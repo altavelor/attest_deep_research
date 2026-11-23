@@ -13,9 +13,10 @@ import {
 } from "@core/research/deepResearch";
 import { ResearchService, type ResearchServiceOptions } from "@application/use-cases/research";
 import type { ChatRunRequest } from "@application/use-cases/chat";
+import type { NoteToolService } from "@application/research";
 import { createResearchToolRegistry, runToolLoop } from "@adapters/research-tools";
 import { ChatCompletionsRoundAdapter } from "@adapters/model-provider";
-import { emptyRetrieval, fixedNow } from "./factories";
+import { emptyRetrieval, fixedNow, markdownSource } from "./factories";
 import { FakeRetriever } from "./researchFakes";
 import type {
   ChatModelProvider,
@@ -178,6 +179,7 @@ export class MemoryResearchState implements ResearchStatePort {
  */
 export class BranchModelRounds implements ModelRoundProvider {
   readonly tasks: string[] = [];
+  tool: "search_index" | "read_note" = "search_index";
   readonly hang = new Set<string>();
   onHang: () => void = () => undefined;
   peakConcurrentRounds = 0;
@@ -233,8 +235,11 @@ export class BranchModelRounds implements ModelRoundProvider {
           type: "toolCall",
           call: {
             id: `call-${this.tasks.length}`,
-            name: "search_index",
-            arguments: { query: task.slice(0, 200) },
+            name: this.tool,
+            arguments:
+              this.tool === "read_note"
+                ? { path: "Notes/tides.md" }
+                : { query: task.slice(0, 200) },
           },
         },
       ],
@@ -516,5 +521,28 @@ export function finishedReport(markdown: string): ResearchReport {
     stopReason: "All branches settled.",
     createdAt: "2026-03-04T05:06:07.000Z",
     verification: null,
+  };
+}
+
+/** A note service whose read_note returns one registered chunk of the tides note. */
+export function tidesNoteTools(): NoteToolService {
+  return {
+    setCitationProvider: () => undefined,
+    definitions: () => [],
+    mutationEnabled: () => false,
+    execute: async () => ({
+      ok: true,
+      result: JSON.stringify({
+        ok: true,
+        evidenceId: "note:tides",
+        chunks: [
+          {
+            id: "note:tides",
+            evidenceSource: { ...markdownSource("Notes/tides.md"), id: "note:tides" },
+            text: "The moon causes tides.",
+          },
+        ],
+      }),
+    }),
   };
 }

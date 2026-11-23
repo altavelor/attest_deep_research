@@ -31,6 +31,11 @@ export interface SubAgentImportCall {
   query?: string;
 }
 
+/** True for the tools that read a document's content rather than list search hits. */
+export function isDocumentReadTool(tool: string): boolean {
+  return tool === "fetch_web_page" || tool === "read_note" || tool === "get_active_note";
+}
+
 /** One child evidence element as the runner reports it, after shape and size checks. */
 export interface SubAgentChildEvidence {
   id: string;

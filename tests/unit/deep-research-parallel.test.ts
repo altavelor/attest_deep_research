@@ -68,14 +68,19 @@ describe("deep research budget scopes", () => {
     expect(owner.snapshot().consumed.branchAttempts).toBe(1);
   });
 
-  it("lets the first cleanup claim of each scope win without suppressing a sibling scope", async () => {
+  it("charges only document reads and lets the first cleanup claim of each scope win", async () => {
     const owner = new ResearchBudgetOwner({ ...limits, evidenceItemsTotal: 1 }, () => 0, 2);
     const port = permits(owner);
     const [a, b] = ["branch-1", "branch-2"].map((id) => researchScopeId("research-1", id));
+    const searched = await port.reserve(a!, {
+      actionKey: "append-0",
+      action: "evidence-append",
+      units: { evidenceItems: 30, documentReads: 0 },
+    });
     const denied = await port.reserve(a!, {
       actionKey: "append-1",
       action: "evidence-append",
-      units: { evidenceItems: 2 },
+      units: { evidenceItems: 2, documentReads: 2 },
     });
     const closureId = denied.type === "denied" ? denied.closureId : "none";
 
@@ -85,6 +90,8 @@ describe("deep research budget scopes", () => {
       await port.claimClosureCleanup(a!, closureId),
     ];
 
+    expect(searched.type).toBe("granted");
+    expect(denied.type).toBe("denied");
     expect(claims).toEqual([true, true, false]);
     expect(await port.beginExecution(b!, "key-after")).toMatchObject({ type: "denied", closureId });
   });

@@ -47,6 +47,9 @@ Attest separates the stable `instant` and `thinking` strategies:
 - **Deep Research** is offered in the composer's mode selector. Its lifecycle is
   `plan → user review → gather → verify → synthesize → export`. The composer disables the item
   with the same readable reason as Thinking when the model has no verified tool calling.
+  The `searches` limit bounds searching; the evidence limit (`evidenceItemsTotal`) counts only
+  documents a branch read — pages opened with `fetch_web_page` and notes read with `read_note`
+  or `get_active_note` — while `search_web` and `search_index` results are not charged.
   New-chat defaults still offer only Instant and Thinking. The quality gates of the
   specification remain open and are tracked separately from availability:
   - Deep Research beats the recorded Thinking baseline on objective coverage and citation support

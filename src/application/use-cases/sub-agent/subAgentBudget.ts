@@ -24,6 +24,7 @@ const BUDGET_UNITS: readonly string[] = [
   "searches",
   "fetches",
   "evidenceItems",
+  "documentReads",
   "verificationFollowUps",
   "inputTokens",
   "outputTokens",

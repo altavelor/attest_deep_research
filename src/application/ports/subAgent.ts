@@ -287,6 +287,7 @@ export type SubAgentBudgetUnit =
   | "searches"
   | "fetches"
   | "evidenceItems"
+  | "documentReads"
   | "verificationFollowUps"
   | "inputTokens"
   | "outputTokens";
