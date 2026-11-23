@@ -6,6 +6,7 @@ import { createTranslator } from "@adapters/i18n";
 import { renderResearchCard } from "@apps/obsidian/ui/chat/deep-research/researchPlanCard";
 import { installObsidianDomHelpers, resetDom } from "../../support/domHarness";
 import { pendingResearch } from "../../support/deepResearch";
+import { settle } from "../../support/async";
 import { initialExecutions, startResearchState } from "@core/research/deepResearch";
 
 const t = createTranslator("en").t;
@@ -34,8 +35,6 @@ describe("deep research plan card", () => {
 
     const first = render();
     expect(first.textContent).toContain("Investigate aspect 1");
-    [...first.querySelectorAll("button")].find((button) => button.textContent === "Edit")!.click();
-    expect(first.querySelector("textarea")!.getAttribute("maxlength")).toBe("4000");
     approve(first).click();
     approve(first).click();
     const rerendered = render();
@@ -55,6 +54,57 @@ describe("deep research plan card", () => {
       },
       "Approve the research plan",
     );
+  });
+
+  it("edits the plan in place, cancels without sending and commits without a turn", async () => {
+    const state = pendingResearch();
+    const onTurn = vi.fn();
+    const onEditPlan = vi
+      .fn()
+      .mockResolvedValueOnce({ ok: false, message: "A required branch is disabled." })
+      .mockResolvedValueOnce({ ok: true });
+    const host = document.createElement("div");
+    renderResearchCard(
+      host,
+      { researchId: state.researchId, artifact: "plan", revision: state.revision },
+      {
+        view: { status: "ready", active: state, history: [] },
+        t,
+        sentTurns: new Set(),
+        onTurn,
+        onEditPlan,
+      },
+    );
+    const click = (label: string): void =>
+      [...host.querySelectorAll("button")].find((button) => button.textContent === label)!.click();
+
+    click("Edit");
+    expect(host.querySelectorAll("ol")).toHaveLength(1);
+    expect(host.querySelectorAll("li textarea")).toHaveLength(2);
+    expect(host.querySelector("textarea")!.getAttribute("maxlength")).toBe("4000");
+    click("Cancel editing");
+    expect(host.querySelector("textarea")).toBeNull();
+    click("Edit");
+    host.querySelector("textarea")!.value = "Measure tides";
+    host.querySelector<HTMLInputElement>("input[type=checkbox]")!.checked = false;
+    click("Save changes");
+    click("Save changes");
+    await settle();
+    expect(host.textContent).toContain("The plan was not saved: A required branch is disabled.");
+    click("Save changes");
+    await settle();
+
+    expect(onTurn).not.toHaveBeenCalled();
+    expect(onEditPlan).toHaveBeenCalledTimes(2);
+    expect(onEditPlan).toHaveBeenLastCalledWith({
+      researchId: state.researchId,
+      decisionId: "decision-1",
+      expectedRevision: state.revision,
+      branches: [
+        { branchId: "branch-1", enabled: false, task: "Measure tides" },
+        { branchId: "branch-2", enabled: true, task: "Investigate aspect 2" },
+      ],
+    });
   });
 
   it("offers Cancel for a research still in planning", () => {
