@@ -199,10 +199,23 @@ export class ResearchDiscoveryService {
           ),
         )
       : "";
+    return this.reportObservation(test, text, parseReportVerdict(reply));
+  }
+
+  /** Records a supplied report as an inconclusive user observation when no verdict can be judged. */
+  unjudgedReport(test: ResearchTest, text: string): ResearchObservation {
+    return this.reportObservation(test, text, "inconclusive");
+  }
+
+  private reportObservation(
+    test: ResearchTest,
+    text: string,
+    verdict: ResearchObservation["verdict"],
+  ): ResearchObservation {
     return userObservation({
       observationId: this.options.createId("observation"),
       testId: test.testId,
-      verdict: parseReportVerdict(reply),
+      verdict,
       quote: discoveryText(text, MAX_OBSERVATION_QUOTE_CHARS),
       receivedAt: this.options.now(),
     });

@@ -171,7 +171,7 @@ export async function runResearch(
     if (owner.remainingMs() <= 0) closeOnTime();
     const observed =
       deps.observation && discovery && start.discovery
-        ? await suppliedObservation(start, deps.observation, discovery)
+        ? await suppliedObservation(start, deps.observation, discovery, stopped)
         : start.discovery;
     await commit({
       phase: entry.phase,
@@ -357,10 +357,12 @@ async function writeReport(
   return { state, report };
 }
 
+/** Assesses a supplied observation; when the time limit interrupts the judgement, it is kept as inconclusive. */
 async function suppliedObservation(
   start: ResearchState,
   supplied: SuppliedObservation,
   service: ResearchDiscoveryService,
+  stopped: () => boolean,
 ): Promise<ResearchDiscovery> {
   const discovery = start.discovery!;
   const test = discovery.tests.find((entry) => entry.testId === supplied.testId)!;
@@ -368,8 +370,12 @@ async function suppliedObservation(
     (entry) =>
       entry.hypothesisId === test.hypothesisId && entry.revision === test.hypothesisRevision,
   )!;
-  const observation = await service.assessReport(hypothesis, test, supplied.text);
-  return withObservation(discovery, observation);
+  try {
+    return withObservation(discovery, await service.assessReport(hypothesis, test, supplied.text));
+  } catch (error) {
+    if (stopped() || !isAbort(error)) throw error;
+    return withObservation(discovery, service.unjudgedReport(test, supplied.text));
+  }
 }
 
 function isAbort(error: unknown): boolean {
