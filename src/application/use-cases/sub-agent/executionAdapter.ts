@@ -16,6 +16,7 @@ import type {
 import type { ResearchToolsetOptions } from "@application/research/toolPorts";
 import type { RetrievedChunk } from "@core/model";
 import {
+  isDocumentReadTool,
   mergeSubAgentUsage,
   toValidatedJson,
   type NormalizedUsage,
@@ -224,7 +225,7 @@ function resultEvidence(
 
 /**
  * Maps the runner's evidence to the child evidence wire format. Every provenance call
- * of an element is considered: a fetched page reports its fetch, otherwise the first call whose
+ * of an element is considered: a fetched page reports its fetch and a note its read, otherwise the first call whose
  * tool fits the source kind is reported, so evidence first seen through another tool is not dropped.
  */
 function childEvidence(snapshot: ResearchEvidenceSnapshot, now: string): ValidatedJsonValue[] {
@@ -233,6 +234,9 @@ function childEvidence(snapshot: ResearchEvidenceSnapshot, now: string): Validat
     const fetched = chunk.source.kind === "web" && chunk.source.wasContentFetched;
     const call =
       (fetched ? calls.find((entry) => entry.tool === "fetch_web_page") : undefined) ??
+      (chunk.source.kind === "web"
+        ? undefined
+        : calls.find((entry) => isDocumentReadTool(entry.tool) && fitsSource(chunk, entry))) ??
       calls.find((entry) => fitsSource(chunk, entry)) ??
       calls[0];
     if (!call) return [];
