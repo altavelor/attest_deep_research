@@ -1,5 +1,9 @@
 import type { ResearchRequest } from "@application/contracts/research";
-import { validateResearchSection, type ResearchState } from "@core/research/deepResearch";
+import {
+  nextResearchSection,
+  validateResearchSection,
+  type ResearchState,
+} from "@core/research/deepResearch";
 import { collectAsync } from "../support/async";
 import {
   BranchModelRounds,
@@ -157,6 +161,102 @@ describe("deep research discovery", () => {
         String(request.messages[0]?.content).startsWith("You turn research findings"),
       ),
     ).toHaveLength(1);
+  });
+
+  it("stops a turn while its supplied observation is assessed without recording it", async () => {
+    const model = new DiscoveryModel(["observation"], ["supports"]);
+    const port = stored("balanced");
+    const researchId = port.commits[0]!.researchId;
+    await answer(model, new ResearchRegistry(), {
+      question: "Continue",
+      researchState: port,
+      research: { type: "continue", researchId },
+    });
+    const waiting = port.commits.at(-1)!;
+    const resumed = reloaded(waiting);
+    const stop = new AbortController();
+    const assessing = (signal: AbortSignal) =>
+      new Promise<never>((_, reject) => {
+        signal.addEventListener("abort", () => reject(signal.reason));
+        stop.abort(new DOMException("Stopped", "AbortError"));
+      });
+
+    await expect(
+      runResearch(resumed.commits[0]!, {
+        port: resumed,
+        runner: { path: "main", run: () => Promise.reject(new Error("unused")) },
+        synthesis: {} as ReportSynthesisService,
+        createDiscovery: (options) =>
+          ({
+            assessReport: () => assessing(options.signal),
+          }) as unknown as ResearchDiscoveryService,
+        observation: { testId: waiting.pending!.subjectId!, text: "It held." },
+        signal: stop.signal,
+        now: fixedNow,
+        setTimer: () => () => undefined,
+        createId: (prefix) => `${prefix}-1`,
+        onState: () => undefined,
+        onStatus: () => undefined,
+      }),
+    ).rejects.toMatchObject({ name: "AbortError" });
+    expect(resumed.commits).toEqual([waiting]);
+  });
+
+  it("keeps a supplied observation as inconclusive when the time limit interrupts its assessment", async () => {
+    const model = new DiscoveryModel(["observation"], ["supports"]);
+    const port = stored("balanced");
+    const researchId = port.commits[0]!.researchId;
+    await answer(model, new ResearchRegistry(), {
+      question: "Continue",
+      researchState: port,
+      research: { type: "continue", researchId },
+    });
+    const waiting = port.commits.at(-1)!;
+    const resumed = reloaded(waiting);
+    let timeLimit = (): void => undefined;
+    const judge = {
+      listModels: async () => ["model"],
+      async *streamChat(request: { signal?: AbortSignal }) {
+        timeLimit();
+        throw request.signal!.reason;
+      },
+    };
+    let id = 0;
+
+    const { report } = await runResearch(resumed.commits[0]!, {
+      port: resumed,
+      runner: { path: "main", run: () => Promise.reject(new Error("unused")) },
+      synthesis: {} as ReportSynthesisService,
+      createDiscovery: (options) =>
+        new ResearchDiscoveryService({
+          chatModel: judge as unknown as DiscoveryModel,
+          model: "model",
+          chatOptions: {},
+          createId: (prefix) => `${prefix}-${(id += 1)}`,
+          now: () => fixedNow().toISOString(),
+          ...options,
+        }),
+      observation: { testId: waiting.pending!.subjectId!, text: "It held." },
+      now: fixedNow,
+      setTimer: (_delayMs, callback) => {
+        timeLimit = callback;
+        return () => undefined;
+      },
+      createId: (prefix) => `${prefix}-${(id += 1)}`,
+      onState: () => undefined,
+      onStatus: () => undefined,
+    });
+
+    expect(report).not.toBeNull();
+    const final = resumed.commits.at(-1)!;
+    expect(final.phase).toBe("completed");
+    for (const state of resumed.commits) {
+      const section = JSON.parse(JSON.stringify(nextResearchSection(null, state)));
+      expect(validateResearchSection(section).ok, state.phase).toBe(true);
+    }
+    expect(final.discovery!.observations).toMatchObject([
+      { producer: "user", verdict: "inconclusive", quote: "It held." },
+    ]);
   });
 
   it("stores a long sub-agent test finding within the discovery bounds so it reloads", async () => {

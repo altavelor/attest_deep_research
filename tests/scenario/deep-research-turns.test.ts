@@ -107,7 +107,11 @@ describe("deep research turns through the chat runtime", () => {
     const stopped = session.deepResearch?.status === "ready" ? session.deepResearch.section : null;
     expect(stopped).toMatchObject({ active: null, history: [{ phase: "cancelled" }] });
 
-    const leftover = startResearchState("research-left", "Crashed", "2026-01-01T00:00:00.000Z");
+    const leftover = startResearchState(
+      "research-left",
+      "Crashed ".repeat(200),
+      "2026-01-01T00:00:00.000Z",
+    );
     session.deepResearch = { status: "ready", section: { ...stopped!, active: leftover } };
     await manager.start(session.sessionId, researchTurn("Second"));
     await eventually(() => expect(session.status).toBe("completed"));
@@ -116,6 +120,7 @@ describe("deep research turns through the chat runtime", () => {
     expect(restarted?.active).toMatchObject({ question: "Second", phase: "awaiting-approval" });
     expect(restarted?.history[0]).toMatchObject({
       researchId: "research-left",
+      question: "Crashed ".repeat(200).slice(0, 1000),
       phase: "failed",
       terminalReason: "Interrupted during planning.",
     });

@@ -1,5 +1,6 @@
 import {
   DEEP_RESEARCH_SCHEMA,
+  MAX_HISTORY_QUESTION_CHARS,
   MAX_RESEARCH_HISTORY,
   MAX_RESEARCH_QUESTION_CHARS,
   MAX_RESEARCH_TEXT_CHARS,
@@ -106,7 +107,7 @@ export function nextResearchSection(
   }
   const entry: ResearchHistoryEntry = {
     researchId: next.researchId,
-    question: next.question,
+    question: next.question.slice(0, MAX_HISTORY_QUESTION_CHARS),
     phase: next.phase,
     terminalReason: next.terminalReason,
     createdAt: next.createdAt,

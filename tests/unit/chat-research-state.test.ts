@@ -1,6 +1,10 @@
 import { ChatResearchState } from "@application/use-cases/chat/ChatResearchState";
 import { createIdleSessionState } from "@application/use-cases/chat/chatSessionSnapshots";
-import { startResearchState } from "@core/research/deepResearch";
+import {
+  MAX_RESEARCH_SECTION_BYTES,
+  fitResearchSection,
+  startResearchState,
+} from "@core/research/deepResearch";
 import { pendingResearch } from "../support/deepResearch";
 
 function port() {
@@ -43,5 +47,27 @@ describe("chat research state port", () => {
     });
     expect(research.read()).toMatchObject({ status: "ready", active: planning });
     expect(state.deepResearch?.status).toBe("ready");
+  });
+
+  it("drops the oldest history entries of an oversized section until it fits", () => {
+    const planning = startResearchState("research-1", "Q", "2026-01-01T00:00:00.000Z");
+    const active = { ...planning, question: "q".repeat(MAX_RESEARCH_SECTION_BYTES - 70_000) };
+    const history = Array.from({ length: 10 }, (_, index) => ({
+      researchId: `research-old-${index}`,
+      question: "h".repeat(20_000),
+      phase: "completed" as const,
+      terminalReason: null,
+      createdAt: "2026-01-01T00:00:00.000Z",
+      updatedAt: "2026-01-01T00:00:00.000Z",
+      report: null,
+    }));
+
+    const fitted = fitResearchSection({ schema: 1, active, history });
+    expect(fitted?.active).toBe(active);
+    expect(fitted?.history.map((entry) => entry.researchId)).toEqual([
+      "research-old-0",
+      "research-old-1",
+      "research-old-2",
+    ]);
   });
 });

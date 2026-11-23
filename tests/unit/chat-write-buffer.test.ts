@@ -10,6 +10,7 @@ import {
   sessionDelta,
   subAgentSection,
 } from "../support/chatDocuments";
+import { settle } from "../support/async";
 import { applyAll, readySubAgentRecord, runToImport } from "../support/subAgentSessions";
 
 const BASE = { content: "c", subAgents: "s" };
@@ -165,6 +166,25 @@ describe("ChatWriteBuffer durability", () => {
     await writer.flushThrough(2, "barrier");
 
     expect(sessionTitles(repository)).toEqual(["Renamed", "Second"]);
+  });
+
+  it("holds a barrier on a delta overwritten before its batch starts until the value is durable", async () => {
+    const { repository, writer } = setup();
+    const release = repository.holdNext();
+    void writer.flushThrough(writer.markChatDirty(chatInput()), "barrier");
+    writer.markDirty("a", 2, sessionDelta("session-1"));
+    const waiting = writer.flushThrough(2, "barrier");
+    writer.markDirty("a", 3, sessionDelta("session-1", { title: "Overwritten" }));
+    release();
+    const releaseSecond = repository.holdNext();
+    let durable = false;
+    void waiting.then(() => (durable = true));
+    await settle();
+    expect(durable).toBe(false);
+
+    releaseSecond();
+    await waiting;
+    expect(sessionTitles(repository)).toEqual(["-", "Overwritten"]);
   });
 
   it("stops writing after the chat file disappeared", async () => {

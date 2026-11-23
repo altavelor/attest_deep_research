@@ -32,6 +32,7 @@ export interface ChatSnapshotEntry {
 
 export interface ChatWriteWaiter {
   revision: number;
+  staged: number;
   resolve(): void;
   reject(error: Error): void;
 }

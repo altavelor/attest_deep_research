@@ -1,7 +1,7 @@
 import type { ResearchStatePort } from "@application/ports/researchState";
 import {
-  MAX_RESEARCH_SECTION_BYTES,
   deepResearchRejected,
+  fitResearchSection,
   nextResearchSection,
   validateResearchSection,
   type ResearchSectionView,
@@ -49,11 +49,10 @@ export class ChatResearchState implements ResearchStatePort {
       );
     }
     const previous = this.options.state.deepResearch;
-    const section = nextResearchSection(
-      previous?.status === "ready" ? previous.section : null,
-      next,
+    const section = fitResearchSection(
+      nextResearchSection(previous?.status === "ready" ? previous.section : null, next),
     );
-    if (new TextEncoder().encode(JSON.stringify(section)).length > MAX_RESEARCH_SECTION_BYTES) {
+    if (!section) {
       throw deepResearchRejected(
         "research-section-too-large",
         "The research state is larger than 1 MB and was not saved.",

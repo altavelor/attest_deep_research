@@ -15,6 +15,8 @@ import {
 } from "@core/research/deepResearch";
 import { researchBranch, researchPlan } from "../support/deepResearch";
 import { settle } from "../support/async";
+import { runPastDeadline } from "../support/timers";
+import { STOP_SETTLE_MS } from "@application/use-cases/research/deep-research/ResearchScheduler";
 
 const plan = researchPlan(
   [
@@ -115,6 +117,7 @@ describe("deep research main-path fallback", () => {
       runners: { main, subAgent: child, sessionByBranch: () => ({ "branch-2": "s-2" }) },
       waveSize: 2,
       signal: new AbortController().signal,
+      setTimer: () => () => undefined,
       barrier: async () => undefined,
     }).run(
       ["branch-1", "branch-2"].map((branchId) => ({
@@ -165,6 +168,7 @@ describe("deep research main-path fallback", () => {
       runners: { main, subAgent: child, sessionByBranch: () => ({ "branch-2": "s-2" }) },
       waveSize: 2,
       signal: stop.signal,
+      setTimer: () => () => undefined,
       barrier: async () => undefined,
     }).run(
       ["branch-1", "branch-2"].map((branchId) => ({
@@ -191,6 +195,61 @@ describe("deep research main-path fallback", () => {
       snapshot.openAllocations.reduce((total, entry) => total + entry.modelRounds, 0),
     );
   });
+
+  it.each([
+    ["a user stop rethrows", false],
+    ["a time-limit closure ends the run", true],
+  ])(
+    "abandons a child that never settles after the abort, charges its allocation: %s",
+    async (_case, timeLimit) => {
+      const single = researchPlan([researchBranch(1)], "balanced", {
+        approvedAt: "2026-01-01T00:00:00.000Z",
+      });
+      const owner = new ResearchBudgetOwner(single.limits, () => 0, 1);
+      owner.open(null);
+      const stop = new AbortController();
+      const child: BranchRunner = {
+        path: "sub-agent",
+        run: () => {
+          if (timeLimit) owner.close("time");
+          stop.abort(new DOMException("Stopped", "AbortError"));
+          return new Promise(() => undefined);
+        },
+      };
+      const scheduler = new ResearchScheduler({
+        plan: single,
+        executions: initialExecutions(single),
+        owner,
+        runners: { main: child, subAgent: child, sessionByBranch: () => ({}) },
+        waveSize: 1,
+        signal: stop.signal,
+        setTimer: (delayMs, callback) => {
+          const handle = setTimeout(callback, delayMs);
+          return () => clearTimeout(handle);
+        },
+        barrier: async () => undefined,
+      });
+      const outcome = await runPastDeadline(STOP_SETTLE_MS, () =>
+        scheduler
+          .run([
+            {
+              workId: "branch-1-gather-1",
+              branchId: "branch-1",
+              cycle: 1,
+              kind: "gather",
+              task: "T",
+            },
+          ])
+          .catch((error: unknown) => error),
+      );
+      await scheduler.drain();
+
+      expect(outcome instanceof DOMException).toBe(!timeLimit);
+      const snapshot = owner.snapshot();
+      expect(snapshot.openAllocations).toEqual([]);
+      expect(snapshot.consumed.modelRounds).toBe(single.limits.modelRoundsPerAttempt);
+    },
+  );
 
   it("refuses a mapped session that the chat lists as stopped without contacting it", async () => {
     const calls: string[] = [];

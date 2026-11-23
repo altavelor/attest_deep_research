@@ -31,6 +31,7 @@ import { withMissingNote, writeReportMarkdown } from "./researchReportWriting";
 import { removeUnknownCitationTokens } from "../strategies/citations";
 import type { ResearchDiscoveryService } from "./ResearchDiscoveryService";
 import { runDiscoveryPhase, withObservation } from "./researchDiscoveryPhase";
+import { researchResumeEntry } from "./researchResume";
 
 export interface ResearchDiscoveryFactoryOptions {
   resolveEvidence(tokens: readonly string[]): RetrievedChunk[];
@@ -128,32 +129,16 @@ export async function runResearch(
     deps.onState(next);
     return next;
   };
-  const verifying = start.phase === "verifying";
-  const discovering = start.phase === "discovering" || start.phase === "awaiting-observation";
+  const entry = researchResumeEntry(start);
+  const { verifying } = entry;
   const discovery = deps.createDiscovery?.({
     resolveEvidence: deps.resolveEvidence ?? (() => []),
     spendRound: () => owner.spendDiscovery(1),
     signal: turn.signal,
   });
-  const observed =
-    deps.observation && discovery && start.discovery
-      ? await suppliedObservation(start, deps.observation, discovery)
-      : start.discovery;
-  await commit({
-    phase: verifying ? "verifying" : discovering ? "discovering" : "gathering",
-    pending: null,
-    executions: resumeExecutions(start.executions),
-    discovery: observed,
-  });
-  if (deps.observation && isPlanStale(plan, deps.now().toISOString())) {
-    const state = await commit({
-      pending: {
-        decisionId: deps.createId("decision"),
-        kind: "stale-plan",
-        artifactRevision: plan.revision,
-      },
-    });
-    return { state, report: null };
+  if (entry.synthesizing) {
+    await commit({ pending: null, executions: resumeExecutions(start.executions) });
+    return writeReport(start, current, owner, deps, commit);
   }
 
   const stopTurn = (): void => turn.abort(deps.signal?.reason);
@@ -177,11 +162,33 @@ export async function runResearch(
     runners,
     waveSize: waveSize(plan.limits, deps.parallelRequests === true),
     turnSignal: turn.signal,
+    setTimer: deps.setTimer,
     onStatus: deps.onStatus,
   };
   const stopped = (): boolean => deps.signal?.aborted === true;
   try {
+    if (stopped()) throw new DOMException("Research stopped", "AbortError");
     if (owner.remainingMs() <= 0) closeOnTime();
+    const observed =
+      deps.observation && discovery && start.discovery
+        ? await suppliedObservation(start, deps.observation, discovery, stopped)
+        : start.discovery;
+    await commit({
+      phase: entry.phase,
+      pending: null,
+      executions: resumeExecutions(start.executions),
+      discovery: observed,
+    });
+    if (deps.observation && isPlanStale(plan, deps.now().toISOString())) {
+      const state = await commit({
+        pending: {
+          decisionId: deps.createId("decision"),
+          kind: "stale-plan",
+          artifactRevision: plan.revision,
+        },
+      });
+      return { state, report: null };
+    }
     await runSchedulingPhase({
       ...phase,
       plan,
@@ -300,7 +307,7 @@ async function writeReport(
   commit: (patch: Partial<ResearchState>) => Promise<ResearchState>,
 ): Promise<ResearchRunResult> {
   const plan = start.plan!;
-  await commit({ phase: "synthesizing" });
+  if (current.phase !== "synthesizing") await commit({ phase: "synthesizing" });
   const stopReason = stopReasonOf(owner.snapshot());
   const executions = current.executions;
   const verification = current.verification;
@@ -350,10 +357,12 @@ async function writeReport(
   return { state, report };
 }
 
+/** Assesses a supplied observation; when the time limit interrupts the judgement, it is kept as inconclusive. */
 async function suppliedObservation(
   start: ResearchState,
   supplied: SuppliedObservation,
   service: ResearchDiscoveryService,
+  stopped: () => boolean,
 ): Promise<ResearchDiscovery> {
   const discovery = start.discovery!;
   const test = discovery.tests.find((entry) => entry.testId === supplied.testId)!;
@@ -361,8 +370,12 @@ async function suppliedObservation(
     (entry) =>
       entry.hypothesisId === test.hypothesisId && entry.revision === test.hypothesisRevision,
   )!;
-  const observation = await service.assessReport(hypothesis, test, supplied.text);
-  return withObservation(discovery, observation);
+  try {
+    return withObservation(discovery, await service.assessReport(hypothesis, test, supplied.text));
+  } catch (error) {
+    if (stopped() || !isAbort(error)) throw error;
+    return withObservation(discovery, service.unjudgedReport(test, supplied.text));
+  }
 }
 
 function isAbort(error: unknown): boolean {

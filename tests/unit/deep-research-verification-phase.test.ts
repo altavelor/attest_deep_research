@@ -175,4 +175,28 @@ describe("deep research verification phase", () => {
     expect(settled.budget!.consumed).toMatchObject({ branchAttempts: 3, modelRounds: 25 });
     expect(port.commits.at(-1)!.phase).toBe("completed");
   });
+
+  it("writes the report of a dead synthesizing turn without spending a gathering or verification round", async () => {
+    const port = new MemoryResearchState();
+    const createVerifier = vi.fn();
+    const { report } = await runResearch(
+      { ...gatheringResearch(plan), phase: "synthesizing", executions: completed },
+      {
+        port,
+        runner: { path: "main", run: vi.fn(), usage: vi.fn() },
+        synthesis: {} as ReportSynthesisService,
+        createVerifier,
+        now: () => new Date("2026-01-01T01:00:00.000Z"),
+        setTimer: () => () => undefined,
+        createId: (prefix) => `${prefix}-1`,
+        onState: () => undefined,
+        onStatus: () => undefined,
+      },
+    );
+
+    expect(port.commits.map((state) => state.phase)).toEqual(["synthesizing", "completed"]);
+    expect(createVerifier).not.toHaveBeenCalled();
+    expect(port.commits.at(-1)!.budget!.consumed.branchAttempts).toBe(0);
+    expect(report?.completedBranches).toHaveLength(2);
+  });
 });
