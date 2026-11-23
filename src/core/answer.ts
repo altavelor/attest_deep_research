@@ -30,6 +30,12 @@ export interface AnswerClarification {
   questions: readonly AnswerClarificationQuestion[];
 }
 
+/** The answers a user sent from a clarification card, or a request to proceed without them. */
+export interface ClarificationReply {
+  answers: Readonly<Record<string, string>>;
+  skipped: boolean;
+}
+
 export interface ResearchAnswer {
   question: string;
   answer: string;

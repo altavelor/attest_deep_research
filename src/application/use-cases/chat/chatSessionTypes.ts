@@ -1,5 +1,5 @@
 import type { ChatDisplayMessage } from "@core/conversation";
-import type { ResearchAnswer } from "@core/answer";
+import type { ClarificationReply, ResearchAnswer } from "@core/answer";
 import type {
   ConversationSourceRegistry,
   ConversationRegistryPromptView,
@@ -62,6 +62,7 @@ export interface ChatRunRequest {
   modelLabel: string;
   research?: ResearchTurnInput;
   thinking?: true;
+  clarificationReply?: ClarificationReply;
 }
 
 export interface ChatSubAgentServices {

@@ -81,4 +81,6 @@ export const deepResearch: EnDeepResearchMessages = {
     "أجب دون توضيح: تابع السؤال كما طُرح واذكر الافتراضات التي تعتمدها.",
   "chat.clarification.reply.heading": "إجابات الأسئلة التوضيحية:",
   "chat.clarification.reply.answer": "الإجابة",
+  "chat.clarification.reply.summary": "إجابات الأسئلة التوضيحية ({count})",
+  "chat.clarification.reply.skipped": "تمت المتابعة دون توضيح",
 };

@@ -1,3 +1,4 @@
+import type { ClarificationReply } from "@core/answer";
 import { Notice } from "obsidian";
 
 import { chatHistoryForPrompt } from "@application/use-cases/chat";
@@ -200,10 +201,11 @@ export class ResearchQuestionController {
   }
 
   /** Sends a reply to clarifying questions as an ordinary user message of a Thinking turn. */
-  async submitClarificationReply(reply: string): Promise<void> {
+  async submitClarificationReply(text: string, reply: ClarificationReply): Promise<void> {
     const sessionId = this.options.getSessionId();
     if (this.isRunning() || this.options.getSearchUnavailableMessage() !== null) return;
-    await this.runQuestion(sessionId, reply, this.options.getModelInputValue(), {
+    await this.runQuestion(sessionId, text, this.options.getModelInputValue(), {
+      clarificationReply: reply,
       appendQuestion: true,
       chatHistory: this.options.getMessages(sessionId),
       activeFilePath: undefined,
@@ -228,6 +230,7 @@ export class ResearchQuestionController {
       includeActiveFile: boolean;
       research?: ResearchTurnInput;
       thinking?: true;
+      clarificationReply?: ClarificationReply;
     },
   ): Promise<void> {
     const contextPaths = options.contextPaths ?? this.options.getContextPaths(sessionId);
@@ -245,6 +248,7 @@ export class ResearchQuestionController {
       modelLabel: this.options.getCurrentModelLabel(sessionId),
       ...(options.research ? { research: options.research } : {}),
       ...(options.thinking ? { thinking: true as const } : {}),
+      ...(options.clarificationReply ? { clarificationReply: options.clarificationReply } : {}),
     });
 
     if (!result.started) {

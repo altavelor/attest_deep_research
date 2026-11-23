@@ -83,4 +83,6 @@ export const deepResearch: EnDeepResearchMessages = {
     "Ответь без уточнения: исходи из вопроса как он задан и назови сделанные допущения.",
   "chat.clarification.reply.heading": "Ответы на уточняющие вопросы:",
   "chat.clarification.reply.answer": "Ответ",
+  "chat.clarification.reply.summary": "Ответы на уточняющие вопросы ({count})",
+  "chat.clarification.reply.skipped": "Продолжено без уточнения",
 };

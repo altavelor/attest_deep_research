@@ -9,6 +9,7 @@ import {
   renderFollowUps,
   type ChatTranscriptOptions,
 } from "@apps/obsidian/ui/chat/ChatTranscript";
+import { createTranslator } from "@adapters/i18n";
 import { installObsidianDomHelpers, resetDom } from "../support/domHarness";
 
 function options(overrides: Partial<ChatTranscriptOptions> = {}): ChatTranscriptOptions {
@@ -61,6 +62,40 @@ describe("ChatTranscript", () => {
 
     expect(renderEmptyState).toHaveBeenCalledWith(transcript);
     expect(transcript.querySelector(".attest-chat__message")).toBeNull();
+  });
+
+  it("renders a clarification reply as one compact line and a typed reply in full", () => {
+    const transcript = document.createElement("div");
+    const at = "2026-01-01T12:34:00.000Z";
+    renderChatTranscript(
+      transcript,
+      options({
+        t: createTranslator("ru").t,
+        messages: [
+          {
+            role: "user",
+            content: "Answers:\n\n1. Which database?\nAnswer: Postgres",
+            createdAt: at,
+            clarificationReply: { answers: { "question-1": "Postgres" }, skipped: false },
+          },
+          {
+            role: "user",
+            content: "skip",
+            createdAt: at,
+            clarificationReply: { answers: {}, skipped: true },
+          },
+          { role: "user", content: "Postgres, please", createdAt: at },
+        ],
+      }),
+    );
+    const texts = [...transcript.querySelectorAll(".attest-chat__message-text")].map(
+      (el) => el.textContent,
+    );
+    expect(texts).toEqual([
+      "Ответы на уточняющие вопросы (1)",
+      "Продолжено без уточнения",
+      "Postgres, please",
+    ]);
   });
 
   it("renders attached context names and submits or cancels an edited user question", () => {

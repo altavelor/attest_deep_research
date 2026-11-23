@@ -1,4 +1,8 @@
-import type { AnswerClarification, AnswerClarificationQuestion } from "@core/answer";
+import type {
+  AnswerClarification,
+  AnswerClarificationQuestion,
+  ClarificationReply,
+} from "@core/answer";
 import {
   MAX_CLARIFICATION_QUESTIONS,
   MAX_RESEARCH_TEXT_CHARS,
@@ -49,39 +53,51 @@ export function readAnswerClarification(value: unknown): AnswerClarification | u
   return { questions: read as AnswerClarificationQuestion[] };
 }
 
-/** Formats the user's answers as one ordinary chat message, marking unanswered questions. */
-export function formatClarificationReply(
+/** Keeps the trimmed, bounded, non-empty answers to the asked questions as a structured reply. */
+export function clarificationReplyOf(
   clarification: AnswerClarification,
   answers: Readonly<Record<string, string>>,
+): ClarificationReply {
+  const kept: Record<string, string> = {};
+  for (const { questionId } of clarification.questions) {
+    const answer = (answers[questionId] ?? "").trim().slice(0, MAX_RESEARCH_TEXT_CHARS);
+    if (answer) kept[questionId] = answer;
+  }
+  return { answers: kept, skipped: false };
+}
+
+/** Formats a structured reply as the chat message text the model reads, marking unanswered questions. */
+export function formatClarificationReply(
+  clarification: AnswerClarification,
+  reply: ClarificationReply,
   labels: ClarificationReplyLabels,
 ): string {
-  const items = clarification.questions.map((question, index) => {
-    const answer = (answers[question.questionId] ?? "").trim().slice(0, MAX_RESEARCH_TEXT_CHARS);
-    return `${replyHeader(index, question, labels)}${answer || labels.unanswered}`;
-  });
+  const items = clarification.questions.map(
+    (question, index) =>
+      `${index + 1}. ${question.prompt}\n${labels.answer}: ` +
+      (reply.answers[question.questionId] ?? labels.unanswered),
+  );
   return [labels.heading, ...items].join("\n\n");
 }
 
-/** Recovers the answers from a reply the card sent; a message written otherwise yields none. */
-export function clarificationAnswersFromReply(
-  clarification: AnswerClarification,
-  reply: string,
-  labels: ClarificationReplyLabels,
-): Record<string, string> {
-  if (!reply.startsWith(`${labels.heading}\n\n`)) return {};
-  const answers: Record<string, string> = {};
-  const { questions } = clarification;
-  questions.forEach((question, index) => {
-    const header = replyHeader(index, question, labels);
-    const start = reply.indexOf(header);
-    if (start < 0) return;
-    const from = start + header.length;
-    const next = questions[index + 1];
-    const end = next ? reply.indexOf(`\n\n${replyHeader(index + 1, next, labels)}`, from) : -1;
-    const answer = reply.slice(from, end < 0 ? undefined : end).trim();
-    if (answer !== "" && answer !== labels.unanswered) answers[question.questionId] = answer;
-  });
-  return answers;
+/** Reads a stored clarification reply, or returns undefined when it is absent or malformed. */
+export function readClarificationReply(value: unknown): ClarificationReply | undefined {
+  if (typeof value !== "object" || value === null) return undefined;
+  const { answers, skipped } = value as { answers?: unknown; skipped?: unknown };
+  if (typeof skipped !== "boolean" || typeof answers !== "object" || answers === null) {
+    return undefined;
+  }
+  const entries = Object.entries(answers);
+  if (entries.length > MAX_CLARIFICATION_QUESTIONS) return undefined;
+  const valid = entries.every(
+    ([, answer]) =>
+      typeof answer === "string" &&
+      answer.trim() !== "" &&
+      answer.length <= MAX_RESEARCH_TEXT_CHARS,
+  );
+  return valid
+    ? { answers: Object.fromEntries(entries) as Record<string, string>, skipped }
+    : undefined;
 }
 
 /** Renders the asked questions for the next turn's chat history. */
@@ -90,12 +106,4 @@ export function clarificationHistoryText(clarification: AnswerClarification): st
     "Clarifying questions asked instead of answering:",
     ...clarification.questions.map((question, index) => `${index + 1}. ${question.prompt}`),
   ].join("\n");
-}
-
-function replyHeader(
-  index: number,
-  question: AnswerClarificationQuestion,
-  labels: ClarificationReplyLabels,
-): string {
-  return `${index + 1}. ${question.prompt}\n${labels.answer}: `;
 }
