@@ -1,7 +1,8 @@
 import { FileChatRepository } from "@adapters/filesystem/FileChatRepository";
 import type { SavedChatSettings } from "@core/chat/savedChat";
 import type { ChatModelProvider } from "@core/agent";
-import { eventually } from "../support/async";
+import { eventually, settle } from "../support/async";
+import { deferred } from "../support/subAgentSessions";
 import { createTestSessionManager } from "../support/chatSessions";
 import {
   BranchModelRounds,
@@ -19,8 +20,19 @@ const SETTINGS: SavedChatSettings = {
   researchMode: "deep-research",
 };
 
-function open(fileSystem: MemoryFileSystem, model: ChatModelProvider) {
+function open(
+  fileSystem: MemoryFileSystem,
+  model: ChatModelProvider,
+  saveGate: { next?: Promise<void> } = {},
+) {
   const repository = new FileChatRepository({ fileSystem, folder: "chats" });
+  const commit = repository.commitChatDocument.bind(repository);
+  repository.commitChatDocument = async (change) => {
+    const gate = saveGate.next;
+    delete saveGate.next;
+    await gate;
+    return commit(change);
+  };
   const { manager } = createTestSessionManager({
     repository,
     createResearchService: () =>
@@ -93,5 +105,39 @@ describe("deep research plan edit in place", () => {
     });
     manager.stop(session.sessionId);
     await eventually(() => expect(session.status).toBe("interrupted"));
+  });
+
+  it("blocks runs and a second edit while an edit saves, and rolls back a failed save", async () => {
+    const gate: { next?: Promise<void> } = {};
+    const { manager } = open(new MemoryFileSystem(), new PlanAndReportModel(), gate);
+    const session = manager.createSession(SETTINGS);
+    await manager.start(session.sessionId, researchTurn("How do tides work?"));
+    await eventually(() => expect(session.status).toBe("completed"));
+    const active =
+      session.deepResearch?.status === "ready" ? session.deepResearch.section.active! : null;
+    const request = {
+      researchId: active!.researchId,
+      decisionId: active!.pending!.decisionId,
+      expectedRevision: active!.revision,
+      branches: [{ branchId: active!.plan!.branches[0]!.branchId, task: "Edited" }],
+    };
+    const before = { messages: session.messages, deepResearch: session.deepResearch };
+    const save = deferred<void>();
+    gate.next = save.promise;
+
+    const saving = manager.editResearchPlan(session.sessionId, request);
+    await settle();
+
+    expect(await manager.start(session.sessionId, researchTurn("Again"))).toMatchObject({
+      started: false,
+    });
+    expect(await manager.editResearchPlan(session.sessionId, request)).toEqual({
+      ok: false,
+      message: "The plan is already being saved.",
+    });
+    save.reject(new Error("Disk full"));
+    expect(await saving).toEqual({ ok: false, message: expect.stringContaining("Disk full") });
+    expect(session.messages).toBe(before.messages);
+    expect(session.deepResearch).toBe(before.deepResearch);
   });
 });
