@@ -67,13 +67,23 @@ function run(
 
 describe("Thinking clarification tool", () => {
   it("ends the turn with the stored questions and no synthesis round", async () => {
-    const { modelRound, events } = run(() =>
-      clarifyingCall([{ prompt: " Which database now? ", suggestions: ["Postgres", "Files"] }]),
-    );
+    const { modelRound, events } = run(() => {
+      const round = clarifyingCall([
+        { prompt: " Which database now? ", suggestions: ["Postgres", "Files"] },
+      ]);
+      round.items.push({
+        type: "toolCall",
+        call: { id: "s1", name: "search_index", arguments: { query: "sqlite" } },
+      });
+      return round;
+    });
 
-    const complete = (await events).find((event) => event.type === "complete");
+    const all = await events;
+    const complete = all.find((event) => event.type === "complete");
 
     expect(modelRound.requests).toHaveLength(1);
+    expect(modelRound.requests[0]!.messages[0]!.content).toContain(`(${ASK})`);
+    expect(all.filter((event) => event.type === "tool-call-end")).toHaveLength(2);
     expect(complete).toMatchObject({
       answer: {
         answer: "",
