@@ -14,6 +14,7 @@ export interface SchedulingPhase {
   runners: ResearchSchedulerRunners;
   waveSize: number;
   turnSignal: AbortSignal;
+  setTimer(delayMs: number, callback: () => void): () => void;
   barrier(executions: readonly BranchExecution[]): Promise<void>;
   onStatus(message: string): void;
 }
@@ -37,6 +38,7 @@ export async function runSchedulingPhase(
     runners: phase.runners,
     waveSize: phase.waveSize,
     signal: work.signal,
+    setTimer: phase.setTimer,
     barrier: phase.barrier,
     onStatus: phase.onStatus,
   });

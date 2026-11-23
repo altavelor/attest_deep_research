@@ -28,6 +28,7 @@ export interface ResearchSchedulerDeps {
   runners: ResearchSchedulerRunners;
   waveSize: number;
   signal: AbortSignal;
+  setTimer(delayMs: number, callback: () => void): () => void;
   barrier(executions: readonly BranchExecution[]): Promise<void>;
   onStatus?(message: string): void;
 }
@@ -37,8 +38,19 @@ interface Flight {
   allocation: BranchAllocation;
   runner: BranchRunner;
   newSession: boolean;
-  done: Promise<{ flight: Flight; finding: BranchExecution["finding"]; error: unknown }>;
+  abandon(): void;
+  done: Promise<FlightResult>;
 }
+
+interface FlightResult {
+  flight: Flight;
+  finding: BranchExecution["finding"];
+  error: unknown;
+  abandoned?: true;
+}
+
+export const STOP_SETTLE_MS = 10_000;
+const ABANDONED_REASON = "The attempt did not stop in time and was abandoned.";
 
 /**
  * Runs research works in waves in dependency and priority order: up to the wave size at once, at
@@ -46,15 +58,25 @@ interface Flight {
  * allows. Each attempt is admitted by the budget owner and committed as a wave barrier before it
  * starts and as a branch barrier when it settles; a user stop waits for the wave and leaves its open
  * allocations for the next turn to consume, while a budget closure settles them and ends the run.
+ * An attempt that has not settled within the settle deadline after the abort is abandoned and
+ * consumes its whole allocation.
  */
 export class ResearchScheduler {
   private executions: BranchExecution[];
   private readonly flights = new Map<string, Flight>();
   private readonly mainOnly = new Set<string>();
   private readonly fallbacks: Flight[] = [];
+  private cancelDeadline: (() => void) | null = null;
+  private readonly onAbort = (): void => {
+    this.cancelDeadline ??= this.deps.setTimer(STOP_SETTLE_MS, () => {
+      for (const flight of this.flights.values()) flight.abandon();
+    });
+  };
 
   constructor(private readonly deps: ResearchSchedulerDeps) {
     this.executions = [...deps.executions];
+    if (deps.signal.aborted) this.onAbort();
+    else deps.signal.addEventListener("abort", this.onAbort, { once: true });
   }
 
   async run(works: readonly ResearchWork[]): Promise<readonly BranchExecution[]> {
@@ -85,9 +107,11 @@ export class ResearchScheduler {
     return this.executions;
   }
 
-  /** Waits until every attempt still in flight has settled after the caller aborted the signal. */
+  /** Waits until every attempt still in flight has settled or was abandoned after the caller aborted the signal. */
   async drain(): Promise<void> {
     await Promise.all([...this.flights.values()].map((flight) => flight.done));
+    this.cancelDeadline?.();
+    this.deps.signal.removeEventListener("abort", this.onAbort);
   }
 
   private async launch(byId: ReadonlyMap<string, ResearchWork>): Promise<void> {
@@ -143,12 +167,22 @@ export class ResearchScheduler {
       newSession:
         runner.path === "sub-agent" &&
         this.deps.runners.sessionByBranch()[work.branchId] === undefined,
+      abandon: () => undefined,
       done: null as unknown as Flight["done"],
     };
-    flight.done = runner.run(work, allocation, this.deps.signal).then(
-      (finding) => ({ flight, finding, error: null }),
-      (error: unknown) => ({ flight, finding: null, error: error ?? new Error("failed") }),
+    const abandoned = new Promise<FlightResult>((resolve) => {
+      flight.abandon = () =>
+        resolve({ flight, finding: null, error: this.deps.signal.reason, abandoned: true });
+    });
+    const ran = runner.run(work, allocation, this.deps.signal).then(
+      (finding): FlightResult => ({ flight, finding, error: null }),
+      (error: unknown): FlightResult => ({
+        flight,
+        finding: null,
+        error: error ?? new Error("failed"),
+      }),
     );
+    flight.done = Promise.race([ran, abandoned]);
     this.flights.set(work.workId, flight);
   }
 
@@ -174,9 +208,14 @@ export class ResearchScheduler {
   }
 
   /** Commits the branch barrier of one finished attempt; true when a user stop ended it. */
-  private async settle(result: Awaited<Flight["done"]>): Promise<boolean> {
+  private async settle(result: FlightResult): Promise<boolean> {
     const { owner, plan, signal } = this.deps;
     const { work, allocation, runner } = result.flight;
+    if (result.abandoned) {
+      owner.settle(allocation, null);
+      await this.update(work.workId, { state: "pending", terminalReason: ABANDONED_REASON });
+      return owner.snapshot().closed === null;
+    }
     const runRef = runner.runRef?.(work.workId) ?? null;
     const ref = runRef ? { runRef } : {};
     if (result.error === null) {

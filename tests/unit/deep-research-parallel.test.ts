@@ -167,6 +167,7 @@ describe("deep research waves", () => {
       },
       waveSize: 1,
       signal: new AbortController().signal,
+      setTimer: () => () => undefined,
       barrier: async () => undefined,
     }).run([
       { workId: "branch-1-gather-1", branchId: "branch-1", cycle: 1, kind: "gather", task: "T" },

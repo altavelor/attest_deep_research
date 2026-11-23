@@ -162,6 +162,7 @@ export async function runResearch(
     runners,
     waveSize: waveSize(plan.limits, deps.parallelRequests === true),
     turnSignal: turn.signal,
+    setTimer: deps.setTimer,
     onStatus: deps.onStatus,
   };
   const stopped = (): boolean => deps.signal?.aborted === true;
