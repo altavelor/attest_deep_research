@@ -183,7 +183,7 @@ describe("deep research waves", () => {
     ]);
 
     expect(executions).toMatchObject([
-      { state: "failed", attempts: 1, terminalReason: "No source for this branch." },
+      { state: "failed", attempts: 1, terminalReason: ENGLISH_RESEARCH_LABELS.branchUnavailable },
     ]);
   });
 });

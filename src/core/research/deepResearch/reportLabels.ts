@@ -51,6 +51,17 @@ export const ENGLISH_RESEARCH_LABELS = {
   interruptedPlanning: "Interrupted during planning.",
   stoppedDrafting: "Stopped while drafting the plan.",
   planFailed: "The plan could not be generated.",
+  dimensionBranchAttempts: "branch attempts",
+  dimensionModelRounds: "model rounds",
+  dimensionSearches: "searches",
+  dimensionEvidenceItems: "evidence items",
+  dimensionBudget: "budget",
+  dependsOnFailed: 'Depends on "{title}", which did not complete.',
+  attemptAbandoned: "The attempt did not stop in time and was abandoned.",
+  attemptFailed: "The attempt failed: {reason}",
+  attemptFailedPlain: "The attempt failed.",
+  branchUnavailable: "The branch has no source available in this chat.",
+  noFindings: "The branch produced no findings.",
 } as const;
 
 export type ResearchLabelKey = keyof typeof ENGLISH_RESEARCH_LABELS;

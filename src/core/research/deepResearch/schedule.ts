@@ -1,3 +1,4 @@
+import { label, type ResearchLabels } from "./reportLabels";
 import type {
   BranchExecution,
   ResearchBranch,
@@ -65,6 +66,7 @@ export function resumeExecutions(executions: readonly BranchExecution[]): Branch
 export function blockDependants(
   executions: readonly BranchExecution[],
   plan: ResearchPlan,
+  labels: ResearchLabels,
 ): BranchExecution[] {
   let current = [...executions];
   for (;;) {
@@ -81,7 +83,7 @@ export function blockDependants(
       return {
         ...execution,
         state: "blocked",
-        terminalReason: `Depends on "${title}", which did not complete.`,
+        terminalReason: label(labels, "dependsOnFailed", { title }),
       };
     });
     if (!changed) return current;

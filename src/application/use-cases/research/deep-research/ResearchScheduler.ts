@@ -3,6 +3,8 @@ import {
   boundedReason,
   branchPath,
   DEFAULT_RESEARCH_LANGUAGE,
+  ENGLISH_RESEARCH_LABELS,
+  label,
   branchTaskText,
   nextReadyExecution,
   type BranchAllocation,
@@ -10,8 +12,10 @@ import {
   type ResearchBudgetOwner,
   type ResearchPlan,
   type ResearchWork,
+  type ResearchLabels,
 } from "@core/research/deepResearch";
 import {
+  BranchNoFindingsError,
   BranchUnavailableError,
   UnusableBranchSessionError,
   type BranchRunner,
@@ -25,6 +29,7 @@ export interface ResearchSchedulerRunners {
 
 export interface ResearchSchedulerDeps {
   language?: string;
+  labels?: ResearchLabels;
   plan: ResearchPlan;
   executions: readonly BranchExecution[];
   owner: ResearchBudgetOwner;
@@ -53,7 +58,6 @@ interface FlightResult {
 }
 
 export const STOP_SETTLE_MS = 10_000;
-const ABANDONED_REASON = "The attempt did not stop in time and was abandoned.";
 
 /**
  * Runs research works in waves in dependency and priority order: up to the wave size at once, at
@@ -87,7 +91,7 @@ export class ResearchScheduler {
     const byId = new Map(works.map((work) => [work.workId, work]));
     let userStop: unknown = null;
     for (;;) {
-      const blocked = blockDependants(this.executions, this.deps.plan);
+      const blocked = blockDependants(this.executions, this.deps.plan, this.labels());
       if (blocked.some((entry, index) => entry !== this.executions[index])) {
         await this.commit(blocked);
       }
@@ -225,7 +229,10 @@ export class ResearchScheduler {
     const { work, allocation, runner } = result.flight;
     if (result.abandoned) {
       owner.settle(allocation, null);
-      await this.update(work.workId, { state: "pending", terminalReason: ABANDONED_REASON });
+      await this.update(work.workId, {
+        state: "pending",
+        terminalReason: this.labels().attemptAbandoned,
+      });
       return owner.snapshot().closed === null;
     }
     const runRef = runner.runRef?.(work.workId) ?? null;
@@ -247,7 +254,8 @@ export class ResearchScheduler {
       return false;
     }
     const error = result.error;
-    const reason = boundedReason(error instanceof Error ? error.message : "The attempt failed.");
+    const labels = this.labels();
+    const reason = boundedReason(attemptReason(error, labels));
     const retry =
       !(error instanceof BranchUnavailableError) &&
       allocation.attempt < plan.limits.attemptsPerBranch;
@@ -257,6 +265,10 @@ export class ResearchScheduler {
       ...ref,
     });
     return false;
+  }
+
+  private labels(): ResearchLabels {
+    return this.deps.labels ?? ENGLISH_RESEARCH_LABELS;
   }
 
   private async update(workId: string, patch: Partial<BranchExecution>): Promise<void> {
@@ -283,4 +295,11 @@ function exhausted(
 
 function titleOf(plan: ResearchPlan, branchId: string): string {
   return plan.branches.find((branch) => branch.branchId === branchId)?.title ?? branchId;
+}
+
+function attemptReason(error: unknown, labels: ResearchLabels): string {
+  if (error instanceof BranchUnavailableError) return labels.branchUnavailable;
+  if (error instanceof BranchNoFindingsError) return labels.noFindings;
+  if (error instanceof Error) return label(labels, "attemptFailed", { reason: error.message });
+  return labels.attemptFailedPlain;
 }

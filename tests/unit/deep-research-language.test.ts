@@ -1,5 +1,9 @@
+import { createResearchLabelCatalogue } from "@adapters/i18n";
 import {
   detectResearchLanguage,
+  emptyBudgetState,
+  label,
+  stopReasonOf,
   parseClarification,
   researchLanguageOf,
   validateResearchSection,
@@ -35,5 +39,13 @@ describe("deep research language", () => {
     const old = stored(state);
     expect(old.ok && old.value.active).not.toHaveProperty("language");
     expect(researchLanguageOf(old.ok ? old.value.active! : state)).toBe("ru");
+  });
+
+  it("names the exhausted budget dimension in the research language", () => {
+    const ru = createResearchLabelCatalogue().labelsFor("ru");
+    const closed = { reason: "exhausted" as const, dimension: "modelRounds" };
+    expect(stopReasonOf({ ...emptyBudgetState(), closed }, ru)).toBe(
+      label(ru, "stopBudget", { dimension: ru.dimensionModelRounds }),
+    );
   });
 });

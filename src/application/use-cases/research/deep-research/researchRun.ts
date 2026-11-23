@@ -166,6 +166,7 @@ export async function runResearch(
   };
   const phase = {
     language: researchLanguageOf(start),
+    labels: deps.labels,
     owner,
     runners,
     waveSize: waveSize(plan.limits, deps.parallelRequests === true),

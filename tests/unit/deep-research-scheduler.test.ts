@@ -1,3 +1,5 @@
+import { createResearchLabelCatalogue } from "@adapters/i18n";
+import { label } from "@core/research/deepResearch";
 import { ENGLISH_RESEARCH_LABELS } from "@core/research/deepResearch";
 import {
   UnusableBranchSessionError,
@@ -42,11 +44,14 @@ const settled = (states: Record<string, string>) =>
         : null,
   }));
 
+const RU_LABELS = createResearchLabelCatalogue().labelsFor("ru");
+
 describe("deep research scheduling rules", () => {
   it("blocks the dependants of a failed branch while a skipped optional one blocks nothing", () => {
     const executions = blockDependants(
       settled({ "branch-1": "failed", "branch-3": "skipped" }),
       plan,
+      RU_LABELS,
     );
     expect(executions.map((execution) => execution.state)).toEqual([
       "failed",
@@ -54,6 +59,9 @@ describe("deep research scheduling rules", () => {
       "skipped",
       "pending",
     ]);
+    expect(executions[1]!.terminalReason).toBe(
+      label(RU_LABELS, "dependsOnFailed", { title: plan.branches[0]!.title }),
+    );
     expect(nextReadyExecution(executions, plan)?.branchId).toBe("branch-4");
   });
 

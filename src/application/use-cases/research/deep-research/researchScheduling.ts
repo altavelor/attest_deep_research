@@ -2,12 +2,14 @@ import type {
   BranchExecution,
   ResearchBudgetOwner,
   ResearchPlan,
+  ResearchLabels,
   ResearchWork,
 } from "@core/research/deepResearch";
 import { ResearchScheduler, type ResearchSchedulerRunners } from "./ResearchScheduler";
 
 export interface SchedulingPhase {
   language?: string;
+  labels?: ResearchLabels;
   plan: ResearchPlan;
   executions: readonly BranchExecution[];
   works: readonly ResearchWork[];
@@ -34,6 +36,7 @@ export async function runSchedulingPhase(
   phase.turnSignal.addEventListener("abort", follow);
   const scheduler = new ResearchScheduler({
     ...(phase.language ? { language: phase.language } : {}),
+    ...(phase.labels ? { labels: phase.labels } : {}),
     plan: phase.plan,
     executions: phase.executions,
     owner: phase.owner,

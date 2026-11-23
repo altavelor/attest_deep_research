@@ -73,7 +73,15 @@ export function stopReasonOf(budget: ResearchBudgetState | null, labels: Researc
   if (!closed) return labels.stopSettled;
   if (closed.reason === "time") return labels.stopTime;
   if (closed.reason === "user") return labels.stopUser;
-  return label(labels, "stopBudget", { dimension: closed.dimension ?? "budget" });
+  return label(labels, "stopBudget", { dimension: dimensionName(closed.dimension, labels) });
+}
+
+function dimensionName(dimension: string | null, labels: ResearchLabels): string {
+  if (dimension === "branchAttempts") return labels.dimensionBranchAttempts;
+  if (dimension === "modelRounds") return labels.dimensionModelRounds;
+  if (dimension === "searches") return labels.dimensionSearches;
+  if (dimension === "evidenceItems") return labels.dimensionEvidenceItems;
+  return dimension ?? labels.dimensionBudget;
 }
 
 /**
