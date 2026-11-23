@@ -32,7 +32,7 @@ function reopen(fileSystem: MemoryFileSystem, model: ChatModelProvider, errors: 
   const { manager } = createTestSessionManager({
     repository,
     createResearchService: () =>
-      deepResearchService(model, true, {
+      deepResearchService(model, {
         retriever: new FakeRetriever({
           chunks: [
             retrieved("chunk-1", markdownSource("Notes/tides.md"), "The moon causes tides."),

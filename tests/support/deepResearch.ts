@@ -101,7 +101,6 @@ export function planReply(branchCount: 2 | 3 = 2): string {
 /** Builds a research service with tool calling and an index whose model answers with the given replies. */
 export function deepResearchService(
   model: ChatModelProvider,
-  deepResearchEnabled = true,
   overrides: Partial<ResearchServiceOptions> = {},
 ): ResearchService {
   return new ResearchService({
@@ -111,7 +110,6 @@ export function deepResearchService(
     retriever: new FakeRetriever(emptyRetrieval()),
     chatModel: model,
     chatModelName: "model",
-    deepResearchEnabled,
     toolCapabilities: {
       calls: true,
       choiceRequired: true,

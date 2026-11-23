@@ -22,7 +22,6 @@ export interface ChatComposerControllerOptions {
   getAvailableIndexes: () => IndexProfileSelectOption[];
   getContextFilePaths: () => string[];
   getResearchMode: () => ResearchMode;
-  isDeepResearchEnabled?: () => boolean;
   getAttachedContextPaths: () => string[];
   getActiveFilePath: () => string | undefined;
   shouldIncludeActiveFileContext: () => boolean;
@@ -60,7 +59,6 @@ export class ChatComposerController {
       availableIndexes: this.options.getAvailableIndexes(),
       contextFilePaths: this.options.getContextFilePaths(),
       researchMode: this.options.getResearchMode(),
-      deepResearchEnabled: this.options.isDeepResearchEnabled?.() === true,
       t: this.options.t,
       onSubmit: this.options.onSubmit,
       onStop: this.options.onStop,

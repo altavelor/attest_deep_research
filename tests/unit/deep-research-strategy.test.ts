@@ -58,19 +58,6 @@ describe("deep research strategy", () => {
     expect(ended.terminalReason!.length).toBeLessThanOrEqual(500);
   });
 
-  it("refuses a saved deep-research mode without contacting the model when the flag is off", async () => {
-    const model = new FakeChatModel();
-    const answer = deepResearchService(model, false).answer({
-      question: "Q",
-      mode: "deep-research",
-    });
-    await expect(collectAsync(answer)).rejects.toMatchObject({
-      message: "Deep Research is not enabled.",
-      details: { reason: "research-disabled" },
-    });
-    expect(model.requests).toHaveLength(0);
-  });
-
   it("rejects an over-long question readably before any state commit", async () => {
     const port = new MemoryResearchState();
     const model = new FakeChatModel();

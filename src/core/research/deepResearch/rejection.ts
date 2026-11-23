@@ -12,7 +12,6 @@ export type DeepResearchRejectionReason =
   | "research-preflight"
   | "research-generation-failed"
   | "research-continue-unavailable"
-  | "research-disabled"
   | "research-input-too-long"
   | "research-export-folder"
   | "research-export-name";

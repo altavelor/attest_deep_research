@@ -32,7 +32,7 @@ function answer(
   now: () => Date = fixedNow,
 ) {
   return collectAsync(
-    deepResearchService(model, true, {
+    deepResearchService(model, {
       retriever: new FakeRetriever({
         chunks: [
           retrieved(

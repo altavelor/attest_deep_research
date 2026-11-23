@@ -116,7 +116,6 @@ function dropUnknownSettings(settings: AttestSettings): AttestSettings {
     downloadFolder: settings.downloadFolder,
     researchExportFolder: settings.researchExportFolder,
     debugMode: settings.debugMode,
-    deepResearchPreview: settings.deepResearchPreview === true,
     onboardingCompleted: settings.onboardingCompleted === true,
     onboardingProfileIds: readOnboardingProfileIds(settings),
     modelCapabilityCache: { ...settings.modelCapabilityCache },

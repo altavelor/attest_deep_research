@@ -131,7 +131,6 @@ export interface AttestSettings {
   downloadFolder: string;
   researchExportFolder: string;
   debugMode: boolean;
-  deepResearchPreview: boolean;
   onboardingCompleted: boolean;
   onboardingProfileIds: OnboardingProfileIds;
   modelCapabilityCache: Record<string, ModelCapabilitySnapshot>;

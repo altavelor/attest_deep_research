@@ -44,12 +44,11 @@ Attest separates the stable `instant` and `thinking` strategies:
   selected model cannot satisfy the tool/reasoning policy. A call to a tool the run does not offer
   or permit fails with `tool-unavailable`; the model receives the offered tool names and the
   timeline row shows a localized reason.
-- **Deep Research** runs only behind the hidden developer flag `deepResearchPreview`; it is not
-  offered in the composer or in new-chat defaults without it, and the run is rejected with
-  `research-disabled` when the flag is off. Its lifecycle is
+- **Deep Research** is offered in the composer's mode selector. Its lifecycle is
   `plan → user review → gather → verify → synthesize → export`. The composer disables the item
   with the same readable reason as Thinking when the model has no verified tool calling.
-  The flag stays until every activation condition holds; all of them are open:
+  New-chat defaults still offer only Instant and Thinking. The quality gates of the
+  specification remain open and are tracked separately from availability:
   - Deep Research beats the recorded Thinking baseline on objective coverage and citation support
     on the frozen corpus for one local and one remote profile (no baseline is recorded yet);
   - unsupported-certainty and uncounted-conflict rates are not worse than that baseline;

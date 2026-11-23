@@ -33,7 +33,7 @@ interface Harness {
 
 function answer(harness: Harness, request: Omit<ResearchRequest, "mode">) {
   return collectAsync(
-    deepResearchService(harness.model, true, {
+    deepResearchService(harness.model, {
       retriever: retriever(),
       modelRound: harness.rounds,
       ...(harness.timer ? { researchTimer: harness.timer } : {}),

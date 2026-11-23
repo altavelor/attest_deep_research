@@ -117,7 +117,6 @@ export interface AttestChatViewServices {
   getTranslator(): UiTranslator;
   logError?(error: unknown): void;
   isDebugMode(): boolean;
-  isDeepResearchEnabled?(): boolean;
   exportResearchReport?(
     report: ResearchReport,
     context: ResearchExportContext,
@@ -216,7 +215,6 @@ export class AttestChatView extends ItemView {
           .map((file) => file.path)
           .sort(),
       getResearchMode: () => this.currentResearchMode,
-      isDeepResearchEnabled: () => this.services.isDeepResearchEnabled?.() === true,
       getAttachedContextPaths: () => this.attachedContextPaths,
       getActiveFilePath: () => this.app.workspace.getActiveFile()?.path,
       shouldIncludeActiveFileContext: () => this.services.shouldIncludeActiveFileContext(),
@@ -1036,7 +1034,7 @@ export class AttestChatView extends ItemView {
   }
 
   private async updateResearchMode(mode: ResearchMode): Promise<void> {
-    const researchMode = availableResearchMode(this.services, mode);
+    const researchMode = availableResearchMode(mode);
     this.currentChatSettings = { ...this.currentChatSettings, researchMode };
     await this.saveCurrentChat();
   }

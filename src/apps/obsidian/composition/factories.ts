@@ -144,7 +144,6 @@ export function createResearchService(
       summaryAvailable: chatProfile.reasoningCapabilities?.summary === true,
     },
     chatModelName: chatProfile.modelName,
-    deepResearchEnabled: settings.deepResearchPreview,
     chatOptions: {
       temperature: chatProfile.temperature,
       maxTokens: chatProfile.maxTokens,

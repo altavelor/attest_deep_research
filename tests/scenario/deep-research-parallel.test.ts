@@ -47,7 +47,7 @@ function researchRun(
   port.commits.push(state);
   const model = new CitingReportModel();
   const events = collectAsync(
-    deepResearchService(model, true, {
+    deepResearchService(model, {
       retriever: retriever(),
       modelRound: rounds,
       now: () => new Date("2026-01-01T01:00:00.000Z"),

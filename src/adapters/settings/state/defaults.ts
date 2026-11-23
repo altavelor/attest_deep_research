@@ -84,7 +84,6 @@ export const DEFAULT_SETTINGS: AttestSettings = {
   downloadFolder: DEFAULT_DOWNLOAD_FOLDER,
   researchExportFolder: DEFAULT_RESEARCH_EXPORT_FOLDER,
   debugMode: false,
-  deepResearchPreview: false,
   onboardingCompleted: false,
   onboardingProfileIds: { ...EMPTY_ONBOARDING_PROFILE_IDS },
   modelCapabilityCache: {},

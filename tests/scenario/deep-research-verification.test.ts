@@ -64,7 +64,7 @@ async function runVerified(plan: ResearchPlan, model: FirstAssessmentFailsModel)
   const rounds = new BranchModelRounds();
   const registry = new ResearchRegistry();
   await collectAsync(
-    deepResearchService(model, true, {
+    deepResearchService(model, {
       retriever: new FakeRetriever({
         chunks: [
           retrieved("chunk-1", markdownSource("Notes/tides.md"), "The moon pulls the oceans."),
