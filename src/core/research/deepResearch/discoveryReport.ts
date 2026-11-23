@@ -93,7 +93,7 @@ function labelOf(
   const user = own.filter((entry) => entry.producer === "user");
   const status = statusLabel(hypothesis.status, labels);
   if (user.length === 0) {
-    if (hypothesis.status !== "supported" && skippedTest(discovery, hypothesis)) {
+    if (unsettled(hypothesis) && skippedTest(discovery, hypothesis)) {
       return label(labels, "skippedObservation", { status });
     }
     return hypothesis.status === "supported" ? labels.supportedByLiterature : status;
@@ -109,6 +109,10 @@ function statusLabel(status: ResearchHypothesis["status"], labels: ResearchLabel
   if (status === "disconfirmed") return labels.statusDisconfirmed;
   if (status === "inconclusive") return labels.statusInconclusive;
   return labels.statusUntested;
+}
+
+function unsettled(hypothesis: ResearchHypothesis): boolean {
+  return hypothesis.status === "untested" || hypothesis.status === "inconclusive";
 }
 
 function skippedTest(discovery: ResearchDiscovery, hypothesis: ResearchHypothesis): boolean {

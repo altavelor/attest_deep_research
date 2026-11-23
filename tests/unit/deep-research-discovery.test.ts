@@ -132,7 +132,7 @@ describe("deep research discovery rules", () => {
     expect(reported.limitations).toEqual([USER_OBSERVATION_LIMITATION]);
   });
 
-  it("labels user support with its limitations and always lists disconfirmed revisions", () => {
+  it("labels user support with its limitations and lists disconfirmed revisions without a skip label", () => {
     const reported = userObservation({
       observationId: "o-1",
       testId: "t-1",
@@ -153,7 +153,8 @@ describe("deep research discovery rules", () => {
             observationIds: ["o-1"],
           },
         ],
-        tests: [],
+        tests: [{ ...proposed, kind: "supplied-observation", status: "unavailable" }],
+        observationsSkipped: true,
         observations: [reported, { ...reported, observationId: "o-2", verdict: "contradicts" }],
         cycles: [],
         notes: [],
@@ -162,7 +163,7 @@ describe("deep research discovery rules", () => {
       },
       ENGLISH_RESEARCH_LABELS,
     );
-    expect(section).toContain("(disconfirmed) The moon drives tides. (revision 1)");
+    expect(section).toContain("- (disconfirmed) The moon drives tides. (revision 1)");
     expect(section).toContain(
       `(disconfirmed by a user observation — ${USER_OBSERVATION_LIMITATION}) The moon drives tides.`,
     );
