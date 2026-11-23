@@ -80,11 +80,12 @@ export interface CycleDecisionInput {
   hypotheses: readonly ResearchHypothesis[];
   tests: readonly ResearchTest[];
   progressed: boolean;
+  observationsSkipped?: boolean;
 }
 
 /**
  * Decides what follows a finished cycle: finish when every current hypothesis is settled, wait
- * when only tests needing the user remain, stop as exhausted at the cycle cap or a closed budget,
+ * when only tests needing the user remain unless the user skipped observations, stop as exhausted at the cycle cap or a closed budget,
  * continue only after progress and otherwise finish instead of looping.
  */
 export function nextCycleDecision(input: CycleDecisionInput): CycleDecision {
@@ -99,7 +100,8 @@ export function nextCycleDecision(input: CycleDecisionInput): CycleDecision {
   const remaining = input.tests.filter(
     (test) =>
       openIds.has(`${test.hypothesisId}#${test.hypothesisRevision}`) &&
-      (test.status === "proposed" || test.status === "awaiting-input"),
+      (test.status === "proposed" ||
+        (test.status === "awaiting-input" && input.observationsSkipped !== true)),
   );
   if (remaining.length > 0 && remaining.every((test) => test.status === "awaiting-input")) {
     return "await-observation";

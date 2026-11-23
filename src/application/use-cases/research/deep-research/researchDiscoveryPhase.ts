@@ -62,7 +62,10 @@ export async function runDiscoveryPhase(deps: DiscoveryPhaseDeps): Promise<Disco
       if (discovery.tests.some((test) => test.status === "awaiting-input")) {
         return { discovery, decision: "await-observation" };
       }
-      await commit(decided(deps, discovery, last.ordinal, true, "Observation received."));
+      const reason = discovery.observationsSkipped
+        ? "Observations skipped."
+        : "Observation received.";
+      await commit(decided(deps, discovery, last.ordinal, true, reason));
       continue;
     }
     const ordinal = last.ordinal + 1;
@@ -148,6 +151,26 @@ export function withObservation(
         : hypothesis,
     ),
   };
+}
+
+/**
+ * Ends the observation stage of a research: every supplied-observation test still open becomes
+ * unavailable with a note that the user skipped it, and the flag keeps later cycles from asking.
+ */
+export function withObservationsSkipped(
+  discovery: ResearchDiscovery,
+  ordinal: number,
+): ResearchDiscovery {
+  let next: ResearchDiscovery = { ...discovery, observationsSkipped: true };
+  for (const test of discovery.tests) {
+    if (
+      test.kind === "supplied-observation" &&
+      (test.status === "proposed" || test.status === "awaiting-input")
+    ) {
+      next = unavailable(next, test.testId, ordinal, "Observation skipped by the user");
+    }
+  }
+  return next;
 }
 
 async function started(deps: DiscoveryPhaseDeps): Promise<ResearchDiscovery> {
@@ -276,6 +299,8 @@ function decided(
   progressed: boolean,
   reason: string | null,
 ): ResearchDiscovery {
+  const skipped = discovery.observationsSkipped === true;
+  if (skipped) discovery = withObservationsSkipped(discovery, ordinal);
   const decision = nextCycleDecision({
     cycle: ordinal,
     researchCycles: deps.plan.limits.researchCycles,
@@ -283,6 +308,7 @@ function decided(
     hypotheses: discovery.hypotheses,
     tests: discovery.tests,
     progressed,
+    observationsSkipped: skipped,
   });
   return withCycle(discovery, ordinal, decision, reason ?? `Cycle ${ordinal}: ${decision}.`);
 }

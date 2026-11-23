@@ -226,6 +226,27 @@ describe("deep research plan card", () => {
       },
       "Send the observation",
     );
+    const skipHost = document.createElement("div");
+    renderResearchCard(
+      skipHost,
+      { researchId: state.researchId, artifact: "plan", revision: state.revision },
+      { view: { status: "ready", active: state, history: [] }, t, sentTurns: new Set(), onTurn },
+    );
+    [...skipHost.querySelectorAll("button")]
+      .find((button) => button.textContent === "Skip observations")!
+      .click();
+    expect(onTurn).toHaveBeenLastCalledWith(
+      {
+        type: "decision",
+        decision: {
+          researchId: state.researchId,
+          decisionId: "decision-o",
+          expectedRevision: state.revision,
+          payload: { action: "skip-observations", testId: "t-1" },
+        },
+      },
+      "Skip the observations",
+    );
   });
 
   it("renders a finished partial report with its verification sections from the history", () => {

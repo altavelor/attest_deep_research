@@ -55,7 +55,7 @@ const MAX_TIMESTAMP = 40;
  * Reads the stored discovery of an approved plan and rebuilds it from validated fields, or returns
  * undefined when a field is malformed or over its bound, a reference names an unknown branch,
  * hypothesis, test, observation or work, or a stored status differs from the one its own
- * observations give.
+ * observations give. A state stored before observations could be skipped reads as not skipped.
  */
 export function readDiscovery(
   value: unknown,
@@ -77,7 +77,8 @@ export function readDiscovery(
     !cycles ||
     !notes ||
     !executions ||
-    !isTextList(value.omissions, MAX_DISCOVERY_OMISSIONS, MAX_DISCOVERY_TEXT_CHARS)
+    !isTextList(value.omissions, MAX_DISCOVERY_OMISSIONS, MAX_DISCOVERY_TEXT_CHARS) ||
+    !(value.observationsSkipped === undefined || typeof value.observationsSkipped === "boolean")
   ) {
     return undefined;
   }
@@ -89,6 +90,7 @@ export function readDiscovery(
     notes,
     executions,
     omissions: [...value.omissions],
+    ...(value.observationsSkipped === true ? { observationsSkipped: true } : {}),
   };
   return discoveryConsistent(discovery, plan, otherWorks) &&
     discoveryBytes(discovery) <= MAX_DISCOVERY_BYTES
