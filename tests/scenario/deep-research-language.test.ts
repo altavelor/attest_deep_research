@@ -79,6 +79,26 @@ describe("deep research language", () => {
     const systems = run.model.requests.map((request) => String(request.messages[0]?.content));
     expect(systems.length).toBeGreaterThan(3);
     expect(systems.filter((text) => !text.includes(RESEARCH_LANGUAGE_RULE))).toEqual([]);
+
+    for (const failure of [new Error("down"), "down"]) {
+      const port = new MemoryResearchState();
+      const broken = {
+        listModels: async () => ["model"],
+        async *streamChat(): AsyncIterable<never> {
+          throw failure;
+        },
+      };
+      await expect(
+        collectAsync(
+          deepResearchService(broken).answer({
+            question: "Почему на Земле бывают приливы?",
+            mode: "deep-research",
+            researchState: port,
+          }),
+        ),
+      ).rejects.toThrow();
+      expect(port.commits.at(-1)).toMatchObject({ phase: "failed", terminalReason: ru.planFailed });
+    }
   });
 
   it("falls back to English labels for a language without a catalogue", async () => {

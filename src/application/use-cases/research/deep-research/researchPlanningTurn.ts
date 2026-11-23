@@ -137,11 +137,6 @@ async function endPlanning(
   const labels = turn.labels(planning);
   const ended = isAbort(error)
     ? endResearch(planning, "cancelled", labels.stoppedDrafting, turn.now())
-    : endResearch(
-        planning,
-        "failed",
-        error instanceof Error ? error.message : labels.planFailed,
-        turn.now(),
-      );
+    : endResearch(planning, "failed", labels.planFailed, turn.now());
   await turn.port.commit(ended, planning.revision).catch(() => undefined);
 }
