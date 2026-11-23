@@ -16,6 +16,7 @@ import { pumpEvents } from "./eventPump";
 import { runResearch, type ResearchRunResult, type SuppliedObservation } from "./researchRun";
 import { defaultTimer, referenceEvent } from "./strategyHelpers";
 import { preflightScope } from "./deepResearchTurns";
+import { turnRecorderOf } from "./DeepResearchTurnRecorder";
 
 export type TurnEvents = AsyncGenerator<ResearchStreamEvent, ResearchStrategyOutcome>;
 
@@ -36,7 +37,8 @@ export async function* runApprovedTurn(
   const signal = ctx.request.signal;
   let finalAnswer: ResearchAnswer | null = null;
   const result = yield* pumpEvents<ResearchStreamEvent, ResearchRunResult>((push) => {
-    const runner = new MainBranchRunner({
+    const recorder = turnRecorderOf(ctx);
+    const mainRunner = new MainBranchRunner({
       engine: deps.createBranchEngine(),
       sources: deps.branchSources,
       web: ctx.retrieval.web,
@@ -46,6 +48,7 @@ export async function* runApprovedTurn(
       onEvent: push,
       now: deps.now,
     });
+    const runner = recorder?.observeRunner(mainRunner) ?? mainRunner;
     const delegated = ctx.request.subAgentResearch;
     const parent = ctx.request.subAgentParent;
     return runResearch(approved, {
@@ -55,14 +58,16 @@ export async function* runApprovedTurn(
         ? {
             subAgents: {
               attach: (permits) => delegated.attachBudget(permits),
-              createRunner: (sessionOf) =>
-                new SubAgentBranchRunner({
+              createRunner: (sessionOf) => {
+                const subAgent = new SubAgentBranchRunner({
                   branches: approved.plan!.branches,
                   delegator: (branch, allocation) => delegated.delegator(branch, allocation),
                   resolver: parent.resolver,
                   sessionOf,
                   ...(parent.listSessions ? { listSessions: parent.listSessions } : {}),
-                }),
+                });
+                return recorder?.observeRunner(subAgent) ?? subAgent;
+              },
             },
           }
         : {}),
