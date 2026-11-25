@@ -36,6 +36,7 @@ import { dispatchEvent } from "@core/chat/subAgentPlacement";
 import { transcriptEventPlacement } from "./subAgentEventPlacement";
 import type { SubAgentDispatchEntry, SubAgentNoticeEntry } from "@core/research";
 import type { ResearchCardContext } from "./deep-research/researchPlanCard";
+import { isIntermediateResearchMessage } from "./deep-research/researchMessageActions";
 import type { ClarificationCardContext } from "./clarificationCard";
 
 export interface ChatTranscriptOptions {
@@ -230,6 +231,7 @@ function renderHeaderActions(
   index: number,
   options: ChatTranscriptOptions,
 ): void {
+  if (isIntermediateResearchMessage(message, options.research)) return;
   let actions: HTMLElement | null = null;
   const ensureActions = (): HTMLElement =>
     (actions ??= header.createDiv({ cls: "attest-chat__message-actions" }));

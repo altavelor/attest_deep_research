@@ -384,6 +384,7 @@ export class ChatSessionManager {
           request.question,
           request.contextPaths,
           request.clarificationReply,
+          request.research !== undefined,
         )
       : state.messages;
     const messages = startAssistantProgress(

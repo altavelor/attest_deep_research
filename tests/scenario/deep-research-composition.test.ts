@@ -189,7 +189,13 @@ describe("deep research through the composition factory", () => {
     expect(mainPath.report?.completedBranches).toHaveLength(3);
     expect(mainPath.sessions).toEqual([]);
 
-    const sequential = await composedRun((await parentTurn()).request);
+    const parent = await parentTurn();
+    expect(
+      parent.chat.manager
+        .getSession(parent.sessionId)!
+        .messages.map((message) => message.researchTurn),
+    ).toEqual([true, undefined]);
+    const sequential = await composedRun(parent.request);
     expect(sequential.report?.completedBranches).toHaveLength(3);
     expect(sequential.sessions).toHaveLength(3);
     expect(sequential.rounds.peakConcurrentRounds).toBe(1);

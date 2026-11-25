@@ -101,9 +101,15 @@ describe("chat rendering helpers", () => {
     ).toBe("instant");
   });
 
-  it("keeps included context paths and a clarification reply on the sent user message", () => {
+  it("keeps included context paths, a clarification reply and the research mark on the sent user message", () => {
     const reply = { answers: { "question-1": "Postgres" }, skipped: false };
-    const messages = nextUserMessage([], "Summarize this", ["Docs/one.md", "Docs/two.pdf"], reply);
+    const messages = nextUserMessage(
+      [],
+      "Summarize this",
+      ["Docs/one.md", "Docs/two.pdf"],
+      reply,
+      true,
+    );
 
     expect(messages).toEqual([
       {
@@ -112,6 +118,7 @@ describe("chat rendering helpers", () => {
         content: "Summarize this",
         contextPaths: ["Docs/one.md", "Docs/two.pdf"],
         clarificationReply: reply,
+        researchTurn: true,
         createdAt: expect.any(String),
       },
     ]);

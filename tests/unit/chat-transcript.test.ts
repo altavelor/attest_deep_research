@@ -10,7 +10,9 @@ import {
   type ChatTranscriptOptions,
 } from "@apps/obsidian/ui/chat/ChatTranscript";
 import { createTranslator } from "@adapters/i18n";
+import { isIntermediateResearchMessage } from "@apps/obsidian/ui/chat/deep-research/researchMessageActions";
 import { installObsidianDomHelpers, resetDom } from "../support/domHarness";
+import { pendingResearch } from "../support/deepResearch";
 
 function options(overrides: Partial<ChatTranscriptOptions> = {}): ChatTranscriptOptions {
   return {
@@ -190,6 +192,56 @@ describe("ChatTranscript", () => {
       .dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", shiftKey: true, bubbles: true }));
 
     expect(onSubmitEditedQuestion).not.toHaveBeenCalled();
+  });
+
+  it("gives no header actions to the intermediate messages of a Deep Research run", () => {
+    const transcript = document.createElement("div");
+    const at = "2026-01-01T12:34:00.000Z";
+    renderChatTranscript(
+      transcript,
+      options({
+        messages: [
+          { role: "user", content: "Question", createdAt: at },
+          { role: "user", content: "Approve the plan", createdAt: at, researchTurn: true },
+        ],
+      }),
+    );
+    expect(
+      [...transcript.querySelectorAll(".attest-chat__message")].map(
+        (el) => el.querySelectorAll(".attest-chat__message-actions button").length,
+      ),
+    ).toEqual([2, 0]);
+
+    const active = pendingResearch();
+    const context = {
+      view: {
+        status: "ready" as const,
+        active,
+        history: [
+          { researchId: "done", report: {} },
+          { researchId: "failed", report: null },
+        ] as never,
+      },
+      t: ((key: string) => key) as never,
+      sentTurns: new Set<string>(),
+      latestRevisions: new Map([["done", 3]]),
+      onTurn: vi.fn(),
+    };
+    const turn = (researchId: string, revision: number) => ({
+      role: "assistant" as const,
+      content: "Turn",
+      createdAt: at,
+      research: { researchId, artifact: "plan" as const, revision },
+    });
+    expect(
+      [
+        turn(active.researchId, active.revision),
+        turn("done", 1),
+        turn("done", 3),
+        turn("failed", 2),
+        { role: "assistant" as const, content: "Answer", createdAt: at },
+      ].map((message) => isIntermediateResearchMessage(message, context)),
+    ).toEqual([true, true, false, true, false]);
   });
 
   it("exposes a debug diagnostic for an assistant response and preserves its model label", () => {

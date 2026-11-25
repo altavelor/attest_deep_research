@@ -37,6 +37,7 @@ export function nextUserMessage(
   content: string,
   contextPaths: readonly string[] = [],
   clarificationReply?: ClarificationReply,
+  researchTurn = false,
 ): ChatDisplayMessage[] {
   return [
     ...messages,
@@ -47,6 +48,7 @@ export function nextUserMessage(
       createdAt: new Date().toISOString(),
       ...(contextPaths.length > 0 ? { contextPaths: [...contextPaths] } : {}),
       ...(clarificationReply ? { clarificationReply } : {}),
+      ...(researchTurn ? { researchTurn: true as const } : {}),
     },
   ];
 }

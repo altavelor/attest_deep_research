@@ -33,6 +33,7 @@ export interface ChatDisplayMessage {
   fallbackReason?: string;
   timelineSequence?: number;
   research?: ResearchArtifactReference;
+  researchTurn?: true;
 }
 
 export interface ReasoningSegment {
