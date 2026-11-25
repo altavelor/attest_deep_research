@@ -208,8 +208,14 @@ describe("deep research plan card", () => {
     );
   });
 
-  it("shows a paused research with its branch states and sends Continue", () => {
-    const pending = pendingResearch();
+  it("shows a paused research as numbered branch rows that open in place and sends Continue", () => {
+    const pending = pendingResearch(
+      researchPlan([
+        researchBranch(1),
+        researchBranch(2),
+        researchBranch(3, { dependsOn: ["branch-1"] }),
+      ]),
+    );
     const state = {
       ...pending,
       phase: "gathering" as const,
@@ -218,17 +224,73 @@ describe("deep research plan card", () => {
       executions: initialExecutions(pending.plan!).map((execution, index) =>
         index === 0
           ? { ...execution, state: "failed" as const, terminalReason: "Provider down" }
-          : execution,
+          : index === 2
+            ? execution
+            : {
+                ...execution,
+                state: "completed" as const,
+                finding: { text: "Found tides", citationTokens: [], partial: true },
+                runRef: { sessionId: "s-2", runId: "r-2", resultRevision: 1 },
+              },
       ),
     };
     const onTurn = vi.fn();
-    const host = document.createElement("div");
-    renderResearchCard(
-      host,
-      { researchId: state.researchId, artifact: "plan", revision: state.revision },
-      { view: { status: "ready", active: state, history: [] }, t, sentTurns: new Set(), onTurn },
+    const onOpenSubAgentSession = vi.fn();
+    const context = {
+      view: { status: "ready" as const, active: state, history: [] },
+      t,
+      sentTurns: new Set<string>(),
+      expandedBranches: new Set<string>(),
+      onTurn,
+      onOpenSubAgentSession,
+    };
+    const render = (): HTMLElement => {
+      const host = document.createElement("div");
+      renderResearchCard(
+        host,
+        { researchId: state.researchId, artifact: "plan", revision: state.revision },
+        context,
+      );
+      return host;
+    };
+    const texts = (host: HTMLElement, selector: string): string[] =>
+      [...host.querySelectorAll(selector)].map((el) => el.textContent ?? "");
+    const host = render();
+    const rows = [...host.querySelectorAll<HTMLElement>(".attest-research-progress__row")];
+    expect([
+      texts(host, ".attest-research-progress__title"),
+      texts(host, ".attest-research-progress__summary"),
+      texts(host, ".attest-research-progress__legend-item"),
+      rows.map((row) => [
+        row.querySelector(".attest-research-progress__number")!.textContent,
+        row.querySelector(".attest-research-progress__chip")!.textContent,
+      ]),
+      texts(host, ".attest-research-progress__reason"),
+      texts(host, ".attest-research-progress__note"),
+      rows[1]!.querySelector<HTMLElement>(".attest-research-progress__body")!.hidden,
+    ]).toEqual([
+      ["Gathering sources"],
+      ["1 of 3 done"],
+      ["Partial: 1", "Waiting: 1", "Failed: 1"],
+      [
+        ["1", "Failed"],
+        ["2", "Partial"],
+        ["3", "Waiting"],
+      ],
+      ["Provider down"],
+      ["After 1"],
+      true,
+    ]);
+    rows[1]!.querySelector<HTMLButtonElement>(".attest-research-progress__toggle")!.click();
+    expect(rows[1]!.querySelector(".attest-research-progress__body")!.textContent).toContain(
+      "Found tides",
     );
-    expect(host.textContent).toContain("Failed · Provider down");
+    [...rows[1]!.querySelectorAll("button")]
+      .find((button) => button.textContent === "Open agent details")!
+      .click();
+    expect(onOpenSubAgentSession).toHaveBeenCalledWith("s-2");
+    const rerendered = render().querySelectorAll<HTMLElement>(".attest-research-progress__body");
+    expect([...rerendered].map((body) => body.hidden)).toEqual([true, false, true]);
     [...host.querySelectorAll("button")]
       .find((button) => button.textContent === "Continue")!
       .click();

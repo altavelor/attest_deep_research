@@ -146,6 +146,7 @@ export class AttestChatView extends ItemView {
   private selectedSessionId: string | null = null;
   private toolbarEl: HTMLElement | null = null;
   private readonly sentResearchTurns = new Set<string>();
+  private readonly expandedResearchBranches = new Set<string>();
   private readonly researchExports: ResearchExportController | null;
   private readonly clarificationDrafts = new ClarificationDrafts();
 
@@ -707,9 +708,11 @@ export class AttestChatView extends ItemView {
         view: researchSectionView(this.session.deepResearch),
         t: this.t,
         sentTurns: this.sentResearchTurns,
+        expandedBranches: this.expandedResearchBranches,
         running: this.isRunning,
         onTurn: (input, label) => void this.researchController.submitResearchTurn(input, label),
         onEditPlan: (request) => this.sessions.editResearchPlan(this.session.sessionId, request),
+        onOpenSubAgentSession: (sessionId) => this.subAgents.open(sessionId),
         ...(this.researchExports ? { exports: this.researchExports } : {}),
       },
       clarification: {

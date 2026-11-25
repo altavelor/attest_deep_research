@@ -1,20 +1,19 @@
 import type { Translate } from "@adapters/i18n";
-import {
-  budgetLimits,
-  type BranchExecution,
-  type ReportVerificationCounts,
-  type ResearchHistoryEntry,
-  type ResearchPlan,
-  type ResearchState,
+import type {
+  ReportVerificationCounts,
+  ResearchHistoryEntry,
+  ResearchPlan,
+  ResearchState,
 } from "@core/research/deepResearch";
 import type { ResearchCardContext } from "./researchCardContext";
 import type { ResearchExportController } from "./researchExportController";
 import { cancelAction, renderActions, type CardAction } from "./researchCardActions";
 import { renderDiscovery } from "./researchDiscoveryCard";
+import { renderBranchProgress } from "./researchBranchProgress";
 
 /**
- * Renders the progress of an approved research: every branch with its execution state and reason,
- * and the budget spent so far. A research that executes while no turn runs is paused and offers
+ * Renders the progress of an approved research: the branch progress block with the spent budget,
+ * then the discovery section. A research that executes while no turn runs is paused and offers
  * Continue and Cancel; an old plan waiting on a stale-plan decision offers its three choices.
  */
 export function renderProgress(
@@ -24,40 +23,7 @@ export function renderProgress(
   context: ResearchCardContext,
 ): void {
   const { t } = context;
-  cardEl.createDiv({
-    cls: "attest-research-card__title",
-    text: t("chat.deepResearch.progress.title"),
-  });
-  const listEl = cardEl.createEl("ol", { cls: "attest-research-card__branches" });
-  for (const execution of state.executions) {
-    const branch = plan.branches.find((entry) => entry.branchId === execution.branchId);
-    const itemEl = listEl.createEl("li", {
-      cls: `attest-research-card__branch attest-research-card__branch--${execution.state}`,
-    });
-    itemEl.createDiv({
-      cls: "attest-research-card__branch-title",
-      text: branch?.title ?? execution.branchId,
-    });
-    itemEl.createDiv({
-      cls: "attest-research-card__branch-notes",
-      text: executionNote(execution, t),
-    });
-  }
-  const budget = state.budget;
-  if (budget) {
-    const limits = budgetLimits(plan);
-    cardEl.createDiv({
-      cls: "attest-research-card__meta",
-      text: t("chat.deepResearch.progress.budget", {
-        rounds: budget.consumed.modelRounds,
-        maxRounds: limits.modelRoundsTotal,
-        attempts: budget.consumed.branchAttempts,
-        maxAttempts: limits.attemptsTotal,
-        minutes: Math.floor(budget.activeMs / 60_000),
-        maxMinutes: Math.floor(limits.activeExecutionMs / 60_000),
-      }),
-    });
-  }
+  renderBranchProgress(cardEl, state, plan, context);
   if (state.discovery) renderDiscovery(cardEl, state, state.discovery, context);
   if (context.running || state.pending?.kind === "observation") return;
   if (state.pending?.kind === "stale-plan") {
@@ -230,10 +196,4 @@ function renderStaleChoices(
     decide("replan", t("chat.deepResearch.action.replan")),
     decide("cancel", t("chat.deepResearch.action.cancel")),
   ]);
-}
-
-function executionNote(execution: BranchExecution, t: Translate): string {
-  const label = t(`chat.deepResearch.state.${execution.state}`);
-  const reason = execution.state === "completed" ? null : execution.terminalReason;
-  return reason ? `${label} · ${reason}` : label;
 }

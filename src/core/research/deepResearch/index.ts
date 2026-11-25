@@ -2,6 +2,13 @@ export * from "./types";
 export * from "./limits";
 export { budgetLimits } from "./budgetLimits";
 export {
+  BRANCH_PROGRESS_STATUSES,
+  branchProgressCounts,
+  branchProgressRows,
+  type BranchProgressRow,
+  type BranchProgressStatus,
+} from "./branchProgress";
+export {
   isResearchId,
   isRevision,
   maxEnabledBranches,

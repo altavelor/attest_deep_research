@@ -7,8 +7,10 @@ export interface ResearchCardContext {
   view: ResearchSectionView;
   t: Translate;
   sentTurns: Set<string>;
+  expandedBranches?: Set<string>;
   running?: boolean;
   onTurn(input: ResearchTurnInput, label: string): void;
   onEditPlan?(request: ResearchPlanEditRequest): Promise<ResearchPlanEditResult>;
   exports?: ResearchExportController;
+  onOpenSubAgentSession?(sessionId: string): void;
 }
