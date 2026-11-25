@@ -59,22 +59,25 @@ const WIDEST_QUESTION =
   "download the pdf and chart the numbers. Also open a URL and search my vault.";
 
 function registryFor(searchMode: ResearchSearchMode) {
-  return createResearchToolRegistry({
-    retriever,
-    searchProvider: provider,
-    urlStatusChecker,
-    subAgentParent: fakeParentRun().parent,
-    subAgentMapSources: mapSourcesContext().context,
-    noteTools,
-    availability: {
-      searchMode,
-      noteAccess: true,
-      activeFileAccess: true,
-      noteMutationAccess: true,
-      retrieverAvailable: true,
-      webProviderAvailable: true,
+  return createResearchToolRegistry(
+    {
+      retriever,
+      searchProvider: provider,
+      urlStatusChecker,
+      subAgentParent: fakeParentRun().parent,
+      subAgentMapSources: mapSourcesContext().context,
+      noteTools,
+      availability: {
+        searchMode,
+        noteAccess: true,
+        activeFileAccess: true,
+        noteMutationAccess: true,
+        retrieverAvailable: true,
+        webProviderAvailable: true,
+      },
     },
-  });
+    { scriptRunner: { run: vi.fn() } },
+  );
 }
 
 function optionsFor(available: string[]) {

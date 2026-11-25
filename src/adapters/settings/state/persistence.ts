@@ -113,6 +113,7 @@ function dropUnknownSettings(settings: AttestSettings): AttestSettings {
     graphContextDepth: settings.graphContextDepth,
     useWebWhenFreshnessNeeded: settings.useWebWhenFreshnessNeeded,
     expandSearchQuery: settings.expandSearchQuery,
+    scriptCalculations: settings.scriptCalculations,
     downloadFolder: settings.downloadFolder,
     debugMode: settings.debugMode,
     onboardingCompleted: settings.onboardingCompleted === true,

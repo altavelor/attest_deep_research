@@ -25,6 +25,8 @@ export const IMAGE_SEARCH_TOOL = "search_images";
 export const PRESENT_IMAGE_GALLERY_TOOL = "present_image_gallery";
 export const PRESENT_CHART_TOOL = "present_chart";
 
+export const RUN_JS_TOOL = "run_js";
+
 export const SUB_AGENT_TOOL = "run_subagent";
 export const SUB_AGENT_RESULT_TOOL = "get_subagent_result";
 export const SUB_AGENT_WAIT_TOOL = "wait_subagents";
@@ -75,6 +77,7 @@ export const PROMPT_TOOL_NAMES = [
   IMAGE_SEARCH_TOOL,
   PRESENT_IMAGE_GALLERY_TOOL,
   PRESENT_CHART_TOOL,
+  RUN_JS_TOOL,
   ...NOTE_EDIT_TOOLS,
   ...NOTE_MUTATION_TOOLS,
 ] as const;

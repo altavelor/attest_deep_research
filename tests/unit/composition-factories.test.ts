@@ -24,6 +24,7 @@ import {
   createSearchProvider,
 } from "@apps/obsidian/composition/factories";
 import { createTranslator } from "@adapters/i18n";
+import type { ResearchToolsetFactory } from "@application/research";
 
 describe("composition factories", () => {
   it("passes settings and shared infrastructure into the web-search factory", () => {
@@ -211,5 +212,29 @@ describe("research service composition", () => {
     const options = composedOptions(createContext(), "none");
 
     expect((options.getIndexStatus as () => unknown)()).toMatchObject({ available: false });
+  });
+
+  it.each([
+    [true, ["run_js"]],
+    [false, []],
+  ])("offers sandboxed calculations only while the setting is %s", (enabled, expected) => {
+    const ctx = createContext();
+    (ctx.getSettings() as { scriptCalculations: boolean }).scriptCalculations = enabled;
+    const toolsetFactory = composedOptions(ctx, "none").toolsetFactory as ResearchToolsetFactory;
+
+    const toolset = toolsetFactory({
+      availability: {
+        searchMode: "none",
+        noteAccess: false,
+        activeFileAccess: false,
+        noteMutationAccess: false,
+        retrieverAvailable: false,
+        webProviderAvailable: false,
+      },
+    });
+
+    expect(toolset.tools.definitions().map((definition) => definition.function.name)).toEqual(
+      expected,
+    );
   });
 });

@@ -42,6 +42,10 @@ export const settings: EnSettingsMessages = {
   "settings.retrieval.expandSearchQuery.name": "Étendre la requête de recherche",
   "settings.retrieval.expandSearchQuery.desc":
     "Générer des variantes multilingues de la requête avant la récupération afin de trouver les notes rédigées dans d’autres langues. Consomme un appel supplémentaire au modèle de chat par recherche.",
+  "settings.retrieval.calculations.heading": "Calculs",
+  "settings.retrieval.scriptCalculations.name": "Calculs en bac à sable",
+  "settings.retrieval.scriptCalculations.desc":
+    "Permet à l’agent de recherche de calculer les chiffres dérivés (pourcentages, conversions, sommes) en JavaScript dans un bac à sable isolé, sans accès au réseau ni au coffre. Le code et le résultat apparaissent dans la chaîne.",
   "settings.retrieval.web.heading": "Web",
   "settings.retrieval.useWebWhenFreshnessNeeded.name":
     "Utiliser le web pour les questions d’actualité",

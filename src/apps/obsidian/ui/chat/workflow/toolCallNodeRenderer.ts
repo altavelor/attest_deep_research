@@ -56,7 +56,8 @@ export function renderToolNode(
     });
   }
   const onOpen = (): void => scope.resources.openToolOutput(item);
-  if (context.isDebugMode && view.inCell) {
+  const showCells = context.isDebugMode || view.cellsAlwaysVisible === true;
+  if (showCells && view.inCell) {
     renderToolCell(
       body,
       `${item.id}:in`,
@@ -69,7 +70,7 @@ export function renderToolNode(
       },
     );
   }
-  if (context.isDebugMode && view.outCell) {
+  if (showCells && view.outCell) {
     renderToolCell(
       body,
       `${item.id}:out`,

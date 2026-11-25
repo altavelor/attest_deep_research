@@ -11,6 +11,7 @@ import {
   MAP_SOURCES_TOOL,
   PROBE_DOCUMENT_URL_TOOL,
   READ_NOTE_TOOL,
+  RUN_JS_TOOL,
   SEARCH_NOTES_TOOL,
   UPDATE_NOTE_TOOL,
   WEB_FETCH_TOOL,
@@ -278,6 +279,15 @@ describe("capability gating", () => {
       availableTools: [WEB_SEARCH_TOOL, WEB_FETCH_TOOL, SUB_AGENT_TOOL],
     });
     expect(withSubAgent).toContain(`## Delegating a facet (${SUB_AGENT_TOOL})`);
+  });
+
+  it("requires sandboxed arithmetic over passed-in source figures only when run_js is registered", () => {
+    expect(systemText({ availableTools: [WEB_SEARCH_TOOL] })).not.toContain(RUN_JS_TOOL);
+
+    const system = systemText({ availableTools: [WEB_SEARCH_TOOL, RUN_JS_TOOL] });
+    expect(system).toContain(`## Calculations (${RUN_JS_TOOL})`);
+    expect(system).toContain("never in your head");
+    expect(system).toContain("never retype them in the code");
   });
 
   it("gives delegation a verifiable criterion and does not recommend a fan-out", () => {

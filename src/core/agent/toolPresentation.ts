@@ -24,6 +24,7 @@ import {
   READ_INDEX_CHUNK_TOOL,
   READ_INDEX_SECTION_TOOL,
   READ_NOTE_TOOL,
+  RUN_JS_TOOL,
   SEARCH_INDEX_BY_METADATA_TOOL,
   SEARCH_NOTES_TOOL,
   SUB_AGENT_RESULT_TOOL,
@@ -272,6 +273,13 @@ export const TOOL_PRESENTATIONS: Readonly<Record<string, ToolPresentation>> = {
       return url
         ? `Saving a document from ${hostOf(url)} to the vault`
         : "Saving a document to the vault";
+    },
+  },
+  [RUN_JS_TOOL]: {
+    title: "Calculation",
+    intent: ({ args }) => {
+      const purpose = str(args, "purpose");
+      return purpose ? `Calculating ${quoted(purpose)}` : "Running a calculation";
     },
   },
   [READ_NOTE_TOOL]: {

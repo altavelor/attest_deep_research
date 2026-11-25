@@ -43,6 +43,10 @@ export const settings: EnSettingsMessages = {
   "settings.retrieval.expandSearchQuery.name": "Suchanfrage erweitern",
   "settings.retrieval.expandSearchQuery.desc":
     "Vor dem Abruf sprachübergreifende Anfragevarianten erzeugen, damit auch Notizen in anderen Sprachen gefunden werden. Kostet pro Suche einen zusätzlichen Aufruf des Chat-Modells.",
+  "settings.retrieval.calculations.heading": "Berechnungen",
+  "settings.retrieval.scriptCalculations.name": "Berechnungen in der Sandbox",
+  "settings.retrieval.scriptCalculations.desc":
+    "Lässt den Recherche-Agenten abgeleitete Zahlen (Prozente, Umrechnungen, Summen) als JavaScript in einer isolierten Sandbox ohne Netzwerk- oder Vault-Zugriff berechnen. Code und Ergebnis erscheinen in der Kette.",
   "settings.retrieval.web.heading": "Web",
   "settings.retrieval.useWebWhenFreshnessNeeded.name": "Web für Aktualitätsfragen nutzen",
   "settings.retrieval.useWebWhenFreshnessNeeded.desc":

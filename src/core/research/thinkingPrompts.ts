@@ -13,6 +13,7 @@ import {
   PRESENT_CHART_TOOL,
   PRESENT_IMAGE_GALLERY_TOOL,
   PROBE_DOCUMENT_URL_TOOL,
+  RUN_JS_TOOL,
   SUB_AGENT_TOOL,
   UPDATE_NOTE_TOOL,
   WEB_FETCH_TOOL,
@@ -68,6 +69,7 @@ import {
   buildExplicitEvidenceSection,
 } from "./thinking-prompt/promptUntrustedData";
 import {
+  buildCalculationsSection,
   buildCompileKnowledgeSection,
   buildFindClaimsSection,
   buildMapSourcesSection,
@@ -254,6 +256,13 @@ function workflowSections(capabilities: PromptCapabilities, intent: PromptIntent
         PRESENT_IMAGE_GALLERY_TOOL,
         PRESENT_CHART_TOOL,
       ]),
+    ),
+    optionalSection(
+      "calculations",
+      "workflow",
+      capabilities.calculations,
+      buildCalculationsSection,
+      [RUN_JS_TOOL],
     ),
   ];
 }

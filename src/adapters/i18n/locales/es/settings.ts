@@ -42,6 +42,10 @@ export const settings: EnSettingsMessages = {
   "settings.retrieval.expandSearchQuery.name": "Ampliar la consulta de búsqueda",
   "settings.retrieval.expandSearchQuery.desc":
     "Generar variantes de la consulta en varios idiomas antes de la recuperación para encontrar notas escritas en otras lenguas. Consume una llamada adicional al modelo de chat por búsqueda.",
+  "settings.retrieval.calculations.heading": "Cálculos",
+  "settings.retrieval.scriptCalculations.name": "Cálculos en entorno aislado",
+  "settings.retrieval.scriptCalculations.desc":
+    "Permite que el agente de investigación calcule cifras derivadas (porcentajes, conversiones, sumas) con JavaScript en un entorno aislado sin acceso a la red ni a la bóveda. El código y el resultado aparecen en la cadena.",
   "settings.retrieval.web.heading": "Web",
   "settings.retrieval.useWebWhenFreshnessNeeded.name": "Usar la web para preguntas de actualidad",
   "settings.retrieval.useWebWhenFreshnessNeeded.desc":

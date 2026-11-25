@@ -39,6 +39,10 @@ export const settings: EnSettingsMessages = {
   "settings.retrieval.expandSearchQuery.name": "توسيع استعلام البحث",
   "settings.retrieval.expandSearchQuery.desc":
     "إنشاء صيغ للاستعلام بلغات مختلفة قبل الاسترجاع للعثور على الملاحظات المكتوبة بلغات أخرى. يستهلك استدعاءً إضافيًا لنموذج المحادثة لكل بحث.",
+  "settings.retrieval.calculations.heading": "الحسابات",
+  "settings.retrieval.scriptCalculations.name": "حسابات في بيئة معزولة",
+  "settings.retrieval.scriptCalculations.desc":
+    "يسمح لوكيل البحث بحساب الأرقام المشتقة (النسب المئوية والتحويلات والمجاميع) بلغة JavaScript في بيئة معزولة دون الوصول إلى الشبكة أو الخزنة. يظهر الكود والنتيجة في السلسلة.",
   "settings.retrieval.web.heading": "الويب",
   "settings.retrieval.useWebWhenFreshnessNeeded.name": "استخدام الويب لأسئلة الحداثة",
   "settings.retrieval.useWebWhenFreshnessNeeded.desc":

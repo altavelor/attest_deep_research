@@ -27,6 +27,8 @@ export function normalizeSettingsState(settings: AttestSettings): void {
       : DEFAULT_DOWNLOAD_FOLDER;
   settings.expandSearchQuery =
     typeof settings.expandSearchQuery === "boolean" ? settings.expandSearchQuery : true;
+  settings.scriptCalculations =
+    typeof settings.scriptCalculations === "boolean" ? settings.scriptCalculations : true;
   migrateLegacyWebSettings(settings);
   migrateWebSourceActivation(settings);
   normalizeWebSources(settings);

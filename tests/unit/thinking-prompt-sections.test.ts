@@ -27,6 +27,7 @@ import {
   READ_INDEX_CHUNK_TOOL,
   READ_INDEX_SECTION_TOOL,
   READ_NOTE_TOOL,
+  RUN_JS_TOOL,
   SEARCH_NOTES_TOOL,
   SUB_AGENT_TOOL,
   UPDATE_NOTE_TOOL,
@@ -58,6 +59,7 @@ const WORKFLOW_TOOLS = [
   IMAGE_SEARCH_TOOL,
   PRESENT_CHART_TOOL,
   PRESENT_IMAGE_GALLERY_TOOL,
+  RUN_JS_TOOL,
 ];
 
 /** A question that matches every intent, so each profile assembles at its widest. */

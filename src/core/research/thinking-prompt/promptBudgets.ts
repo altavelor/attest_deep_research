@@ -13,7 +13,7 @@ export const PROMPT_TOKEN_CEILINGS: Readonly<Record<PromptProfileId, number>> = 
   "index-only": 2_400,
   "vault-mutations": 2_300,
   "web-only": 2_350,
-  "index-web-mutations-workflows": 4_200,
+  "index-web-mutations-workflows": 4_300,
 });
 
 export interface PromptSizeMeasurement {

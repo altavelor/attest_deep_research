@@ -12,6 +12,7 @@ import { DEFAULT_GRAPH_CONTEXT_LIMITS } from "@core/research";
 import { ObsidianGraphContextProvider } from "@adapters/obsidian/ObsidianGraphContextProvider";
 import { createResearchToolRegistry, NoteToolService, runToolLoop } from "@adapters/research-tools";
 import { ObsidianVaultWriter } from "@adapters/obsidian/ObsidianVaultWriter";
+import { QuickJsScriptRunner } from "@adapters/sandbox";
 import { ResearchService } from "@application/use-cases/research";
 import type { ResearchSearchMode } from "@application/use-cases/research";
 import { getActiveIndexProfile, resolveToolCapabilities } from "@adapters/settings";
@@ -97,6 +98,7 @@ export function createResearchService(
   const toolResolution = resolveToolCapabilities(chatProfile.capabilities?.toolCalling);
   const toolsEnabled = resolveEffectiveTools(chatProfile);
   const vaultWriter = chatProfile.noteMutationAccess ? new ObsidianVaultWriter(ctx.app) : undefined;
+  const scriptRunner = settings.scriptCalculations ? new QuickJsScriptRunner() : undefined;
   let effectiveProtocol = resolveEffectiveChatApiProtocol(chatProfile);
   if (
     effectiveProtocol === "responses" &&
@@ -128,7 +130,11 @@ export function createResearchService(
 
   return new ResearchService({
     retriever,
-    toolsetFactory: (options) => createResearchToolRegistry(options, { fetch: nativeWindowFetch }),
+    toolsetFactory: (options) =>
+      createResearchToolRegistry(options, {
+        fetch: nativeWindowFetch,
+        ...(scriptRunner ? { scriptRunner } : {}),
+      }),
     modelRoundFactory: (model) => new ChatCompletionsRoundAdapter(model),
     runToolLoop,
     translate: (key, params) => ctx.translator.t(key as MessageKey, params),

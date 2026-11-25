@@ -80,6 +80,7 @@ export const DEFAULT_SETTINGS: AttestSettings = {
   graphContextDepth: 1,
   useWebWhenFreshnessNeeded: true,
   expandSearchQuery: true,
+  scriptCalculations: true,
   downloadFolder: DEFAULT_DOWNLOAD_FOLDER,
   debugMode: false,
   onboardingCompleted: false,
