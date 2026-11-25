@@ -43,6 +43,7 @@ export function verificationCounts(
     unsupported: count("unsupported"),
     unresolved: count("unresolved"),
     uncoveredObjectives: uncoveredRequired(plan, verification),
+    coveredObjectives: verification.coverage.filter((entry) => entry.covered).length,
   };
 }
 

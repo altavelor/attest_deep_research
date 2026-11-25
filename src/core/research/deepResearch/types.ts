@@ -168,6 +168,7 @@ export interface ReportVerificationCounts {
   unsupported: number;
   unresolved: number;
   uncoveredObjectives: readonly string[];
+  coveredObjectives?: number;
 }
 
 export type BudgetDimension = "branchAttempts" | "modelRounds" | "searches" | "evidenceItems";

@@ -266,7 +266,9 @@ export function readReportCounts(value: unknown): ReportVerificationCounts | nul
     ) ||
     !Array.isArray(value.uncoveredObjectives) ||
     value.uncoveredObjectives.length > MAX_PLAN_LIST_ITEMS ||
-    !value.uncoveredObjectives.every(isText)
+    !value.uncoveredObjectives.every(isText) ||
+    (value.coveredObjectives !== undefined &&
+      !(isRevision(value.coveredObjectives) && value.coveredObjectives <= MAX_PLAN_LIST_ITEMS))
   ) {
     return undefined;
   }
@@ -276,6 +278,9 @@ export function readReportCounts(value: unknown): ReportVerificationCounts | nul
     unsupported: value.unsupported as number,
     unresolved: value.unresolved as number,
     uncoveredObjectives: [...(value.uncoveredObjectives as string[])],
+    ...(value.coveredObjectives !== undefined
+      ? { coveredObjectives: value.coveredObjectives as number }
+      : {}),
   };
 }
 

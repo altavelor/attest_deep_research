@@ -27,7 +27,7 @@ export interface ReportFacts {
  * Reads what the final card of a research shows. A report is complete only when its quality is
  * complete, no branch is missing, no claim conflicts and every objective is covered; a research
  * without a report was cancelled or failed. Objective totals exist only for reports that recorded
- * their scale.
+ * their scale; reports without a covered count estimate it from the uncovered required ones.
  */
 export function reportFacts(entry: ResearchHistoryEntry): ReportFacts {
   const report = entry.report;
@@ -55,6 +55,7 @@ export function reportFacts(entry: ResearchHistoryEntry): ReportFacts {
     (claims?.conflicted ?? 0) === 0 &&
     uncovered.length === 0;
   const objectives = report.scale?.objectives;
+  const covered = counts?.coveredObjectives ?? (objectives ?? 0) - uncovered.length;
   return {
     outcome: clean ? "complete" : "partial",
     report,
@@ -66,7 +67,7 @@ export function reportFacts(entry: ResearchHistoryEntry): ReportFacts {
     objectives:
       objectives === undefined || objectives === 0
         ? null
-        : { done: Math.max(0, objectives - uncovered.length), total: objectives },
+        : { done: Math.min(objectives, Math.max(0, covered)), total: objectives },
     uncovered,
   };
 }

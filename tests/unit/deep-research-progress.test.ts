@@ -32,7 +32,7 @@ describe("deep research branch progress rows", () => {
 });
 
 describe("deep research report facts", () => {
-  it("calls a report complete only without missing branches, conflicts or uncovered objectives", () => {
+  it("calls a report complete only when nothing is missing and counts its covered objectives", () => {
     const entry = {
       researchId: "research-1",
       question: "Q",
@@ -72,6 +72,35 @@ describe("deep research report facts", () => {
       reportFacts(missing).outcome,
       reportFacts({ ...entry, phase: "cancelled", report: null }).outcome,
       reportFacts({ ...entry, phase: "failed", report: null }).outcome,
-    ]).toEqual(["complete", null, "partial", "partial", "cancelled", "failed"]);
+      reportFacts({
+        ...entry,
+        report: {
+          ...entry.report,
+          scale: { objectives: 5, activeMs: 0, activeLimitMs: 1 },
+          verification: {
+            ...entry.report.verification,
+            uncoveredObjectives: ["A"],
+            coveredObjectives: 0,
+          },
+        },
+      }).objectives,
+      reportFacts({
+        ...entry,
+        report: {
+          ...entry.report,
+          scale: { objectives: 5, activeMs: 0, activeLimitMs: 1 },
+          verification: { ...entry.report.verification, uncoveredObjectives: ["A"] },
+        },
+      }).objectives,
+    ]).toEqual([
+      "complete",
+      null,
+      "partial",
+      "partial",
+      "cancelled",
+      "failed",
+      { done: 0, total: 5 },
+      { done: 4, total: 5 },
+    ]);
   });
 });

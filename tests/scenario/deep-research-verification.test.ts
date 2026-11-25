@@ -123,7 +123,12 @@ describe("deep research verification", () => {
     ]);
     expect(final.report).toMatchObject({
       quality: "partial",
-      verification: { supported: 1, unresolved: 2, uncoveredObjectives: ["Second"] },
+      verification: {
+        supported: 1,
+        unresolved: 2,
+        uncoveredObjectives: ["Second"],
+        coveredObjectives: 1,
+      },
     });
     expect(final.report!.markdown).toContain("## Unsupported or unresolved claims");
     expect(final.report!.markdown).toContain("## Uncovered objectives\n\n- Second");

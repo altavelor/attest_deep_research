@@ -619,6 +619,18 @@ describe("deep research section validation", () => {
         ]),
       ],
       [
+        "covered objectives above the objective bound",
+        section(null, [
+          {
+            ...ended,
+            report: {
+              ...ended.report,
+              verification: { ...ended.report.verification, coveredObjectives: 13 },
+            },
+          },
+        ]),
+      ],
+      [
         "too many objectives",
         section({
           ...pending,
@@ -717,6 +729,7 @@ describe("deep research section validation", () => {
         ...ended.report,
         missingBranches: [{ branchId: "branch-2", reason: "Time", title: "Tides" }],
         scale: { objectives: 12, activeMs: 1_000, activeLimitMs: 2_000 },
+        verification: { ...ended.report.verification, coveredObjectives: 12 },
       },
     };
     const rebuilt = validateResearchSection(section(approved, [scaled]));
