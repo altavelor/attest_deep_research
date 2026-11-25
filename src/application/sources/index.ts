@@ -5,6 +5,8 @@ export { SourceManager } from "./DataSource";
 export type { DataSource, DataSourceDescriptor, SourceKind } from "./DataSource";
 
 export type {
+  ComputationRecord,
+  ComputationRecorder,
   EvidenceCallProvenance,
   EvidenceProvenance,
   EvidenceRegistry,

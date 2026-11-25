@@ -16,6 +16,8 @@ import { DownloadSource } from "./download/DownloadSource";
 import { DOWNLOAD_PERMISSIONS } from "./download/documentDownload";
 import { AnswerArtifactRegistry } from "./media/AnswerArtifactRegistry";
 import { MediaSource } from "./media/MediaSource";
+import { ScriptSource } from "./script/ScriptSource";
+import type { ScriptRunner } from "@application/ports";
 import { fetchTransportOrUnavailable } from "@shared";
 
 export interface CreatedResearchToolRegistry extends ResearchToolset {
@@ -27,7 +29,7 @@ export interface CreatedResearchToolRegistry extends ResearchToolset {
 
 export function createResearchToolRegistry(
   options: ResearchToolsetOptions,
-  runtime?: { fetch: typeof fetch },
+  runtime?: { fetch?: typeof fetch; scriptRunner?: ScriptRunner },
 ): CreatedResearchToolRegistry {
   const evidence = new ResearchEvidenceRegistry();
   const artifacts = new AnswerArtifactRegistry();
@@ -138,6 +140,10 @@ export function createResearchToolRegistry(
         readDocumentPaths: () => vaultEvidencePaths(evidence),
       }),
     );
+  }
+
+  if (runtime?.scriptRunner) {
+    sources.register(new ScriptSource({ runner: runtime.scriptRunner, recorder: evidence }));
   }
 
   const tools = new ToolManager([], permissions);

@@ -29,25 +29,28 @@ function allToolDefinitions(): ChatToolDefinition[] {
     execute: async () => ({ ok: true, result: "" }),
   };
 
-  return createResearchToolRegistry({
-    retriever,
-    searchProvider: provider,
-    noteTools,
-    urlStatusChecker: { checkUrls: async () => [] },
-    subAgentParent: fakeParentRun().parent,
-    subAgentMapSources: mapSourcesContext().context,
-    vaultWriter: { write: async () => {} },
-    imageSearch: { enabledImageSources: () => [] },
-    documentImageCandidates: async () => [],
-    availability: {
-      searchMode: "indexAndWeb",
-      noteAccess: true,
-      activeFileAccess: true,
-      noteMutationAccess: true,
-      retrieverAvailable: true,
-      webProviderAvailable: true,
-    },
-  } as never).tools.definitions();
+  return createResearchToolRegistry(
+    {
+      retriever,
+      searchProvider: provider,
+      noteTools,
+      urlStatusChecker: { checkUrls: async () => [] },
+      subAgentParent: fakeParentRun().parent,
+      subAgentMapSources: mapSourcesContext().context,
+      vaultWriter: { write: async () => {} },
+      imageSearch: { enabledImageSources: () => [] },
+      documentImageCandidates: async () => [],
+      availability: {
+        searchMode: "indexAndWeb",
+        noteAccess: true,
+        activeFileAccess: true,
+        noteMutationAccess: true,
+        retrieverAvailable: true,
+        webProviderAvailable: true,
+      },
+    } as never,
+    { scriptRunner: { run: async () => ({ ok: true, result: null, logs: [] }) } },
+  ).tools.definitions();
 }
 
 interface JsonSchemaProperty {

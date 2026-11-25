@@ -1,5 +1,6 @@
 import { Citation } from "@core/model";
 import { RetrievedChunk, SourceReference, WebSourceReference } from "@core/model";
+import type { ScriptJsonValue } from "@application/ports/scriptRunner";
 
 export interface EvidenceCallProvenance {
   callId: string;
@@ -27,6 +28,20 @@ export interface RegisteredWebResult {
 
 export interface WebHandleEntry extends RegisteredWebResult {
   source: WebSourceReference;
+}
+
+export interface ComputationRecord {
+  computationId: string;
+  callId: string;
+  purpose?: string;
+  code: string;
+  inputs: ScriptJsonValue;
+  result: ScriptJsonValue;
+  logs: readonly string[];
+}
+
+export interface ComputationRecorder {
+  registerComputation(computation: Omit<ComputationRecord, "computationId">): string;
 }
 
 /** Raised when a run has already registered as many web sources as its budget allows. */

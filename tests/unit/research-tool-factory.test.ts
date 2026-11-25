@@ -66,6 +66,26 @@ describe("createResearchToolRegistry", () => {
     expect(created.tools.definitions()).toEqual([]);
   });
 
+  it("offers run_js whenever a script runner is supplied, even with no evidence source", () => {
+    const created = createResearchToolRegistry(
+      {
+        availability: {
+          searchMode: "none",
+          noteAccess: false,
+          activeFileAccess: false,
+          noteMutationAccess: false,
+          retrieverAvailable: false,
+          webProviderAvailable: false,
+        },
+      },
+      { scriptRunner: { run: vi.fn() } },
+    );
+
+    expect(created.tools.definitions().map((definition) => definition.function.name)).toEqual([
+      "run_js",
+    ]);
+  });
+
   it("does not expose document downloads until note mutation access is explicitly enabled", () => {
     const searchProvider: SearchProvider = {
       search: vi.fn().mockResolvedValue([]),

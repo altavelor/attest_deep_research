@@ -28,6 +28,11 @@ describe("toolCallChainLabel", () => {
     expect(toolCallChainLabel("search_index", {})).toBe("Search index");
   });
 
+  it("labels a calculation by its purpose or generically", () => {
+    expect(toolCallChainLabel("run_js", { purpose: "  revenue change " })).toBe("revenue change");
+    expect(toolCallChainLabel("run_js", { purpose: "  " })).toBe("Calculation");
+  });
+
   it("returns Fetching page(s) for fetch_web_page by resultIds count", () => {
     expect(toolCallChainLabel("fetch_web_page", { resultIds: ["abc123"] })).toBe("Fetching page");
     expect(toolCallChainLabel("fetch_web_page", { resultIds: ["a", "b", "c"] })).toBe(

@@ -3,6 +3,8 @@ import { formatCitation } from "@core/retrieval";
 import { Citation } from "@core/model";
 import { RetrievedChunk, SourceReference, WebSourceReference } from "@core/model";
 import {
+  ComputationRecord,
+  ComputationRecorder,
   EvidenceCallProvenance,
   EvidenceRegistry,
   RegisteredWebResult,
@@ -27,13 +29,14 @@ export interface ResearchEvidenceRegistryOptions {
 
 const DEFAULT_MAX_WEB_RESULTS = 25;
 
-export class ResearchEvidenceRegistry implements EvidenceRegistry {
+export class ResearchEvidenceRegistry implements EvidenceRegistry, ComputationRecorder {
   private readonly createHandle: () => string;
   private readonly now: () => Date;
   private readonly maxWebResults: number;
   private readonly entries = new Map<string, MutableEvidenceEntry>();
   private readonly handles = new Map<string, WebHandleEntry>();
   private readonly handlesByUrl = new Map<string, WebHandleEntry>();
+  private readonly computationEntries: ComputationRecord[] = [];
 
   constructor(options: ResearchEvidenceRegistryOptions = {}) {
     this.createHandle = options.createHandle ?? (() => `result_${crypto.randomUUID()}`);
@@ -174,6 +177,16 @@ export class ResearchEvidenceRegistry implements EvidenceRegistry {
     entry.citation = { ...formatCitation(source), id: handle.evidenceId };
     entry.page = { finalUrl: page.finalUrl, truncated: page.truncated };
     appendCall(entry.calls, { callId: page.callId, tool: "fetch_web_page" });
+  }
+
+  registerComputation(computation: Omit<ComputationRecord, "computationId">): string {
+    const computationId = `calc_${this.computationEntries.length + 1}`;
+    this.computationEntries.push(cloneValue({ ...computation, computationId }));
+    return computationId;
+  }
+
+  computations(): readonly ComputationRecord[] {
+    return deepFreeze(this.computationEntries.map((entry) => cloneValue(entry)));
   }
 
   snapshot(): ResearchEvidenceSnapshot {

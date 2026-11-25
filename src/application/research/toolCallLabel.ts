@@ -43,6 +43,10 @@ export function toolCallChainLabel(name: string, args: Record<string, unknown>):
         : "Fan-out over sources";
     case "get_map_sources_result":
       return "Fan-out result";
+    case "run_js":
+      return typeof args.purpose === "string" && args.purpose.trim()
+        ? truncate(args.purpose.trim())
+        : "Calculation";
     case "read_note":
       return basename(args.path) || humanizeToolName(name);
     case "get_active_note":
