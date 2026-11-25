@@ -105,13 +105,19 @@ describe("forced synthesis with note mutations available", () => {
     expect(result.diagnostics).toContainEqual(
       expect.objectContaining({ id: "3", status: "failed", reason: "synthesis-forced" }),
     );
-    expect(onToolCall).toHaveBeenCalledWith("3", "create_note", "A", 3, { path: "A.md" });
-    expect(onToolResult).toHaveBeenCalledWith(
+    expect(onToolCall).not.toHaveBeenCalledWith(
       "3",
-      false,
+      expect.anything(),
+      expect.anything(),
+      3,
+      expect.anything(),
+    );
+    expect(onToolResult).not.toHaveBeenCalledWith(
+      "3",
+      expect.anything(),
       undefined,
       undefined,
-      expect.stringContaining("stop calling tools"),
+      expect.anything(),
     );
   });
 

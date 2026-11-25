@@ -257,10 +257,16 @@ export class ThinkingToolRoundExecutor {
     );
   }
 
+  /**
+   * Records a call answered with a stub in the diagnostics. A call refused because the answer is
+   * due is kept out of the visible chain, since it is not a failure the reader can act on.
+   */
   private recordStubbedCall(call: ChatToolCall, result: string, round: number): void {
-    const label = toolCallChainLabel(call.name, call.arguments);
-    this.options.onToolCall?.(call.id, call.name, label, round, call.arguments);
-    this.options.onToolResult?.(call.id, false, undefined, undefined, result);
+    if (result !== SYNTHESIS_TOOL_STUB) {
+      const label = toolCallChainLabel(call.name, call.arguments);
+      this.options.onToolCall?.(call.id, call.name, label, round, call.arguments);
+      this.options.onToolResult?.(call.id, false, undefined, undefined, result);
+    }
     this.totalResultCharsCount += result.length;
     this.callDiagnostics.push({
       id: call.id,
