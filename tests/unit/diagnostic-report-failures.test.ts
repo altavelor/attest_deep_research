@@ -185,10 +185,14 @@ describe("diagnostic findings for a failing run", () => {
     expect(report.findings.summary).toBe("No errors. 1 warning(s): stream-terminal-missing.");
   });
 
-  it("reports no issues for a clean instant run", () => {
+  it("reports no issues for a clean instant run and no thinking policy for deep research", () => {
     const report = buildDiagnosticReportV3(baseDiagnostics({ executionStrategy: "instant" }));
+    const deep = buildDiagnosticReportV3(baseDiagnostics({ executionStrategy: "deep-research" }));
 
     expect(report.findings.findings).toEqual([]);
+    expect(deep.findings.findings.map((finding) => finding.code)).not.toContain(
+      "thinking-policy-fallback",
+    );
     expect(report.findings.summary).toBe("No issues detected.");
   });
 });
