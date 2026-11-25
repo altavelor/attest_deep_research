@@ -40,7 +40,7 @@ export function branchProgressRows(
       return {
         number: numbers.get(branch.branchId)!,
         branch,
-        status: progressStatus(execution),
+        status: executionProgressStatus(execution),
         execution,
         after: branch.dependsOn.flatMap((id) => numbers.get(id) ?? []),
       };
@@ -57,7 +57,8 @@ export function branchProgressCounts(
   ]).filter(([, count]) => count > 0);
 }
 
-function progressStatus(execution: BranchExecution | null): BranchProgressStatus {
+/** Reads the progress status of one execution; a completed one with a partial finding is partial. */
+export function executionProgressStatus(execution: BranchExecution | null): BranchProgressStatus {
   switch (execution?.state) {
     case "completed":
       return execution.finding?.partial ? "partial" : "done";

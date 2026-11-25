@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { createTranslator } from "@adapters/i18n";
 import { renderResearchCard } from "@apps/obsidian/ui/chat/deep-research/researchPlanCard";
+import { tickStageClocks } from "@apps/obsidian/ui/chat/deep-research/researchStageProgress";
 import { installObsidianDomHelpers, resetDom } from "../../support/domHarness";
 import { pendingResearch, researchBranch, researchPlan } from "../../support/deepResearch";
 import { settle } from "../../support/async";
@@ -303,6 +304,231 @@ describe("deep research plan card", () => {
       { type: "continue", researchId: state.researchId },
       "Continue the research",
     );
+  });
+
+  it("folds the gathered items under the stages that follow and shows the live step with its clock", () => {
+    const pending = pendingResearch();
+    const plan = { ...pending.plan!, approvedAt: "2026-01-01T00:00:00.000Z" };
+    const hypothesis = {
+      hypothesisId: "h-1",
+      revision: 1,
+      previousRevision: null,
+      branchId: "branch-1",
+      claim: "Moon drives tides",
+      alternative: "Wind",
+      prediction: "Lunar cycle",
+      disconfirmation: "No cycle",
+      status: "supported" as const,
+      observationIds: [],
+    };
+    const state = {
+      ...pending,
+      phase: "verifying" as const,
+      pending: null,
+      plan,
+      executions: initialExecutions(plan).map((execution, index) => ({
+        ...execution,
+        state: index === 0 ? ("completed" as const) : ("failed" as const),
+      })),
+      discovery: {
+        hypotheses: [hypothesis],
+        tests: [],
+        observations: [],
+        cycles: [],
+        notes: [],
+        executions: [],
+        omissions: [],
+      },
+    };
+    const activity = {
+      researchId: state.researchId,
+      at: 100_000,
+      stage: "verification" as const,
+      stages: {
+        hypotheses: { startedAt: 0, endedAt: 60_000 },
+        verification: { startedAt: 60_000 },
+      },
+      step: {
+        kind: "checking" as const,
+        batch: 1,
+        batches: 2,
+        from: 3,
+        to: 4,
+        tally: { supported: 1, conflicted: 1, unverified: 0, total: 4 },
+      },
+      budget: { activeMs: 5 * 60_000, modelRounds: 7, branchAttempts: 2 },
+    };
+    const context = {
+      view: { status: "ready" as const, active: state, history: [] },
+      t,
+      sentTurns: new Set<string>(),
+      expandedBranches: new Set<string>(),
+      running: true,
+      activity,
+      now: () => 161_000,
+      onTurn: vi.fn(),
+    };
+    const render = (): HTMLElement => {
+      const host = document.createElement("div");
+      renderResearchCard(
+        host,
+        { researchId: state.researchId, artifact: "plan", revision: state.revision },
+        context,
+      );
+      return host;
+    };
+    const texts = (host: HTMLElement, selector: string): string[] =>
+      [...host.querySelectorAll(selector)].map((el) => el.textContent ?? "");
+    const host = render();
+    expect([
+      texts(host, ".attest-research-progress__title"),
+      texts(host, ".attest-research-progress__summary"),
+      texts(host, ".attest-research-stages__gathered-text"),
+      [...host.querySelectorAll(".attest-research-stage")].map((el) => el.className),
+      texts(host, ".attest-research-stage__time"),
+      texts(host, ".attest-research-stage__now"),
+      texts(host, ".attest-research-stage__sub"),
+      texts(host, ".attest-research-claims__legend-item"),
+      texts(host, ".attest-research-progress__budget"),
+      host.querySelector<HTMLElement>(".attest-research-stages__rows")!.hidden,
+    ]).toEqual([
+      ["Research · stage 2 of 4"],
+      ["5 of 60 min"],
+      ["Gathered 1 of 2 plan items"],
+      [
+        "attest-research-stage is-done",
+        "attest-research-stage is-running is-live",
+        "attest-research-stage is-pending",
+        "attest-research-stage is-pending",
+      ],
+      ["1:00", "1:41", "—", "—"],
+      ["Checking claims 3–4 against quotes · batch 1 of 2"],
+      [
+        "Hypotheses: 1 · supported: 1 · disconfirmed: 0",
+        "Extracted claims: 4",
+        "Up to 2 extra searches for items with disputed or uncovered claims",
+      ],
+      ["Supported: 1", "Conflicting: 1", "Unverified: 0", "Left: 2"],
+      ["Rounds 7 of 280 · attempts 2 of 16 · 5 of 60 min"],
+      true,
+    ]);
+    tickStageClocks(host, 200_000);
+    expect(texts(host, ".attest-research-stage__time")[1]).toBe("2:20");
+    const toggle = host.querySelector<HTMLButtonElement>(
+      ".attest-research-stages__gathered button",
+    )!;
+    toggle.click();
+    expect([
+      toggle.textContent,
+      host.querySelectorAll(".attest-research-progress__row").length,
+    ]).toEqual(["Hide", 2]);
+    expect(render().querySelector<HTMLElement>(".attest-research-stages__rows")!.hidden).toBe(
+      false,
+    );
+  });
+
+  it("lists the tests, follow-ups and report sections of the running stages", () => {
+    const pending = pendingResearch();
+    const plan = {
+      ...pending.plan!,
+      approvedAt: "2026-01-01T00:00:00.000Z",
+      reportOutline: ["Summary", "Risks"],
+    };
+    const hypothesis = (id: string, claim: string) => ({
+      hypothesisId: id,
+      revision: 1,
+      previousRevision: null,
+      branchId: "branch-1",
+      claim,
+      alternative: "Wind",
+      prediction: "Lunar cycle",
+      disconfirmation: "No cycle",
+      status: "untested" as const,
+      observationIds: [],
+    });
+    const test = (id: string) => ({
+      testId: `t-${id}`,
+      hypothesisId: id,
+      hypothesisRevision: 1,
+      kind: "literature-check" as const,
+      method: "Search",
+      status: "proposed" as const,
+    });
+    const [first] = initialExecutions(plan);
+    const discovering = {
+      ...pending,
+      phase: "discovering" as const,
+      pending: null,
+      plan,
+      discovery: {
+        hypotheses: [
+          hypothesis("h-1", "Moon"),
+          hypothesis("h-2", "Sun"),
+          hypothesis("h-3", "Wind"),
+        ],
+        tests: [test("h-1"), test("h-2"), test("h-3")],
+        observations: [],
+        cycles: [{ ordinal: 1, workIds: [], decision: "continue" as const, reason: "Go" }],
+        notes: [],
+        executions: [
+          { ...first!, workId: "t-h-1", state: "running" as const },
+          { ...first!, workId: "t-h-2", state: "completed" as const },
+        ],
+        omissions: [],
+      },
+    };
+    const writing = {
+      ...discovering,
+      phase: "synthesizing" as const,
+      verification: {
+        claims: [],
+        assessments: [],
+        coverage: [],
+        verifiedWorks: [],
+        followUps: [{ ...first!, workId: "f-1", state: "completed" as const }],
+        followUpsUsed: 1,
+      },
+    };
+    const render = (state: typeof discovering | typeof writing, step: unknown): HTMLElement => {
+      const host = document.createElement("div");
+      renderResearchCard(
+        host,
+        { researchId: state.researchId, artifact: "plan", revision: state.revision },
+        {
+          view: { status: "ready", active: state, history: [] },
+          t,
+          sentTurns: new Set(),
+          running: true,
+          activity: {
+            researchId: state.researchId,
+            at: 0,
+            stage: state === writing ? "writing" : "hypotheses",
+            stages: {},
+            step: step as never,
+            budget: { activeMs: 0, modelRounds: 0, branchAttempts: 0 },
+          },
+          onTurn: vi.fn(),
+        },
+      );
+      return host;
+    };
+    const items = (host: HTMLElement): string[] =>
+      [...host.querySelectorAll(".attest-research-stage__item")].map(
+        (el) => `${el.className.replace("attest-research-stage__item ", "")} ${el.textContent}`,
+      );
+    expect(items(render(discovering, { kind: "testing", cycle: 1 }))).toEqual([
+      "is-searching Searching the literatureMoon",
+      "is-judging Judging the resultSun",
+      "is-queued QueuedWind",
+    ]);
+    const host = render(writing, { kind: "writing", words: 40, headings: ["Summary"] });
+    expect([
+      items(host),
+      [...host.querySelectorAll(".attest-research-stage__now")].map((el) => el.textContent),
+    ]).toEqual([
+      ["is-done DoneBranch 1", "is-current Summary", "is-pending Risks"],
+      ["Writing “Summary” · 40 words"],
+    ]);
   });
 
   it("asks for a supplied observation under the hypothesis list and sends it as the decision", () => {

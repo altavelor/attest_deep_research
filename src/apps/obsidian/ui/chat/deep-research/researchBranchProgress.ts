@@ -6,7 +6,7 @@ import {
   branchProgressRows,
   budgetLimits,
   type BranchProgressRow,
-  type ResearchPhase,
+  type ResearchActivityBudget,
   type ResearchPlan,
   type ResearchState,
 } from "@core/research/deepResearch";
@@ -14,16 +14,9 @@ import { renderFoldedMarkup } from "../safeMarkupView";
 import type { ResearchCardContext } from "./researchCardContext";
 
 const FINDING_PREVIEW_CHARS = 280;
-const PHASE_TITLES: Partial<Record<ResearchPhase, Parameters<Translate>[0]>> = {
-  gathering: "chat.deepResearch.progress.phase.gathering",
-  discovering: "chat.deepResearch.progress.phase.discovering",
-  "awaiting-observation": "chat.deepResearch.progress.phase.discovering",
-  verifying: "chat.deepResearch.progress.phase.verifying",
-  synthesizing: "chat.deepResearch.progress.phase.synthesizing",
-};
 
 /**
- * Renders the branch progress of an approved research as one block: the phase and the share of
+ * Renders the gather wave of an approved research as one block: the phase and the share of
  * finished branches, a segmented bar and a status legend, one numbered row per enabled plan
  * branch with its status and reason, and the spent budget. A row opens in place to its finding,
  * task and agent details; the open rows live in the view, so they stay open across rerenders.
@@ -43,7 +36,10 @@ export function renderBranchProgress(
   });
   const blockEl = cardEl.createDiv({ cls: "attest-research-progress" });
   const headEl = blockEl.createDiv({ cls: "attest-research-progress__head" });
-  headEl.createDiv({ cls: "attest-research-progress__title", text: phaseTitle(state.phase, t) });
+  headEl.createDiv({
+    cls: "attest-research-progress__title",
+    text: t("chat.deepResearch.progress.phase.gathering"),
+  });
   headEl.createDiv({ cls: "attest-research-progress__summary", text: summary });
   const barEl = blockEl.createDiv({
     cls: "attest-research-progress__bar",
@@ -65,9 +61,19 @@ export function renderBranchProgress(
       }),
     );
   }
-  const listEl = blockEl.createEl("ol", { cls: "attest-research-progress__rows" });
-  for (const row of rows) renderRow(listEl, state, row, context);
+  renderBranchRows(blockEl, state, rows, context);
   renderBudget(blockEl, state, plan, t);
+}
+
+/** Renders one numbered row per enabled plan branch; a row opens in place to its details. */
+export function renderBranchRows(
+  parentEl: HTMLElement,
+  state: ResearchState,
+  rows: readonly BranchProgressRow[],
+  context: ResearchCardContext,
+): void {
+  const listEl = parentEl.createEl("ol", { cls: "attest-research-progress__rows" });
+  for (const row of rows) renderRow(listEl, state, row, context);
 }
 
 function renderRow(
@@ -160,21 +166,26 @@ function renderRowBody(
   link.addEventListener("click", () => open(sessionId));
 }
 
-function renderBudget(
+/**
+ * Renders the spent budget of a research: model rounds, branch attempts and active minutes. The
+ * live budget of a running turn, when given, replaces the last committed one.
+ */
+export function renderBudget(
   blockEl: HTMLElement,
   state: ResearchState,
   plan: ResearchPlan,
   t: Translate,
+  live?: ResearchActivityBudget,
 ): void {
-  const budget = state.budget;
+  const budget = live ?? committedBudget(state);
   if (!budget) return;
   const limits = budgetLimits(plan);
   blockEl.createDiv({
     cls: "attest-research-progress__budget",
     text: t("chat.deepResearch.progress.budget", {
-      rounds: budget.consumed.modelRounds,
+      rounds: budget.modelRounds,
       maxRounds: limits.modelRoundsTotal,
-      attempts: budget.consumed.branchAttempts,
+      attempts: budget.branchAttempts,
       maxAttempts: limits.attemptsTotal,
       minutes: Math.floor(budget.activeMs / 60_000),
       maxMinutes: Math.floor(limits.activeExecutionMs / 60_000),
@@ -182,6 +193,13 @@ function renderBudget(
   });
 }
 
-function phaseTitle(phase: ResearchPhase, t: Translate): string {
-  return t(PHASE_TITLES[phase] ?? "chat.deepResearch.progress.title");
+/** Reads the budget of the last committed revision in the shape of a live budget. */
+export function committedBudget(state: ResearchState): ResearchActivityBudget | null {
+  const budget = state.budget;
+  if (!budget) return null;
+  return {
+    activeMs: budget.activeMs,
+    modelRounds: budget.consumed.modelRounds,
+    branchAttempts: budget.consumed.branchAttempts,
+  };
 }

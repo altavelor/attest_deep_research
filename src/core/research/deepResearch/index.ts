@@ -12,6 +12,7 @@ export {
   BRANCH_PROGRESS_STATUSES,
   branchProgressCounts,
   branchProgressRows,
+  executionProgressStatus,
   type BranchProgressRow,
   type BranchProgressStatus,
 } from "./branchProgress";

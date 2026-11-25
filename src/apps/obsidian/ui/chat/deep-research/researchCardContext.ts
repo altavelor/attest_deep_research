@@ -1,6 +1,10 @@
 import type { Translate } from "@adapters/i18n";
 import type { ResearchExportController } from "./researchExportController";
-import type { ResearchSectionView, ResearchTurnInput } from "@core/research/deepResearch";
+import type {
+  ResearchActivity,
+  ResearchSectionView,
+  ResearchTurnInput,
+} from "@core/research/deepResearch";
 import type { ResearchPlanEditRequest, ResearchPlanEditResult } from "@application/use-cases/chat";
 
 export interface ResearchCardContext {
@@ -10,6 +14,8 @@ export interface ResearchCardContext {
   expandedBranches?: Set<string>;
   latestRevisions?: ReadonlyMap<string, number>;
   running?: boolean;
+  activity?: ResearchActivity | null;
+  now?(): number;
   onTurn(input: ResearchTurnInput, label: string): void;
   onEditPlan?(request: ResearchPlanEditRequest): Promise<ResearchPlanEditResult>;
   exports?: ResearchExportController;

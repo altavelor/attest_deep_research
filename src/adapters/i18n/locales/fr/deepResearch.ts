@@ -36,11 +36,38 @@ export const deepResearch: EnDeepResearchMessages = {
   "chat.deepResearch.turn.approve": "Approuver le plan de recherche",
   "chat.deepResearch.turn.regenerate": "Régénérer le plan de recherche",
   "chat.deepResearch.turn.cancel": "Annuler la recherche",
-  "chat.deepResearch.progress.title": "Avancement de la recherche",
   "chat.deepResearch.progress.phase.gathering": "Collecte des sources",
-  "chat.deepResearch.progress.phase.discovering": "Test des hypothèses",
-  "chat.deepResearch.progress.phase.verifying": "Vérification des affirmations",
-  "chat.deepResearch.progress.phase.synthesizing": "Rédaction du rapport",
+  "chat.deepResearch.progress.stageOf": "Recherche · étape {current} sur {total}",
+  "chat.deepResearch.progress.time": "{minutes} sur {max} min",
+  "chat.deepResearch.progress.gathered": "{done} points du plan sur {total} collectés",
+  "chat.deepResearch.progress.show": "Afficher",
+  "chat.deepResearch.progress.hide": "Masquer",
+  "chat.deepResearch.progress.stage.hypotheses": "Test des hypothèses",
+  "chat.deepResearch.progress.stage.verification": "Vérification des affirmations dans les sources",
+  "chat.deepResearch.progress.stage.followUps":
+    "Recherches supplémentaires sur les affirmations contestées",
+  "chat.deepResearch.progress.stage.writing": "Rédaction du rapport",
+  "chat.deepResearch.progress.stageSkipped": "Pas nécessaire",
+  "chat.deepResearch.progress.step.proposing":
+    "Proposition d’hypothèses à partir des résultats · cycle {cycle}",
+  "chat.deepResearch.progress.step.testing":
+    "Recherche de littérature pour les hypothèses · cycle {cycle}",
+  "chat.deepResearch.progress.step.judging":
+    "Évaluation du test {current} sur {total} · cycle {cycle}",
+  "chat.deepResearch.progress.step.extracting":
+    "Extraction des affirmations des résultats · lot {batch} sur {batches}",
+  "chat.deepResearch.progress.step.checking":
+    "Vérification des affirmations {from}–{to} dans les citations · lot {batch} sur {batches}",
+  "chat.deepResearch.progress.step.followingUp": "Recherches supplémentaires : {count}",
+  "chat.deepResearch.progress.step.writing": "Rédaction du rapport · {words} mots",
+  "chat.deepResearch.progress.step.writingSection": "Rédaction de « {section} » · {words} mots",
+  "chat.deepResearch.progress.extracted": "Affirmations extraites : {count}",
+  "chat.deepResearch.progress.checked": "Affirmations vérifiées : {count}",
+  "chat.deepResearch.progress.claimsLeft": "Restantes : {count}",
+  "chat.deepResearch.progress.hypothesesDone":
+    "Hypothèses : {count} · étayées : {supported} · réfutées : {disconfirmed}",
+  "chat.deepResearch.progress.followUpsPlanned":
+    "Jusqu’à {count} recherches supplémentaires pour les points aux affirmations contestées ou non couvertes",
   "chat.deepResearch.progress.summary": "{done} sur {total} terminées",
   "chat.deepResearch.progress.count": "{label} : {count}",
   "chat.deepResearch.progress.status.done": "Terminée",
@@ -95,15 +122,17 @@ export const deepResearch: EnDeepResearchMessages = {
   "chat.deepResearch.action.assume": "Passer les questions",
   "chat.deepResearch.turn.answer": "Répondre aux questions de clarification",
   "chat.deepResearch.turn.assume": "Passer les questions",
-  "chat.deepResearch.discovery.title": "Hypothèses",
   "chat.deepResearch.discovery.none": "Aucune hypothèse n’a été proposée pour ce plan.",
-  "chat.deepResearch.discovery.status":
-    "{status} · révision {revision} · alternative : {alternative}",
   "chat.deepResearch.discovery.notes": "Notes de recherche ({count})",
   "chat.deepResearch.hypothesis.untested": "Non testée",
   "chat.deepResearch.hypothesis.supported": "Étayée par la littérature",
   "chat.deepResearch.hypothesis.disconfirmed": "Réfutée",
   "chat.deepResearch.hypothesis.inconclusive": "Non concluante",
+  "chat.deepResearch.hypothesis.awaiting": "En attente de votre observation",
+  "chat.deepResearch.hypothesis.searching": "Recherche de littérature",
+  "chat.deepResearch.hypothesis.queued": "En file d’attente",
+  "chat.deepResearch.hypothesis.judging": "Évaluation du résultat",
+  "chat.deepResearch.discovery.alternative": "Alternative : {alternative}",
   "chat.deepResearch.observation.request": "Observation requise : {method}",
   "chat.deepResearch.observation.hint":
     "Décrivez le résultat observé. Un rapport sans sources est enregistré comme non vérifié de façon indépendante.",

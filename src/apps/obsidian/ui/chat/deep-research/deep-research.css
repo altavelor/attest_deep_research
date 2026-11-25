@@ -104,7 +104,6 @@
 }
 
 .attest-research-card__brief,
-.attest-research-card__discovery,
 .attest-research-card__observation,
 .attest-research-card__verification {
   display: flex;
@@ -135,10 +134,6 @@
 .attest-research-card__notes {
   min-width: 0;
   overflow-wrap: anywhere;
-}
-
-.attest-research-card__hypothesis--disconfirmed .attest-research-card__branch-notes {
-  color: var(--text-error);
 }
 
 .attest-research-progress {
@@ -621,4 +616,177 @@ body.is-mobile .attest-research-progress__toggle {
   gap: var(--size-4-1) var(--size-4-3);
   color: var(--text-muted);
   font-size: var(--font-ui-small);
+}
+
+.attest-research-stages__gathered {
+  display: flex;
+  align-items: center;
+  gap: var(--size-4-2);
+  color: var(--text-muted);
+  font-size: var(--font-ui-small);
+}
+
+.attest-research-stages__gathered-icon {
+  display: inline-flex;
+  flex: none;
+  color: var(--color-green, #2ea043);
+}
+
+.attest-research-stages__gathered.is-some .attest-research-stages__gathered-icon {
+  color: var(--color-orange, #d29922);
+}
+
+.attest-research-stages__gathered-icon svg,
+.attest-research-stage__marker svg,
+.attest-research-stage__item-marker svg {
+  width: 14px;
+  height: 14px;
+}
+
+.attest-research-stages__gathered-text {
+  flex: 1;
+  min-width: 0;
+}
+
+.attest-research-stages__rows[hidden] {
+  display: none;
+}
+
+.attest-research-stages__list {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: var(--size-4-2) 0 0;
+  border-top: 1px solid var(--background-modifier-border);
+  list-style: none;
+}
+
+.attest-research-stage {
+  display: grid;
+  grid-template-columns: 16px minmax(0, 1fr) auto;
+  gap: 0 var(--size-4-2);
+  align-items: center;
+  padding: var(--size-4-1) 0;
+}
+
+.attest-research-stage__marker,
+.attest-research-stage__item-marker {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-faint);
+}
+
+.attest-research-stage.is-done .attest-research-stage__marker,
+.attest-research-stage__item.is-done .attest-research-stage__item-marker {
+  color: var(--color-green, #2ea043);
+}
+
+.attest-research-stage__name {
+  min-width: 0;
+  font-weight: var(--font-semibold);
+  overflow-wrap: anywhere;
+}
+
+.attest-research-stage.is-pending .attest-research-stage__name,
+.attest-research-stage.is-skipped .attest-research-stage__name {
+  color: var(--text-faint);
+  font-weight: var(--font-normal);
+}
+
+.attest-research-stage__time {
+  color: var(--text-faint);
+  font-size: var(--font-ui-smaller);
+  font-variant-numeric: tabular-nums;
+}
+
+.attest-research-stage__body {
+  display: flex;
+  grid-column: 2 / 4;
+  flex-direction: column;
+  gap: var(--size-4-1);
+  min-width: 0;
+  margin-top: var(--size-4-1);
+}
+
+.attest-research-stage__pulse {
+  display: inline-block;
+  flex: none;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--interactive-accent);
+}
+
+.attest-research-stage.is-live .attest-research-stage__pulse {
+  animation: attest-workflow-pulse 1.2s ease-in-out infinite;
+}
+
+.attest-research-stage__now {
+  display: flex;
+  align-items: center;
+  gap: var(--size-4-2);
+  padding: var(--size-4-1) var(--size-4-2);
+  border-radius: var(--radius-s);
+  background: var(--background-secondary);
+  font-size: var(--font-ui-small);
+  overflow-wrap: anywhere;
+}
+
+.attest-research-stage__sub {
+  color: var(--text-muted);
+  font-size: var(--font-ui-small);
+  overflow-wrap: anywhere;
+}
+
+.attest-research-stage__sub.is-muted {
+  color: var(--text-faint);
+}
+
+.attest-research-stage__items {
+  display: flex;
+  flex-direction: column;
+  gap: var(--size-2-2);
+  margin: 0;
+  padding: 0;
+  font-size: var(--font-ui-small);
+  list-style: none;
+}
+
+.attest-research-stage__item {
+  display: flex;
+  align-items: baseline;
+  gap: var(--size-4-2);
+  min-width: 0;
+}
+
+.attest-research-stage__item.is-pending,
+.attest-research-stage__item.is-queued {
+  color: var(--text-faint);
+}
+
+.attest-research-stage__item-status {
+  flex: none;
+  color: var(--text-muted);
+}
+
+.attest-research-stage__item.is-supported .attest-research-stage__item-status {
+  color: var(--color-green, #2ea043);
+}
+
+.attest-research-stage__item.is-disconfirmed .attest-research-stage__item-status {
+  color: var(--text-error);
+}
+
+.attest-research-stage__item-text {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.attest-research-claims__bar-part.is-left {
+  background: transparent;
+}
+
+.attest-research-claims__legend-item.is-left {
+  color: var(--text-faint);
 }

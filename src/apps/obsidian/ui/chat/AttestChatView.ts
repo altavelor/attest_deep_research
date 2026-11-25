@@ -57,6 +57,8 @@ import {
 } from "@apps/obsidian/ui/index/IndexSearchController";
 import { ResearchQuestionController } from "./research/ResearchQuestionController";
 import { ResearchExportController } from "./deep-research/researchExportController";
+import { researchStepText } from "./deep-research/researchActivityText";
+import { tickStageClocks } from "./deep-research/researchStageProgress";
 import {
   availableResearchMode,
   chatModelProfileLabel,
@@ -151,6 +153,7 @@ export class AttestChatView extends ItemView {
   private readonly clarificationDrafts = new ClarificationDrafts();
 
   private transcriptEl: HTMLElement | null = null;
+  private stageClock: number | null = null;
   private followUpsEl: HTMLElement | null = null;
   private readonly composer: ChatComposerController;
   private readonly savedChatsPopover: SavedChatsPopoverController;
@@ -431,6 +434,7 @@ export class AttestChatView extends ItemView {
     this.unsubscribeSessions = null;
     this.detachSessionView?.();
     this.detachSessionView = null;
+    this.syncStageClock(false);
     if (this.activeMessageRenderFrame !== null) {
       window.cancelAnimationFrame(this.activeMessageRenderFrame);
       this.activeMessageRenderFrame = null;
@@ -550,7 +554,7 @@ export class AttestChatView extends ItemView {
     }
     this.renderMessages();
     this.renderAnswerDetails();
-    this.composer.setProgressStatus(this.session.progressLabel);
+    this.composer.setProgressStatus(this.progressStatus());
   }
 
   private renderToolbarActions(): void {
@@ -658,6 +662,25 @@ export class AttestChatView extends ItemView {
     renderChatTranscript(this.transcriptEl, this.transcriptOptions());
   }
 
+  /** Ticks the clocks of running research stages once a second while research activity exists. */
+  private syncStageClock(active: boolean): void {
+    if (active && this.stageClock === null) {
+      this.stageClock = window.setInterval(() => {
+        if (this.transcriptEl) tickStageClocks(this.transcriptEl, Date.now());
+      }, 1000);
+    }
+    if (!active && this.stageClock !== null) {
+      window.clearInterval(this.stageClock);
+      this.stageClock = null;
+    }
+  }
+
+  /** Returns the composer status: the localized research step while one runs, else the run label. */
+  private progressStatus(): string | null {
+    const activity = this.session.researchActivity;
+    return activity ? researchStepText(activity.step, this.t) : this.session.progressLabel;
+  }
+
   private scheduleActiveMessageRender(): void {
     const sessionId = this.session.sessionId;
     if (this.activeMessageRenderFrame !== null) {
@@ -711,6 +734,7 @@ export class AttestChatView extends ItemView {
         expandedBranches: this.expandedResearchBranches,
         latestRevisions: latestResearchRevisions(this.session.messages),
         running: this.isRunning,
+        activity: this.session.researchActivity,
         onTurn: (input, label) => void this.researchController.submitResearchTurn(input, label),
         onEditPlan: (request) => this.sessions.editResearchPlan(this.session.sessionId, request),
         onOpenSubAgentSession: (sessionId) => this.subAgents.open(sessionId),
@@ -913,7 +937,9 @@ export class AttestChatView extends ItemView {
       return;
     }
     if (change.kind === "progress") {
-      this.composer.setProgressStatus(this.session.progressLabel);
+      this.composer.setProgressStatus(this.progressStatus());
+      this.syncStageClock(this.session.researchActivity !== null);
+      if (this.session.researchActivity) this.scheduleActiveMessageRender();
       return;
     }
     if (change.kind === "answer") {
@@ -926,7 +952,8 @@ export class AttestChatView extends ItemView {
       return;
     }
     this.composer.setFormRunning(this.isRunning);
-    this.composer.setProgressStatus(this.session.progressLabel);
+    this.composer.setProgressStatus(this.progressStatus());
+    this.syncStageClock(this.session.researchActivity !== null);
     void this.refreshChatActivity();
   }
 
