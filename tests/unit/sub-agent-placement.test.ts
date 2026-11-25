@@ -129,25 +129,25 @@ describe("placing sub-agent events", () => {
       ["agent-dispatch", 3],
       ["agent-notice", 5],
       ["agent-dispatch", 6],
-      ["agent-notice", 9],
       ["agent-dispatch", 11],
     ]);
-    const [merged, , duplicate, , follow] = placed as Extract<
+    const [merged, , duplicate, follow] = placed as Extract<
       ParentTimelineEvent,
       { kind: "agent-dispatch" }
     >[];
-    expect([merged!.title, merged!.status, merged!.durationMs, merged!.created?.kind]).toEqual([
-      "created title",
-      "finished",
-      12_000,
-      "created",
-    ]);
+    expect([
+      merged!.title,
+      merged!.status,
+      merged!.durationMs,
+      merged!.created?.kind,
+      merged!.outcome?.eventKey,
+    ]).toEqual(["created title", "finished", 12_000, "created", "notice:finished:9"]);
     expect([follow!.created, duplicate!.created]).toEqual([undefined, undefined]);
     expect(placement.orphanDispatches.map((entry) => entry.eventKey)).toEqual(["dispatch:lost"]);
     expect(placement.orphanNotices).toEqual([]);
   });
 
-  it("hides a closed notice only when every dispatched run and undispatched session settled before it", () => {
+  it("folds a run's outcome into its dispatch and hides a closed notice only after everything settled", () => {
     const closed = { ...notice("closed", 20, null), sessionId: null, eventKey: "closed" };
     const kinds = (
       notices: SubAgentNoticeEntry[],
@@ -156,20 +156,17 @@ describe("placing sub-agent events", () => {
       placeSubAgentEvents([assistant("answer-p1", [])], dispatches, notices)
         .byMessageId.get("answer-p1")!
         .map((event) => (event.kind === "agent-notice" ? event.notice.kind : "dispatch"));
-    expect(kinds([notice("finished", 9), closed])).toEqual(["dispatch", "finished"]);
-    expect(kinds([notice("interrupted", 9), closed])).toEqual([
-      "dispatch",
-      "interrupted",
-      "closed",
-    ]);
-    expect(kinds([{ ...notice("finished", 21) }, closed])).toEqual([
-      "dispatch",
-      "closed",
-      "finished",
-    ]);
+    expect(kinds([notice("queued", 5), notice("finished", 9), closed])).toEqual(["dispatch"]);
+    expect(kinds([notice("interrupted", 9), closed])).toEqual(["dispatch", "closed"]);
+    expect(kinds([{ ...notice("finished", 21) }, closed])).toEqual(["dispatch", "closed"]);
     expect(
       kinds([notice("finished", 9), { ...notice("created", 10), sessionId: "s2" }, closed]),
-    ).toEqual(["dispatch", "finished", "created", "closed"]);
+    ).toEqual(["dispatch", "created", "closed"]);
+    expect(kinds([notice("finished", 9, "other"), closed])).toEqual([
+      "dispatch",
+      "finished",
+      "closed",
+    ]);
     const followUp = {
       ...dispatch,
       eventKey: "dispatch:r2",
@@ -179,7 +176,6 @@ describe("placing sub-agent events", () => {
     };
     expect(kinds([notice("finished", 9), closed], [dispatch, followUp])).toEqual([
       "dispatch",
-      "finished",
       "dispatch",
       "closed",
     ]);

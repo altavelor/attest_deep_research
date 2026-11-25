@@ -26,7 +26,7 @@ const ICONS: Record<SubAgentNoticeEntry["kind"], string> = {
   closed: "x",
   batch: "layers",
 };
-const TONES: Partial<Record<SubAgentNoticeEntry["kind"], string>> = {
+const TONES: Readonly<Record<string, string>> = {
   finished: "success",
   partial: "partial",
   failed: "error",
@@ -47,7 +47,13 @@ export function subAgentEventOptions(
 /** Returns the icon that marks a dispatch or notice event on the timeline rail. */
 export function subAgentEventIcon(event: ParentTimelineEvent): string {
   if (event.kind === "agent-notice") return ICONS[event.notice.kind];
+  if (event.status !== "running" && event.status !== "queued") return ICONS[event.status];
   return event.created ? ICONS.created : "send";
+}
+
+/** Returns the event's kind class suffix: the run status for a dispatch, else the notice kind. */
+export function subAgentEventKind(event: ParentTimelineEvent): string {
+  return event.kind === "agent-dispatch" ? `dispatch is-${event.status}` : event.notice.kind;
 }
 
 /** Renders a dispatch or notice that has no parent message as a standalone transcript node. */
@@ -56,7 +62,7 @@ export function renderSubAgentTimelineItem(
   event: ParentTimelineEvent,
   options: SubAgentEventRenderOptions,
 ): void {
-  const kind = event.kind === "agent-dispatch" ? "dispatch" : event.notice.kind;
+  const kind = subAgentEventKind(event);
   const key = event.kind === "agent-dispatch" ? event.dispatch.eventKey : event.notice.eventKey;
   const nodeEl = containerEl.createDiv({
     cls: `attest-chat__agent-event attest-chat__agent-event--${kind}`,
@@ -84,9 +90,10 @@ export function renderSubAgentEventContent(
 }
 
 /**
- * Renders one outgoing command to a child agent as safe text under a line naming the
- * agent once: a created line when the session's created notice was merged into it, else a
- * sent line. The card carries the kind, the folded body, the run status and one opener.
+ * Renders one run of a child agent as a single card that updates in place: the agent title,
+ * the command kind when it is not the first, the run status and one opener in the head; the
+ * run's usage, outcome reason and folded reply below; and the command, folded behind a toggle
+ * once a reply exists.
  */
 function renderDispatchContent(
   nodeEl: HTMLElement,
@@ -95,30 +102,59 @@ function renderDispatchContent(
 ): void {
   const { t } = options;
   const entry = event.dispatch;
-  titleLine(
-    nodeEl,
-    t(event.created ? "chat.agent.notice.created" : "chat.agent.dispatch.title"),
-    event.title,
-  );
-  const cardEl = nodeEl.createDiv({ cls: "attest-chat__agent-card" });
-  const tagsEl = cardEl
-    .createDiv({ cls: "attest-chat__agent-card-head attest-chat__agent-card-head--tags" })
-    .createSpan({ cls: "attest-chat__agent-card-tags" });
-  if (event.created) {
-    tagsEl.createSpan({
-      cls: "attest-chat__agent-card-label",
-      text: t("chat.agent.dispatch.title"),
+  const outcome = event.outcome;
+  const cardEl = nodeEl.createDiv({ cls: "attest-chat__agent-card attest-chat__agent-run" });
+  const tone = TONES[event.status];
+  if (tone) cardEl.addClass(`is-${tone}`);
+  const title =
+    cleanDisplayText(event.title) ||
+    t(event.created ? "chat.agent.notice.created" : "chat.agent.dispatch.title");
+  cardEl.setAttribute("aria-label", title);
+  const headEl = cardEl.createDiv({ cls: "attest-chat__agent-card-head" });
+  headEl.createSpan({ cls: "attest-chat__agent-run-title", text: title, attr: { title } });
+  if (entry.commandKind !== "initial") {
+    headEl.createSpan({
+      cls: "attest-chat__agent-badge",
+      text: t(`chat.agent.command.${entry.commandKind}`),
     });
   }
-  tagsEl.createSpan({
-    cls: "attest-chat__agent-badge",
-    text: t(`chat.agent.command.${entry.commandKind}`),
-  });
   if (entry.commandKind === "retry") {
-    tagsEl.createSpan({
+    headEl.createSpan({
       cls: "attest-chat__agent-attempt",
       text: t("chat.agent.attempt", { attempt: String(entry.attempt) }),
     });
+  }
+  const statusEl = headEl.createSpan({
+    cls: `attest-chat__agent-status is-${event.status}`,
+    attr: { "data-status": event.status },
+  });
+  statusEl.createSpan({ cls: "attest-chat__agent-status-dot", attr: { "aria-hidden": "true" } });
+  statusEl.createSpan({ text: t(`chat.agent.status.${event.status}`) });
+  actions(headEl, entry.sessionId, options, true);
+  const meta = outcome ? replyMeta(outcome, t) : "";
+  if (meta) cardEl.createDiv({ cls: "attest-chat__agent-reply-meta", text: meta });
+  const body = outcome
+    ? noticeBody(outcome, t)
+    : event.status === "queued"
+      ? t("chat.agent.notice.queued.body")
+      : null;
+  if (body) cardEl.createDiv({ cls: "attest-chat__agent-event-body", text: body });
+  if (outcome?.replyExcerpt) {
+    renderFoldedMarkup(
+      cardEl,
+      outcome.replyExcerpt,
+      PREVIEW_CHARS,
+      t("chat.agent.showFullReply"),
+      t,
+    );
+    const commandEl = cardEl.createDiv({ cls: "attest-chat__agent-command" });
+    commandEl.hidden = true;
+    commandEl.createDiv({ cls: "attest-chat__agent-text", text: entry.body });
+    renderToggle(cardEl, t("chat.agent.showTask"), t, (expanded) => {
+      commandEl.hidden = !expanded;
+    });
+    cardEl.appendChild(commandEl);
+    return;
   }
   foldedText(
     cardEl.createDiv({ cls: "attest-chat__agent-command" }),
@@ -126,22 +162,6 @@ function renderDispatchContent(
     t("chat.agent.showFullCommand"),
     t,
   );
-  const footEl = cardEl.createDiv({ cls: "attest-chat__agent-card-foot" });
-  const statusEl = footEl.createSpan({
-    cls: `attest-chat__agent-status is-${event.status}`,
-    attr: { "data-status": event.status },
-  });
-  statusEl.createSpan({ cls: "attest-chat__agent-status-dot", attr: { "aria-hidden": "true" } });
-  statusEl.createSpan({ text: statusText(event, t) });
-  actions(footEl, entry.sessionId, options);
-}
-
-function statusText(
-  event: Extract<ParentTimelineEvent, { kind: "agent-dispatch" }>,
-  t: Translate,
-): string {
-  const label = t(`chat.agent.status.${event.status}`);
-  return !isCount(event.durationMs) ? label : `${label} · ${formatElapsed(event.durationMs, t)}`;
 }
 
 function isCount(value: number | undefined): value is number {
@@ -276,13 +296,16 @@ function actions(
   parentEl: HTMLElement,
   sessionId: string | null,
   options: SubAgentEventRenderOptions,
+  iconOnly = false,
 ): void {
   const open = options.onOpenSubAgentSession;
   if (!open || sessionId === null) return;
+  const label = options.t("chat.agent.openDetails");
   const button = parentEl.createEl("button", {
-    cls: "attest-chat__agent-open",
-    text: options.t("chat.agent.openDetails"),
-    attr: { type: "button" },
+    cls: `attest-chat__agent-open${iconOnly ? " clickable-icon" : ""}`,
+    attr: { type: "button", ...(iconOnly ? { "aria-label": label, title: label } : {}) },
   });
+  if (iconOnly) setIcon(button, "external-link");
+  else button.setText(label);
   button.addEventListener("click", () => open(sessionId));
 }

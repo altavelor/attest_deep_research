@@ -124,7 +124,7 @@ describe("sub-agent event cards", () => {
     ]);
   });
 
-  it("appends the terminal duration to a finished task status and leaves a live one bare", () => {
+  it("renders a run as one card with its status, usage, outcome reason, reply and folded task", () => {
     const dispatch = {
       eventKey: "dispatch:p1:s1:r1",
       sessionId: "s1",
@@ -136,17 +136,58 @@ describe("sub-agent event cards", () => {
       attempt: 1,
       sequence: 4,
     };
-    const status = (notices: SubAgentNoticeEntry[]) => {
+    const card = (notices: SubAgentNoticeEntry[]): HTMLElement => {
       const host = document.createElement("div");
-      renderSubAgentTimelineItem(host, dispatchEvent(dispatch, notices), { t });
-      return host.querySelector(".attest-chat__agent-status")!.textContent;
+      renderSubAgentTimelineItem(host, dispatchEvent(dispatch, notices), {
+        t,
+        onOpenSubAgentSession: () => {},
+      });
+      return host;
     };
+    const status = (notices: SubAgentNoticeEntry[]) =>
+      card(notices).querySelector(".attest-chat__agent-status")!.textContent;
     expect([
       status([finished({ durationMs: 12_000 })]),
       status([finished({ kind: "failed", durationMs: 61_000 })]),
       status([finished({ kind: "queued", durationMs: 3_000 })]),
       status([]),
-    ]).toEqual(["Finished · 12s", "Failed · 1m 01s", "Queued", "Running"]);
+    ]).toEqual(["Finished", "Failed", "Queued", "Running"]);
+    expect(
+      card([finished({ kind: "queued" })]).querySelector(".attest-chat__agent-event-body")
+        ?.textContent,
+    ).toBe("Waiting for a free agent slot");
+
+    const done = card([
+      finished({ kind: "partial", durationMs: 12_000, usage, replyExcerpt: "Found it" }),
+    ]);
+    const command = done.querySelector<HTMLElement>(".attest-chat__agent-command")!;
+    const open = done.querySelector<HTMLButtonElement>(".attest-chat__agent-open")!;
+    expect([
+      done.querySelectorAll(".attest-chat__agent-card").length,
+      done.querySelector(".attest-chat__agent-run-title")!.textContent,
+      done.querySelector(".attest-chat__agent-reply-meta")!.textContent,
+      done.querySelector(".attest-chat__agent-event-body")!.textContent,
+      done.querySelector(".attest-chat__agent-markup")!.textContent,
+      [open.getAttribute("aria-label"), open.closest(".attest-chat__agent-card-head") !== null],
+      command.hidden,
+    ]).toEqual([
+      1,
+      "Find primary sources",
+      "12s · Tool calls: 7 · 15.4k tokens",
+      "The reply is partial; the agent can continue it.",
+      "Found it",
+      ["Open details", true],
+      true,
+    ]);
+    [...done.querySelectorAll<HTMLButtonElement>(".attest-chat__agent-toggle")]
+      .find((button) => button.textContent === "Show task")!
+      .click();
+    expect([command.hidden, command.textContent]).toEqual([false, "Task"]);
+    const live = card([]);
+    expect([
+      live.querySelector<HTMLElement>(".attest-chat__agent-command")!.hidden,
+      live.querySelector(".attest-chat__agent-reply-meta"),
+    ]).toEqual([false, null]);
   });
 
   it("gives a created node without a task card exactly one Open details and a clean title", () => {

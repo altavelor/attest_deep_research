@@ -132,6 +132,7 @@ export const chat: EnChatMessages = {
   "chat.agent.attempt": "المحاولة {attempt}",
   "chat.agent.showFullCommand": "إظهار الأمر كاملًا",
   "chat.agent.showFullReply": "إظهار الرد كاملًا",
+  "chat.agent.showTask": "عرض المهمة",
   "chat.agent.showLess": "إظهار أقل",
   "chat.agent.evidence": "المصدر {ordinal}",
   "chat.agent.meta.toolCalls": "استدعاءات الأدوات: {count}",

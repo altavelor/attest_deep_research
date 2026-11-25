@@ -131,6 +131,7 @@ export const chat = {
   "chat.agent.attempt": "attempt {attempt}",
   "chat.agent.showFullCommand": "Show full command",
   "chat.agent.showFullReply": "Show full reply",
+  "chat.agent.showTask": "Show task",
   "chat.agent.showLess": "Show less",
   "chat.agent.evidence": "source {ordinal}",
   "chat.agent.meta.toolCalls": "Tool calls: {count}",

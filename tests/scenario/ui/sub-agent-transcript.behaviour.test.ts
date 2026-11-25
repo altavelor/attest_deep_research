@@ -37,6 +37,7 @@ const NOTICE_KINDS = [
   ["closed", "chat.agent.notice.closed", "x", false],
   ["batch", "chat.agent.notice.batch", "layers", true],
 ] as const;
+const FOLDED_KINDS: readonly string[] = ["queued", "not-started"];
 
 function notice(kind: string, sequence: number) {
   return {
@@ -170,12 +171,16 @@ describe("sub-agent events in a reloaded parent transcript", () => {
     );
 
     const events = [...transcript.querySelectorAll<HTMLElement>(".attest-chat__agent-event")];
+    const standalone = NOTICE_KINDS.filter(([kind]) => !FOLDED_KINDS.includes(kind));
     expect(events.map((el) => el.dataset.eventKey)).toEqual([
       "dispatch:chat-legacy:p1:s1:r1",
-      ...NOTICE_KINDS.map(([kind]) => `notice:chat-legacy:p1:s1:r1:${kind}`),
+      ...standalone.map(([kind]) => `notice:chat-legacy:p1:s1:r1:${kind}`),
     ]);
     expect(events[0]!.textContent).toContain("Find primary sources for the IPO date");
-    for (const [kind, title, icon, action] of NOTICE_KINDS) {
+    expect(events[0]!.querySelector("[data-icon]")?.getAttribute("data-icon")).toBe(
+      "alert-triangle",
+    );
+    for (const [kind, title, icon, action] of standalone) {
       const el = transcript.querySelector<HTMLElement>(`.attest-chat__agent-event--${kind}`)!;
       expect([
         kind,

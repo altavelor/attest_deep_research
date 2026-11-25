@@ -31,6 +31,7 @@ export type ParentTimelineEvent =
       status: SubAgentRunStatus;
       durationMs?: number;
       created?: SubAgentNoticeEntry;
+      outcome?: SubAgentNoticeEntry;
     }
   | { kind: "agent-notice"; sequence: number; notice: SubAgentNoticeEntry };
 
@@ -59,8 +60,9 @@ const SETTLED_KINDS = new Set<SubAgentNoticeKind>(
 
 /**
  * Assigns each dispatch and notice to the assistant message of its parent run, in
- * ascending sequence, keeping the first entry of a repeated event key. Events whose run
- * has no rendered message stay orphans, so the transcript can still show them on their own.
+ * ascending sequence, keeping the first entry of a repeated event key. A run's outcome and
+ * queued notices are shown inside its dispatch card, so they are not placed on their own.
+ * Events whose run has no rendered message stay orphans, shown by the transcript on their own.
  */
 export function placeSubAgentEvents(
   messages: readonly ChatDisplayMessage[],
@@ -87,12 +89,14 @@ export function placeSubAgentEvents(
   };
   const uniqueNotices = notices.filter(fresh);
   const index = indexNotices(uniqueNotices);
+  const folded = new Map<string, number>();
   for (const dispatch of dispatches.filter(fresh)) {
-    if (!place(dispatch.parentRunId, decorate(dispatch, index))) {
-      placement.orphanDispatches.push(dispatch);
-    }
+    const event = decorate(dispatch, index);
+    for (const notice of foldedNotices(event, index)) folded.set(notice.eventKey, notice.sequence);
+    if (!place(dispatch.parentRunId, event)) placement.orphanDispatches.push(dispatch);
   }
   for (const notice of uniqueNotices) {
+    if (folded.has(notice.eventKey)) continue;
     const event = { kind: "agent-notice" as const, sequence: notice.sequence, notice };
     if (!place(notice.parentRunId, event)) placement.orphanNotices.push(notice);
   }
@@ -123,7 +127,7 @@ export function subAgentRunStatus(
 function runOutcome(
   dispatch: Pick<SubAgentDispatchEntry, "runId">,
   notices: readonly SubAgentNoticeEntry[],
-): { status: SubAgentRunStatus; durationMs?: number } {
+): { status: SubAgentRunStatus; durationMs?: number; outcome?: SubAgentNoticeEntry } {
   let terminal: SubAgentNoticeEntry | undefined;
   let queued = false;
   for (const notice of notices) {
@@ -136,10 +140,21 @@ function runOutcome(
   if (terminal) {
     const status = terminal.kind as SubAgentRunStatus;
     return terminal.durationMs === undefined
-      ? { status }
-      : { status, durationMs: terminal.durationMs };
+      ? { status, outcome: terminal }
+      : { status, durationMs: terminal.durationMs, outcome: terminal };
   }
   return { status: queued ? "queued" : "running" };
+}
+
+/** Returns the notices a dispatch card shows itself: its run's outcome and queued notices. */
+function foldedNotices(
+  event: Extract<ParentTimelineEvent, { kind: "agent-dispatch" }>,
+  index: NoticeIndex,
+): SubAgentNoticeEntry[] {
+  const queued = (index.byRun.get(event.dispatch.runId) ?? []).filter(
+    (notice) => notice.kind === "queued",
+  );
+  return event.outcome ? [event.outcome, ...queued] : queued;
 }
 
 interface NoticeIndex {
@@ -232,16 +247,19 @@ function settledSequences(events: readonly ParentTimelineEvent[]): number | null
   const first = (map: Map<string, number>, key: string, sequence: number) => {
     map.set(key, Math.min(map.get(key) ?? sequence, sequence));
   };
+  const settle = (notice: SubAgentNoticeEntry): void => {
+    if (!SETTLED_KINDS.has(notice.kind)) return;
+    if (notice.runId !== null) first(firstByRun, notice.runId, notice.sequence);
+    if (notice.sessionId !== null) first(firstBySession, notice.sessionId, notice.sequence);
+  };
   for (const event of events) {
     if (event.kind === "agent-dispatch") {
       runs.add(event.dispatch.runId);
+      if (event.outcome) settle(event.outcome);
       continue;
     }
-    const { sessionId, runId, kind } = event.notice;
-    if (sessionId !== null) sessions.add(sessionId);
-    if (!SETTLED_KINDS.has(kind)) continue;
-    if (runId !== null) first(firstByRun, runId, event.sequence);
-    if (sessionId !== null) first(firstBySession, sessionId, event.sequence);
+    if (event.notice.sessionId !== null) sessions.add(event.notice.sessionId);
+    settle(event.notice);
   }
   const units = [
     ...[...runs].map((runId) => firstByRun.get(runId)),

@@ -140,6 +140,7 @@ export const chat: EnChatMessages = {
   "chat.agent.attempt": "попытка {attempt}",
   "chat.agent.showFullCommand": "Показать команду целиком",
   "chat.agent.showFullReply": "Показать ответ целиком",
+  "chat.agent.showTask": "Показать задачу",
   "chat.agent.showLess": "Свернуть",
   "chat.agent.evidence": "источник {ordinal}",
   "chat.agent.meta.toolCalls": "Вызовов инструментов: {count}",

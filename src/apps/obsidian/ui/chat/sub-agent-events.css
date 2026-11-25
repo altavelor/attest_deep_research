@@ -322,3 +322,72 @@ body.is-mobile .attest-chat__agent-open {
 .attest-chat__agent-status.is-not-started .attest-chat__agent-status-dot {
   background: var(--color-orange, #e8743b);
 }
+
+.attest-chat__agent-run .attest-chat__agent-card-head {
+  flex-wrap: nowrap;
+  justify-content: flex-start;
+  font-weight: 400;
+}
+
+.attest-chat__agent-run-title {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 600;
+}
+
+.attest-chat__agent-run .attest-chat__agent-badge,
+.attest-chat__agent-run .attest-chat__agent-attempt {
+  flex: none;
+}
+
+.attest-chat__agent-run .attest-chat__agent-status {
+  flex: none;
+  padding: 0.05rem 0.5rem;
+  border-radius: 999px;
+  background: var(--background-modifier-hover);
+  font-size: var(--font-ui-smaller);
+}
+
+.attest-chat__agent-run .attest-chat__agent-open.clickable-icon {
+  flex: none;
+  align-self: center;
+  min-height: 0;
+  margin-left: 0;
+}
+
+.attest-chat__agent-command[hidden] {
+  display: none;
+}
+
+.attest-chat__agent-status.is-running .attest-chat__agent-status-dot {
+  background: var(--interactive-accent);
+}
+
+.attest-chat__workflow-agent--dispatch.is-finished .attest-chat__workflow-dot--agent,
+.attest-chat__agent-event--dispatch.is-finished .attest-chat__agent-event-mark {
+  border-color: var(--color-green, #2ea043);
+  color: var(--color-green, #2ea043);
+}
+
+.attest-chat__workflow-agent--dispatch.is-partial .attest-chat__workflow-dot--agent,
+.attest-chat__workflow-agent--dispatch.is-import-failed .attest-chat__workflow-dot--agent,
+.attest-chat__agent-event--dispatch.is-partial .attest-chat__agent-event-mark,
+.attest-chat__agent-event--dispatch.is-import-failed .attest-chat__agent-event-mark {
+  border-color: var(--color-yellow, #d4a72c);
+  color: var(--color-yellow, #d4a72c);
+}
+
+.attest-chat__workflow-agent--dispatch.is-failed .attest-chat__workflow-dot--agent,
+.attest-chat__agent-event--dispatch.is-failed .attest-chat__agent-event-mark {
+  border-color: var(--text-error);
+  color: var(--text-error);
+}
+
+body.is-mobile .attest-chat__agent-run .attest-chat__agent-open.clickable-icon {
+  align-self: center;
+  min-width: 44px;
+  min-height: 44px;
+}

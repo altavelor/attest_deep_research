@@ -131,6 +131,7 @@ export const chat: EnChatMessages = {
   "chat.agent.attempt": "第 {attempt} 次尝试",
   "chat.agent.showFullCommand": "显示完整指令",
   "chat.agent.showFullReply": "显示完整回复",
+  "chat.agent.showTask": "显示任务",
   "chat.agent.showLess": "收起",
   "chat.agent.evidence": "来源 {ordinal}",
   "chat.agent.meta.toolCalls": "工具调用：{count}",
