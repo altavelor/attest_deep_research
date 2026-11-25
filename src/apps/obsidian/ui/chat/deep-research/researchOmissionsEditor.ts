@@ -16,7 +16,9 @@ export function renderOmissionsEditor(
   });
   const listEl = parentEl.createEl("ul", { cls: "attest-research-card__omissions" });
   const fields: HTMLInputElement[] = [];
-  const addEl = parentEl.createDiv({ cls: "attest-research-card__actions" });
+  const addEl = parentEl.createDiv({
+    cls: "attest-research-card__actions attest-research-card__add",
+  });
   const addButton = addEl.createEl("button", {
     cls: "attest-research-card__action",
     text: t("chat.deepResearch.action.addOmission"),

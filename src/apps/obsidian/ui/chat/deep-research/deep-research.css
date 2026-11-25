@@ -53,6 +53,13 @@
   gap: var(--size-4-2);
 }
 
+.attest-research-card__add {
+  flex-direction: column;
+  align-items: center;
+  margin-bottom: var(--size-4-3);
+  text-align: center;
+}
+
 .attest-research-card__action {
   min-width: 0;
 }

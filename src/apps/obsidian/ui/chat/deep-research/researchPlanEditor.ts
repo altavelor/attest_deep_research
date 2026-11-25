@@ -42,7 +42,9 @@ export function renderPlanEditor(
   const listEl = parentEl.createEl("ol", { cls: "attest-research-card__branches" });
   const rows: EditorRow[] = [];
   const removed: string[] = [];
-  const addEl = parentEl.createDiv({ cls: "attest-research-card__actions" });
+  const addEl = parentEl.createDiv({
+    cls: "attest-research-card__actions attest-research-card__add",
+  });
   const addButton = addEl.createEl("button", {
     cls: "attest-research-card__action",
     text: t("chat.deepResearch.action.addBranch"),
