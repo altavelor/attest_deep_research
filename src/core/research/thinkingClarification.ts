@@ -4,6 +4,9 @@ import type {
   ClarificationReply,
 } from "@core/answer";
 import {
+  MAX_BRIEF_PROMPT_CHARS,
+  MAX_BRIEF_SUGGESTION_CHARS,
+  MAX_BRIEF_SUGGESTIONS,
   MAX_CLARIFICATION_QUESTIONS,
   MAX_RESEARCH_TEXT_CHARS,
   boundedClarificationQuestions,
@@ -21,19 +24,45 @@ export type ClarificationArguments =
 
 /**
  * Reads the untrusted arguments of the Thinking clarification tool with the Deep Research brief
- * bounds. Input without a single usable question is rejected so the model can retry or answer.
+ * bounds. Any invalid entry, an empty list or too many questions rejects the whole call so the
+ * model can retry or answer.
  */
 export function parseClarificationArguments(
   input: Record<string, unknown>,
 ): ClarificationArguments {
-  const questions = boundedClarificationQuestions(input.questions);
-  if (questions.length === 0) {
+  const questions = input.questions;
+  if (
+    !Array.isArray(questions) ||
+    questions.length === 0 ||
+    questions.length > MAX_CLARIFICATION_QUESTIONS ||
+    !questions.every(isValidQuestionArgument)
+  ) {
     return {
       ok: false,
-      message: `Pass 1-${MAX_CLARIFICATION_QUESTIONS} questions, each with a non-empty prompt.`,
+      message:
+        `Pass 1-${MAX_CLARIFICATION_QUESTIONS} questions, each with a non-empty prompt of at most ` +
+        `${MAX_BRIEF_PROMPT_CHARS} characters and at most ${MAX_BRIEF_SUGGESTIONS} string ` +
+        `suggestions of at most ${MAX_BRIEF_SUGGESTION_CHARS} characters.`,
     };
   }
-  return { ok: true, clarification: { questions } };
+  return { ok: true, clarification: { questions: boundedClarificationQuestions(questions) } };
+}
+
+/** Tells whether one tool argument entry is a question with a bounded prompt and suggestions. */
+function isValidQuestionArgument(entry: unknown): boolean {
+  if (typeof entry !== "object" || entry === null || Array.isArray(entry)) return false;
+  const { prompt, suggestions } = entry as { prompt?: unknown; suggestions?: unknown };
+  if (typeof prompt !== "string" || prompt.trim() === "") return false;
+  if (prompt.trim().length > MAX_BRIEF_PROMPT_CHARS) return false;
+  if (suggestions === undefined) return true;
+  return (
+    Array.isArray(suggestions) &&
+    suggestions.length <= MAX_BRIEF_SUGGESTIONS &&
+    suggestions.every(
+      (suggestion) =>
+        typeof suggestion === "string" && suggestion.trim().length <= MAX_BRIEF_SUGGESTION_CHARS,
+    )
+  );
 }
 
 /** Reads a stored clarification, or returns undefined when it is absent or malformed. */
