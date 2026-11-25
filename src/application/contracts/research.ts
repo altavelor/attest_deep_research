@@ -32,7 +32,11 @@ import type {
 } from "@application/ports/subAgent";
 import type { MapSourcesRunContext } from "@application/ports/mapSources";
 import type { ResearchStatePort } from "@application/ports/researchState";
-import type { ResearchArtifactReference, ResearchTurnInput } from "@core/research/deepResearch";
+import type {
+  ResearchActivity,
+  ResearchArtifactReference,
+  ResearchTurnInput,
+} from "@core/research/deepResearch";
 
 export interface IndexedUrlReference {
   id: string;
@@ -173,6 +177,7 @@ export type ResearchStreamEvent =
   | { type: "sub-agent-phase"; parentId: string; phase: string }
   | { type: "answer-reset" }
   | { type: "research"; reference: ResearchArtifactReference }
+  | { type: "research-activity"; activity: ResearchActivity }
   | { type: "context"; diagnostics: ContextDiagnostics }
   | { type: "complete"; answer: ResearchAnswer };
 

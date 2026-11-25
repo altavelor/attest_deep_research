@@ -5,7 +5,7 @@ import type {
   ConversationRegistryPromptView,
 } from "@core/chat/sourceRegistry";
 import type { SavedChatDeepResearch, SavedChatSettings } from "@core/chat/savedChat";
-import type { ResearchTurnInput } from "@core/research/deepResearch";
+import type { ResearchActivity, ResearchTurnInput } from "@core/research/deepResearch";
 import type { ChatSessionStatus, InterruptionReason } from "@core/chat/chatSession";
 import type { ResearchService } from "@application/use-cases/research";
 import type { SubAgentDispatchEntry, SubAgentNoticeEntry } from "@core/research";
@@ -26,6 +26,7 @@ export interface ChatSessionState {
   chatSettings: SavedChatSettings;
   draft: string;
   progressLabel: string | null;
+  researchActivity: ResearchActivity | null;
   startedAt: string | null;
   completedAt: string | null;
   unreadCompletion: boolean;

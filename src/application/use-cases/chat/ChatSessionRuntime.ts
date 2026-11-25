@@ -304,6 +304,12 @@ export class ChatSessionRuntime {
 
     if (event.type === "context") return;
 
+    if (event.type === "research-activity") {
+      this.state.researchActivity = event.activity;
+      this.emit(runId, "progress");
+      return;
+    }
+
     if (event.type === "delta") {
       this.state.messages = nextAssistantMessage(this.state.messages, event.content);
       this.emit(runId, "active-message");

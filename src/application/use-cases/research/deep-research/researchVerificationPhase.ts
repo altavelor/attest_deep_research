@@ -36,6 +36,7 @@ export interface VerificationPhaseDeps {
   commit(verification: ResearchVerification): Promise<void>;
   budgetOpen(): boolean;
   aborted(): boolean;
+  onFollowUps?(count: number): void;
 }
 
 /**
@@ -70,6 +71,7 @@ export async function runVerificationPhase(
       ).map((work) => [work.branchId, work.task]),
     );
     const works = unsettled.map((execution) => followUpWork(plan, execution, tasks));
+    deps.onFollowUps?.(works.length);
     const settled = await deps.runFollowUps(resumeExecutions(current.followUps), works);
     current = { ...current, followUps: [...settled] };
   }
@@ -107,6 +109,7 @@ export async function runVerificationPhase(
       followUpsUsed: current.followUpsUsed + followUps.length,
     };
     await deps.commit(current);
+    deps.onFollowUps?.(works.length);
     const settled = await deps.runFollowUps(current.followUps, works);
     current = { ...current, followUps: [...settled] };
   }

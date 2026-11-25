@@ -6,6 +6,7 @@ import {
   MAX_RESEARCH_CLAIMS,
   acceptedAssessment,
   checkClaimReferences,
+  claimTally,
   escapePromptText,
   followUpWorks,
   independenceGroups,
@@ -14,6 +15,7 @@ import {
   type ClaimAssessment,
   type ResearchClaim,
   type ResearchPlan,
+  type ResearchStep,
   type VerificationSummary,
   RESEARCH_LANGUAGE_RULE,
 } from "@core/research/deepResearch";
@@ -28,6 +30,7 @@ export interface EvidenceVerificationOptions {
   followUpCycle: number;
   claimAllowance: number;
   onExtracted?(workIds: readonly string[]): void;
+  onProgress?(step: ResearchStep): void;
   hypothesisClaims?: readonly ResearchClaim[];
   signal?: AbortSignal;
 }
@@ -81,7 +84,7 @@ export class EvidenceVerificationService {
       citationTokens: claim.citationTokens.filter((token) => known.has(token)),
     }));
     const { checkable, settled } = checkClaimReferences(claims, evidence);
-    const assessed = await this.assess(checkable, evidence);
+    const assessed = await this.assess(checkable, evidence, settled, claims.length);
     const order = new Map(claims.map((claim, index) => [claim.claimId, index]));
     const assessments = [...settled, ...assessed].sort(
       (a, b) => order.get(a.claimId)! - order.get(b.claimId)!,
@@ -115,8 +118,10 @@ export class EvidenceVerificationService {
     const claims: ResearchClaim[] = [];
     const extracted: string[] = [];
     let allowance = limit;
-    for (const batch of batches(findings.filter((execution) => execution.finding))) {
+    const all = batches(findings.filter((execution) => execution.finding));
+    for (const [index, batch] of all.entries()) {
       if (allowance <= 0 || !this.options.spendRound()) break;
+      this.options.onProgress?.({ kind: "extracting", batch: index + 1, batches: all.length });
       const reply = await this.call(EXTRACT_PROMPT, extractRequest(batch, plan));
       const parsed = parseClaims(reply, batch, plan);
       for (const execution of batch) {
@@ -137,6 +142,8 @@ export class EvidenceVerificationService {
   private async assess(
     claims: readonly ResearchClaim[],
     evidence: readonly RetrievedChunk[],
+    settled: readonly ClaimAssessment[],
+    total: number,
   ): Promise<ClaimAssessment[]> {
     const passages = new Map(
       evidence.map((chunk) => [chunk.id, chunk.text.slice(0, MAX_PASSAGE_CHARS)]),
@@ -154,6 +161,14 @@ export class EvidenceVerificationService {
         ),
       );
       if (!this.options.spendRound()) break;
+      this.options.onProgress?.({
+        kind: "checking",
+        batch: start / MAX_ASSESS_BATCH + 1,
+        batches: Math.ceil(claims.length / MAX_ASSESS_BATCH),
+        from: settled.length + start + 1,
+        to: settled.length + start + batch.length,
+        tally: claimTally([...settled, ...assessments], total),
+      });
       const reply = await this.call(ASSESS_PROMPT, assessRequest(batch, shown));
       const verdicts = parseVerdicts(reply);
       assessments.push(

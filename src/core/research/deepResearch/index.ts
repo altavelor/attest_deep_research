@@ -167,3 +167,23 @@ export {
   normalizeResearchLanguage,
   researchLanguageOf,
 } from "./researchLanguage";
+export {
+  addTally,
+  claimTally,
+  formatClock,
+  writingSections,
+  writingStep,
+  type ClaimTally,
+  type ResearchActivity,
+  type ResearchActivityBudget,
+  type ResearchStage,
+  type ResearchStageTime,
+  type ResearchStep,
+  type WritingSection,
+} from "./activity";
+export {
+  currentStageNumber,
+  researchStages,
+  type ResearchStageRow,
+  type ResearchStageStatus,
+} from "./researchStages";

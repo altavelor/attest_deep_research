@@ -15,9 +15,9 @@ import {
   verificationCounts,
   waveSize,
   type BranchExecution,
+  type ResearchActivity,
   type ResearchPlan,
   type ResearchReport,
-  type ResearchDiscovery,
   type ResearchLabels,
   type ResearchState,
   type VerificationSummary,
@@ -34,22 +34,17 @@ import { runVerificationPhase } from "./researchVerificationPhase";
 import { withMissingNote, writeReportMarkdown } from "./researchReportWriting";
 import { removeUnknownCitationTokens } from "../strategies/citations";
 import type { ResearchDiscoveryService } from "./ResearchDiscoveryService";
-import {
-  runDiscoveryPhase,
-  withObservation,
-  withObservationsSkipped,
-} from "./researchDiscoveryPhase";
+import { runDiscoveryPhase } from "./researchDiscoveryPhase";
+import { isAbort, suppliedObservation, type SuppliedObservation } from "./researchObservation";
+
+export type { SuppliedObservation } from "./researchObservation";
 import { researchResumeEntry } from "./researchResume";
+import { ResearchActivityReporter } from "./researchActivityReporter";
 
 export interface ResearchDiscoveryFactoryOptions {
   resolveEvidence(tokens: readonly string[]): RetrievedChunk[];
   spendRound(): boolean;
   signal: AbortSignal;
-}
-
-export interface SuppliedObservation {
-  testId: string;
-  text: string | null;
 }
 
 export type ResearchVerifierOptions = Pick<
@@ -60,6 +55,7 @@ export type ResearchVerifierOptions = Pick<
   | "followUpCycle"
   | "claimAllowance"
   | "onExtracted"
+  | "onProgress"
   | "hypothesisClaims"
   | "signal"
 >;
@@ -86,6 +82,7 @@ export interface ResearchRunDeps {
   createId(prefix: string): string;
   onState(state: ResearchState): void;
   onStatus(message: string): void;
+  onActivity?(activity: ResearchActivity): void;
 }
 
 export interface ResearchRunSubAgents {
@@ -116,6 +113,12 @@ export async function runResearch(
     plan.branches.filter((branch) => branch.enabled).length,
   );
   owner.open(start.budget);
+  const activity = new ResearchActivityReporter(
+    start.researchId,
+    () => deps.now().getTime(),
+    () => owner.snapshot(),
+    (next) => deps.onActivity?.(next),
+  );
   const turn = new AbortController();
   const permits = new ResearchBudgetPermits({
     researchId: start.researchId,
@@ -148,7 +151,7 @@ export async function runResearch(
   });
   if (entry.synthesizing) {
     await commit({ pending: null, executions: resumeExecutions(start.executions) });
-    return writeReport(start, current, owner, deps, commit);
+    return writeReport(start, current, owner, deps, commit, activity);
   }
 
   const stopTurn = (): void => turn.abort(deps.signal?.reason);
@@ -240,6 +243,7 @@ export async function runResearch(
         commit: async (next) => void (await commit({ phase: "discovering", discovery: next })),
         budgetClosed: () => owner.snapshot().closed !== null,
         aborted: () => turn.signal.aborted,
+        onStep: (step) => activity.step("hypotheses", step),
       });
       if (stopped()) throw new DOMException("Research stopped", "AbortError");
       if (result.decision === "await-observation") {
@@ -277,6 +281,7 @@ export async function runResearch(
             followUpCycle: bounds.cycle,
             claimAllowance: bounds.claimAllowance,
             onExtracted: (workIds) => (extractedWorks = workIds),
+            onProgress: activity.verification(current.verification),
             hypothesisClaims: bounds.hypothesisClaims,
             signal: turn.signal,
           }).verify(findings, plan);
@@ -296,6 +301,7 @@ export async function runResearch(
         commit: async (next) => void (await commit({ verification: next })),
         budgetOpen: () => owner.snapshot().closed === null,
         aborted: () => turn.signal.aborted,
+        onFollowUps: (count) => activity.step("follow-ups", { kind: "following-up", count }),
       });
       if (stopped()) throw new DOMException("Research stopped", "AbortError");
       await commit({ verification });
@@ -308,7 +314,7 @@ export async function runResearch(
     deps.signal?.removeEventListener("abort", stopTurn);
   }
   if (stopped()) throw new DOMException("Research stopped", "AbortError");
-  return writeReport(start, current, owner, deps, commit);
+  return writeReport(start, current, owner, deps, commit, activity);
 }
 
 async function writeReport(
@@ -317,6 +323,7 @@ async function writeReport(
   owner: ResearchBudgetOwner,
   deps: ResearchRunDeps,
   commit: (patch: Partial<ResearchState>) => Promise<ResearchState>,
+  activity: ResearchActivityReporter,
 ): Promise<ResearchRunResult> {
   const plan = start.plan!;
   if (current.phase !== "synthesizing") await commit({ phase: "synthesizing" });
@@ -329,6 +336,7 @@ async function writeReport(
     return { state, report: null };
   }
   deps.onStatus("Writing the research report…");
+  activity.step("writing", { kind: "writing", words: 0, headings: [] });
   const markdown = await writeReportMarkdown({
     question: start.question,
     plan,
@@ -340,6 +348,7 @@ async function writeReport(
     spendRound: () => owner.spendFinalization(1),
     ...(deps.resolveEvidence ? { resolveEvidence: deps.resolveEvidence } : {}),
     ...(deps.signal ? { signal: deps.signal } : {}),
+    onText: (text) => activity.writing(text),
   });
   const resolve = deps.resolveEvidence ?? (() => []);
   const hypotheses = hypothesesSection(current.discovery, deps.labels, (text, allowed) =>
@@ -370,35 +379,4 @@ async function writeReport(
   };
   const state = await commit({ phase: "completed", report });
   return { state, report };
-}
-
-/**
- * Assesses a supplied observation; when the time limit interrupts the judgement, it is kept as
- * inconclusive. An observation without text skips the observation stage of the research.
- */
-async function suppliedObservation(
-  start: ResearchState,
-  supplied: SuppliedObservation,
-  service: ResearchDiscoveryService,
-  stopped: () => boolean,
-): Promise<ResearchDiscovery> {
-  const discovery = start.discovery!;
-  if (supplied.text === null) {
-    return withObservationsSkipped(discovery, discovery.cycles.at(-1)!.ordinal);
-  }
-  const test = discovery.tests.find((entry) => entry.testId === supplied.testId)!;
-  const hypothesis = discovery.hypotheses.find(
-    (entry) =>
-      entry.hypothesisId === test.hypothesisId && entry.revision === test.hypothesisRevision,
-  )!;
-  try {
-    return withObservation(discovery, await service.assessReport(hypothesis, test, supplied.text));
-  } catch (error) {
-    if (stopped() || !isAbort(error)) throw error;
-    return withObservation(discovery, service.unjudgedReport(test, supplied.text));
-  }
-}
-
-function isAbort(error: unknown): boolean {
-  return (error as { name?: unknown } | null)?.name === "AbortError";
 }

@@ -21,6 +21,7 @@ export function createIdleSessionState(
     chatSettings,
     draft: "",
     progressLabel: null,
+    researchActivity: null,
     startedAt: null,
     completedAt: null,
     unreadCompletion: false,

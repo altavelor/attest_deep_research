@@ -165,17 +165,32 @@ describe("chat session runtime streaming", () => {
     expect(harness.changes.map((change) => change.kind)).toContain("answer");
   });
 
-  it("reports streaming progress through progress changes only", async () => {
+  it("reports streaming progress and research activity through progress changes only", async () => {
+    const gate = deferred();
+    const activity = {
+      researchId: "research-1",
+      at: 0,
+      stage: "writing" as const,
+      stages: {},
+      step: { kind: "writing" as const, words: 3, headings: [] },
+      budget: { activeMs: 0, modelRounds: 0, branchAttempts: 0 },
+    };
     const harness = createHarness(async function* events() {
       yield { type: "status", message: "Searching" };
+      yield { type: "research-activity", activity };
+      await gate.promise;
       yield { type: "complete", answer: answerFor("Done") };
     });
 
     await harness.start();
     await settle();
+    expect(harness.state.researchActivity).toEqual(activity);
 
-    expect(harness.changes.filter((change) => change.kind === "progress")).toHaveLength(1);
-    expect(harness.state.progressLabel).toBeNull();
+    gate.resolve();
+    await settle();
+
+    expect(harness.changes.filter((change) => change.kind === "progress")).toHaveLength(2);
+    expect([harness.state.progressLabel, harness.state.researchActivity]).toEqual([null, null]);
   });
 });
 

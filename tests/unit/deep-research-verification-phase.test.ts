@@ -44,6 +44,7 @@ function verdict(claimId: string, supported: boolean): ClaimAssessment {
 describe("deep research verification phase", () => {
   it("decides follow-ups from the merged verification, not from the latest round alone", async () => {
     const rounds: string[][] = [];
+    const followUpCounts: number[] = [];
     const verification = await runVerificationPhase({
       plan,
       executions: () => completed,
@@ -81,9 +82,11 @@ describe("deep research verification phase", () => {
       commit: async () => undefined,
       budgetOpen: () => true,
       aborted: () => false,
+      onFollowUps: (count) => followUpCounts.push(count),
     });
 
     expect(rounds).toEqual([["branch-1-gather-1", "branch-2-gather-1"], ["branch-2-follow-up-1"]]);
+    expect(followUpCounts).toEqual([1]);
     expect(verification.followUps.map((execution) => execution.workId)).toEqual([
       "branch-2-follow-up-1",
     ]);
@@ -134,6 +137,7 @@ describe("deep research verification phase", () => {
       JSON.parse(JSON.stringify({ schema: 1, active: dead, history: [] })),
     );
     const port = new MemoryResearchState();
+    const stages: string[] = [];
     await runResearch(stored.ok ? stored.value.active! : dead, {
       port,
       runner: {
@@ -164,9 +168,11 @@ describe("deep research verification phase", () => {
       createId: (prefix) => `${prefix}-1`,
       onState: () => undefined,
       onStatus: () => undefined,
+      onActivity: (activity) => stages.push(`${activity.stage}:${activity.step.kind}`),
     });
 
     expect(stored.ok).toBe(true);
+    expect(stages[0]).toBe("follow-ups:following-up");
     const settled = port.commits.find(
       (state) => state.verification?.followUps[0]?.state === "completed",
     )!;

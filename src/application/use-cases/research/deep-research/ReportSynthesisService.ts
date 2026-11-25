@@ -23,6 +23,7 @@ export interface ReportSynthesisInput {
   claims: readonly VerifiedClaim[];
   evidence: readonly RetrievedChunk[];
   signal?: AbortSignal;
+  onText?(markdown: string): void;
 }
 
 export interface SynthesizedReport {
@@ -42,8 +43,9 @@ const SYSTEM_PROMPT = [
 
 /**
  * Synthesizes the report summary with one model call in a fresh context that sees only the
- * question, the objectives, the outline and the verified claims, with no tools. Citation
- * normalization and verification run on the reply, and tokens of no listed claim are removed.
+ * question, the objectives, the outline and the verified claims, with no tools, reporting the
+ * streamed text as it grows. Citation normalization and verification run on the reply, and tokens
+ * of no listed claim are removed.
  */
 export class ReportSynthesisService {
   constructor(private readonly options: ReportSynthesisOptions) {}
@@ -63,6 +65,7 @@ export class ReportSynthesisService {
         ...(input.signal ? { signal: input.signal } : {}),
       })) {
         reply += chunk.content;
+        input.onText?.(reply);
       }
     } catch (error) {
       if ((error as { name?: unknown }).name === "AbortError") throw error;

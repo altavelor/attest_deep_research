@@ -23,6 +23,7 @@ export interface ReportWritingInput {
   spendRound(): boolean;
   resolveEvidence?(revisionIds: readonly string[]): RetrievedChunk[];
   signal?: AbortSignal;
+  onText?(markdown: string): void;
 }
 
 /**
@@ -77,6 +78,7 @@ export async function writeReportMarkdown(input: ReportWritingInput): Promise<st
       claims,
       evidence: input.resolveEvidence?.([...new Set(tokens)]) ?? [],
       ...(input.signal ? { signal: input.signal } : {}),
+      ...(input.onText ? { onText: input.onText } : {}),
     });
     const sections = verificationSections(plan, input.executions, verification, stopReason, labels);
     return withCitationNotes(

@@ -14,6 +14,7 @@ import {
   type ResearchDiscovery,
   type ResearchObservation,
   type ResearchPlan,
+  type ResearchStep,
   type ResearchWork,
 } from "@core/research/deepResearch";
 import type { ResearchDiscoveryService } from "./ResearchDiscoveryService";
@@ -31,6 +32,7 @@ export interface DiscoveryPhaseDeps {
   commit(discovery: ResearchDiscovery): Promise<void>;
   budgetClosed(): boolean;
   aborted(): boolean;
+  onStep?(step: ResearchStep): void;
 }
 
 export interface DiscoveryPhaseResult {
@@ -80,6 +82,7 @@ export async function runDiscoveryPhase(deps: DiscoveryPhaseDeps): Promise<Disco
         await commit(decided(deps, discovery, ordinal, false, "No room for more hypotheses."));
         continue;
       }
+      deps.onStep?.({ kind: "proposing", cycle: ordinal });
       const proposed = await deps.service.propose(
         deps.question,
         deps.plan,
@@ -113,6 +116,7 @@ export async function runDiscoveryPhase(deps: DiscoveryPhaseDeps): Promise<Disco
       }
       await commit(discovery);
     }
+    deps.onStep?.({ kind: "testing", cycle: ordinal });
     await runOpenTests(deps, () => discovery, commit);
     if (deps.aborted()) return { discovery, decision: null };
     const observed = await assessTests(deps, discovery, ordinal);
@@ -230,6 +234,7 @@ async function assessTests(
 ): Promise<{ discovery: ResearchDiscovery; progressed: boolean; refused: boolean }> {
   let discovery = start;
   let progressed = false;
+  const judged = start.tests.filter((test) => test.status === "proposed");
   for (const test of start.tests) {
     if (test.status !== "proposed" || deps.aborted()) continue;
     const execution = discovery.executions.find((entry) => entry.workId === test.testId);
@@ -246,6 +251,12 @@ async function assessTests(
       (entry) =>
         entry.hypothesisId === test.hypothesisId && entry.revision === test.hypothesisRevision,
     )!;
+    deps.onStep?.({
+      kind: "judging",
+      cycle: ordinal,
+      done: judged.indexOf(test) + 1,
+      total: judged.length,
+    });
     const observation = await deps.service.assess(hypothesis, test, execution.finding);
     if (observation === null) {
       const left = discovery.tests.filter(

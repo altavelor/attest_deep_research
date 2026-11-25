@@ -420,6 +420,7 @@ export class ChatSessionManager {
     state.completedAt = null;
     state.lastAnswer = null;
     state.progressLabel = null;
+    state.researchActivity = null;
     state.unreadCompletion = false;
     state.interruptionReason = null;
     state.draft = "";
@@ -584,6 +585,7 @@ export class ChatSessionManager {
     state.completedAt = completedAt;
     state.activeRunId = null;
     state.progressLabel = null;
+    state.researchActivity = null;
     this.pending.delete(sessionId);
 
     if (!runId) this.publishTerminal(sessionId);

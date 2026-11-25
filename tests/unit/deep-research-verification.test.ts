@@ -71,6 +71,54 @@ describe("deep research claim verification", () => {
     }
   });
 
+  it("reports each extraction and assessment batch with the tally of settled claims", async () => {
+    const plan = researchPlan([researchBranch(1)], "balanced");
+    const model = new FakeChatModel([
+      [
+        {
+          content: JSON.stringify({
+            claims: [
+              { finding: 1, text: "Unsourced", tokens: ["t9"], objective: 1 },
+              { finding: 1, text: "Moon", tokens: ["t1"], objective: 1 },
+            ],
+          }),
+          isComplete: true,
+        },
+      ],
+      [{ content: JSON.stringify({ assessments: [] }), isComplete: true }],
+    ]);
+    const execution = {
+      ...gatheringResearch(plan).executions[0]!,
+      state: "completed" as const,
+      finding: { text: "Moon [t1]", citationTokens: ["t1"], partial: false },
+    };
+    const onProgress = vi.fn();
+    await new EvidenceVerificationService({
+      chatModel: model,
+      model: "model",
+      chatOptions: {},
+      resolveEvidence: (tokens) =>
+        tokens.includes("t1") ? [retrieved("t1", markdownSource("Notes/a.md"), "Moon.")] : [],
+      spendRound: () => true,
+      followUpsRemaining: 0,
+      followUpCycle: 1,
+      claimAllowance: 40,
+      onProgress,
+    }).verify([execution], plan);
+
+    expect(onProgress.mock.calls.map(([step]) => step)).toEqual([
+      { kind: "extracting", batch: 1, batches: 1 },
+      {
+        kind: "checking",
+        batch: 1,
+        batches: 1,
+        from: 2,
+        to: 2,
+        tally: { supported: 0, conflicted: 0, unverified: 1, total: 2 },
+      },
+    ]);
+  });
+
   it("leaves claims without a round unassessed and reports them unverified, not failed", async () => {
     const plan = researchPlan([researchBranch(1)], "balanced");
     const model = new FakeChatModel([

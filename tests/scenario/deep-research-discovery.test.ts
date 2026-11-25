@@ -78,12 +78,34 @@ describe("deep research discovery", () => {
     const port = stored("thorough");
     const researchId = port.commits[0]!.researchId;
     const rounds = new BranchModelRounds();
-    await answer(
+    const events = await answer(
       model,
       new ResearchRegistry(),
       { question: "Continue", researchState: port, research: { type: "continue", researchId } },
       rounds,
     );
+    const steps = events.flatMap((event) =>
+      event.type === "research-activity"
+        ? [`${event.activity.stage}:${event.activity.step.kind}`]
+        : [],
+    );
+    expect(steps.filter((step, index) => step !== steps[index - 1])).toEqual([
+      "hypotheses:proposing",
+      "hypotheses:testing",
+      "hypotheses:judging",
+      "hypotheses:proposing",
+      "hypotheses:testing",
+      "hypotheses:judging",
+      "verification:extracting",
+      "verification:checking",
+      "writing:writing",
+    ]);
+    const writing = events.flatMap((event) =>
+      event.type === "research-activity" && event.activity.step.kind === "writing"
+        ? [event.activity.step.words]
+        : [],
+    );
+    expect(writing.at(-1)).toBeGreaterThan(0);
     const tests = rounds.tasks.filter((task) => task.startsWith("Test this hypothesis"));
     expect(tests).toHaveLength(2);
     expect(tests[0]).toContain("Claim: The moon causes tides");
