@@ -27,12 +27,12 @@ const settings: SavedChatSettings = {
 const NOTICE_KINDS = [
   ["created", "chat.agent.notice.created", "bot", true],
   ["queued", "chat.agent.notice.queued", "bot", true],
-  ["finished", "chat.agent.notice.finished", "check", true],
-  ["partial", "chat.agent.notice.partial", "alert-triangle", true],
-  ["failed", "chat.agent.notice.failed", "x", true],
-  ["stopped", "chat.agent.notice.stopped", "x", true],
-  ["interrupted", "chat.agent.notice.interrupted", "x", true],
-  ["import-failed", "chat.agent.notice.import-failed", "alert-triangle", true],
+  ["finished", "chat.agent.status.finished", "check", true],
+  ["partial", "chat.agent.status.partial", "alert-triangle", true],
+  ["failed", "chat.agent.status.failed", "x", true],
+  ["stopped", "chat.agent.status.stopped", "x", true],
+  ["interrupted", "chat.agent.status.interrupted", "x", true],
+  ["import-failed", "chat.agent.status.import-failed", "alert-triangle", true],
   ["not-started", "chat.agent.notice.not-started", "alert-triangle", true],
   ["closed", "chat.agent.notice.closed", "x", false],
   ["batch", "chat.agent.notice.batch", "layers", true],
@@ -189,6 +189,9 @@ describe("sub-agent events in a reloaded parent transcript", () => {
         el.querySelector(".attest-chat__agent-open") !== null,
       ]).toEqual([kind, true, icon, action]);
     }
+    expect(
+      transcript.querySelector(".attest-chat__agent-event--batch .attest-chat__agent-status"),
+    ).toBeNull();
     transcript
       .querySelector<HTMLButtonElement>(
         ".attest-chat__agent-event--finished .attest-chat__agent-open",
