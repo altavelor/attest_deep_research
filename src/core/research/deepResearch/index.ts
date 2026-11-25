@@ -1,6 +1,12 @@
 export * from "./types";
 export * from "./limits";
-export { isResearchId, isRevision, maxEnabledBranches, validatePlan } from "./planValidation";
+export {
+  isResearchId,
+  isRevision,
+  maxEnabledBranches,
+  maxGeneratedBranches,
+  validatePlan,
+} from "./planValidation";
 export {
   applyDecision,
   canRegenerate,

@@ -2,9 +2,10 @@ import {
   MAX_PLAN_GENERATIONS,
   MAX_PLAN_LIST_ITEMS,
   MAX_RESEARCH_BRANCHES,
+  USER_ADDED_BRANCHES,
   RESEARCH_PRESET_LIMITS,
 } from "./limits";
-import type { ResearchBranch, ResearchLimits, ResearchPlan } from "./types";
+import type { ResearchBranch, ResearchLimits, ResearchPlan, ResearchPreset } from "./types";
 
 const RESEARCH_ID = /^[A-Za-z0-9_-]{1,64}$/u;
 
@@ -18,9 +19,14 @@ export function isRevision(value: unknown): value is number {
   return Number.isSafeInteger(value) && (value as number) >= 0;
 }
 
-/** Returns how many enabled branches the plan's preset lets it run. */
+/** Returns how many branches a model may generate for a preset. */
+export function maxGeneratedBranches(preset: ResearchPreset): number {
+  return Math.min(MAX_RESEARCH_BRANCHES, RESEARCH_PRESET_LIMITS[preset].branches);
+}
+
+/** Returns how many enabled branches a plan may run: the generated limit plus the user's additions. */
 export function maxEnabledBranches(plan: ResearchPlan): number {
-  return Math.min(MAX_RESEARCH_BRANCHES, plan.limits.branches);
+  return Math.min(MAX_RESEARCH_BRANCHES, plan.limits.branches + USER_ADDED_BRANCHES);
 }
 
 /**

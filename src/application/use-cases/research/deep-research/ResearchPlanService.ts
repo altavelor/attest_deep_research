@@ -1,10 +1,9 @@
 import type { ChatModelProvider, ChatRequest } from "@core/agent";
 import type { ResearchChatHistoryMessage } from "@core/research";
 import {
-  RESEARCH_PRESET_LIMITS,
   boundedReason,
   briefText,
-  MAX_RESEARCH_BRANCHES,
+  maxGeneratedBranches,
   deepResearchRejected,
   parsePlanDraft,
   planGenerationPrompt,
@@ -36,10 +35,7 @@ export class ResearchPlanService {
 
   async generate(question: string, instruction: string | null): Promise<ResearchPlan> {
     const { options } = this;
-    const maxBranches = Math.min(
-      MAX_RESEARCH_BRANCHES,
-      RESEARCH_PRESET_LIMITS[options.preset].branches,
-    );
+    const maxBranches = maxGeneratedBranches(options.preset);
     const brief = briefText(options.brief ?? null);
     const request = [question, brief, instruction ? `Revise the plan: ${instruction}` : ""]
       .filter((part) => part !== "")

@@ -1,6 +1,6 @@
 import { RESEARCH_LANGUAGE_RULE } from "./researchLanguage";
 import { MAX_PLAN_LIST_ITEMS, MAX_RESEARCH_BRANCHES, presetLimits } from "./limits";
-import { validatePlan } from "./planValidation";
+import { maxGeneratedBranches, validatePlan } from "./planValidation";
 import type {
   ResearchBranch,
   ResearchPlan,
@@ -77,6 +77,10 @@ export function parsePlanDraft(
     generationsUsed: context.generationsUsed,
     approvedAt: null,
   };
+  const generated = maxGeneratedBranches(context.preset);
+  if (branches.length > generated) {
+    return { ok: false, message: `A generated plan has at most ${generated} branches.` };
+  }
   const problem = validatePlan(plan);
   return problem ? { ok: false, message: problem } : { ok: true, value: plan };
 }

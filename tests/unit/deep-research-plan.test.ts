@@ -33,17 +33,19 @@ describe("deep research plan validity", () => {
     expect(validatePlan(plan)).toBe("Branch dependencies form a cycle.");
   });
 
-  it("rejects a ninth branch", () => {
-    const plan = researchPlan(Array.from({ length: 9 }, (_, index) => researchBranch(index + 1)));
-    expect(validatePlan(plan)).toBe("A plan needs between one and 8 branches.");
+  it("rejects an eleventh branch", () => {
+    const branches = Array.from({ length: 11 }, (_, index) =>
+      researchBranch(index + 1, { enabled: index < 8 }),
+    );
+    expect(validatePlan(researchPlan(branches))).toBe("A plan needs between one and 10 branches.");
   });
 
-  it("limits the enabled branches to the preset and not the disabled ones", () => {
-    const branches = Array.from({ length: 4 }, (_, index) => researchBranch(index + 1));
+  it("lets the user enable four branches beyond the preset but not a fifth", () => {
+    const branches = Array.from({ length: 8 }, (_, index) => researchBranch(index + 1));
     expect(validatePlan(researchPlan(branches, "conservative"))).toBe(
-      "A plan runs at most 3 enabled branches; disable or remove one.",
+      "A plan runs at most 7 enabled branches; disable or remove one.",
     );
-    branches[3] = researchBranch(4, { enabled: false });
+    branches[7] = researchBranch(8, { enabled: false });
     expect(validatePlan(researchPlan(branches, "conservative"))).toBeNull();
   });
 
@@ -187,6 +189,15 @@ describe("deep research untrusted plan input", () => {
       sourceScope: "indexOnly",
     });
     expect(parsed.value.branches[0]!.title).toHaveLength(200);
+  });
+
+  it("rejects a generated plan above the preset branch count", () => {
+    const branches = Array.from({ length: 7 }, () => ({ title: "T", task: "Do", objectives: [1] }));
+    const reply = JSON.stringify({ objectives: ["Goal"], branches });
+    expect(parsePlanDraft(reply, draftContext)).toEqual({
+      ok: false,
+      message: "A generated plan has at most 6 branches.",
+    });
   });
 
   it("resolves objective positions against the list the model sent", () => {

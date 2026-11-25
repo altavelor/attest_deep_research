@@ -92,8 +92,9 @@ describe("deep research plan card", () => {
     click("Cancel editing");
     expect(host.querySelector("li textarea")).toBeNull();
     click("Edit");
+    for (let added = 0; added < 4; added += 1) click("Add branch");
     expect(button("Add branch").disabled).toBe(true);
-    expect(host.textContent).toContain("At most 3 enabled branches");
+    expect(host.textContent).toContain("At most 7 enabled branches");
     const toggle = (checked: boolean): void => {
       const box = items()[0]!.querySelector<HTMLInputElement>("input[type=checkbox]")!;
       box.checked = checked;
@@ -104,6 +105,7 @@ describe("deep research plan card", () => {
     toggle(false);
     expect(struck()).toBe(true);
     expect(button("Add branch").disabled).toBe(false);
+    for (let added = 0; added < 4; added += 1) click("Remove", items()[3]);
     toggle(true);
     expect(struck()).toBe(false);
     toggle(false);

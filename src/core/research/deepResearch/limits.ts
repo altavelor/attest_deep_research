@@ -1,7 +1,8 @@
 import type { ResearchLimits, ResearchPhase, ResearchPreset } from "./types";
 
 export const DEEP_RESEARCH_SCHEMA = 1;
-export const MAX_RESEARCH_BRANCHES = 8;
+export const MAX_RESEARCH_BRANCHES = 10;
+export const USER_ADDED_BRANCHES = 4;
 export const MAX_PLAN_GENERATIONS = 3;
 export const MAX_CLARIFICATION_ROUNDS = 1;
 export const MAX_CLARIFICATION_QUESTIONS = 3;
