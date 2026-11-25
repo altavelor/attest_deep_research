@@ -94,7 +94,8 @@ export function objectiveCoverage(
  * Turns one untrusted verdict into an assessment; `passages` are exactly the passages of the
  * request that carried the claim. A `supported` verdict needs a quote of at least
  * `MIN_CLAIM_QUOTE_CHARS` normalized characters inside a passage of the claim's own tokens, and a
- * conflict needs a contradicting token among the request's passages; otherwise it is `unresolved`.
+ * conflict needs a contradicting token of another source among the request's passages; otherwise
+ * it is `unresolved`. A claim contradicted only by its own sources is `unsupported`.
  */
 export function acceptedAssessment(
   claim: ResearchClaim,
@@ -120,10 +121,15 @@ export function acceptedAssessment(
           ),
         ]
       : [];
-    if (contradicting.length === 0) return assessment(claim.claimId, "unresolved", claimGroups);
+    const own = new Set(claim.citationTokens);
+    const others = contradicting.filter((token) => !own.has(token));
+    if (others.length === 0) {
+      const misread = contradicting.length > 0 ? "unsupported" : "unresolved";
+      return assessment(claim.claimId, misread, claimGroups);
+    }
     return {
       ...assessment(claim.claimId, "conflicted", claimGroups),
-      contradictingTokens: contradicting.slice(0, MAX_CLAIM_TOKENS),
+      contradictingTokens: others.slice(0, MAX_CLAIM_TOKENS),
     };
   }
   const plain = verdict?.verdict === "unsupported" ? "unsupported" : "unresolved";

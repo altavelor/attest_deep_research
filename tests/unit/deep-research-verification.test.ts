@@ -283,7 +283,7 @@ describe("deep research claim verification", () => {
 
     expect(summary.assessments.map((entry) => entry.verdict)).toEqual([
       ...Array.from({ length: 10 }, () => "unresolved"),
-      "conflicted",
+      "unsupported",
     ]);
   });
 
@@ -369,7 +369,10 @@ describe("deep research claim verification", () => {
   });
 
   it("downgrades verdicts the cited passages of the request do not bear out", () => {
-    const passages = new Map([["t1", "The moon pulls the oceans twice every day."]]);
+    const passages = new Map([
+      ["t1", "The moon pulls the oceans twice every day."],
+      ["t2", "Tides ignore the moon."],
+    ]);
     const rows: [string, object, string][] = [
       [
         "quote outside the passage",
@@ -393,15 +396,31 @@ describe("deep research claim verification", () => {
         "unresolved",
       ],
       [
-        "conflict from this request",
+        "conflict only by its own source",
         { verdict: "conflicted", contradicting: ["t1"] },
+        "unsupported",
+      ],
+      [
+        "conflict from this request",
+        { verdict: "conflicted", contradicting: ["t1", "t2"] },
         "conflicted",
       ],
     ];
+    const raw = (verdict: object) => ({
+      verdict: undefined,
+      quote: undefined,
+      contradicting: undefined,
+      ...verdict,
+    });
     for (const [label, verdict, expected] of rows) {
-      const raw = { verdict: undefined, quote: undefined, contradicting: undefined, ...verdict };
-      expect(acceptedAssessment(claim, raw, passages, new Map()).verdict, label).toBe(expected);
+      expect(acceptedAssessment(claim, raw(verdict), passages, new Map()).verdict, label).toBe(
+        expected,
+      );
     }
+    const conflict = raw({ verdict: "conflicted", contradicting: ["t1", "t2"] });
+    expect(acceptedAssessment(claim, conflict, passages, new Map()).contradictingTokens).toEqual([
+      "t2",
+    ]);
   });
 
   it("groups syndicated copies and spellings of one URL as one source", () => {
