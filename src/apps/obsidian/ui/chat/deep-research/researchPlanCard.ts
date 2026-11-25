@@ -12,7 +12,8 @@ import type { ResearchCardContext } from "./researchCardContext";
 import { renderPlan } from "./researchPlanView";
 import { renderPlanEditor } from "./researchPlanEditor";
 import { cancelAction, renderActions, turnKey } from "./researchCardActions";
-import { renderEndedResearch, renderProgress } from "./researchProgressCard";
+import { renderProgress } from "./researchProgressCard";
+import { renderEarlierTurn, renderEndedResearch } from "./researchReportCard";
 import { renderBrief } from "./researchBriefCard";
 
 export type { ResearchCardContext } from "./researchCardContext";
@@ -20,7 +21,8 @@ export type { ResearchCardContext } from "./researchCardContext";
 /**
  * Renders the card of one research reference from the current section state. Only the card of
  * the current revision of a pending plan has controls; every other card is read-only, and a sent
- * turn stays disabled across rerenders so a double click never sends a second decision.
+ * turn stays disabled across rerenders. A finished research shows its report once, in its latest
+ * turn, and a compact link to it in earlier turns.
  */
 export function renderResearchCard(
   containerEl: HTMLElement,
@@ -39,6 +41,12 @@ export function renderResearchCard(
   }
   const active = view.active?.researchId === reference.researchId ? view.active : null;
   if (!active) {
+    const latest = context.latestRevisions?.get(reference.researchId);
+    if (latest !== undefined && latest > reference.revision) {
+      cardEl.addClass("attest-research-card--compact");
+      renderEarlierTurn(cardEl, reference.researchId, t);
+      return;
+    }
     renderEndedResearch(
       cardEl,
       view.history.find((entry) => entry.researchId === reference.researchId),

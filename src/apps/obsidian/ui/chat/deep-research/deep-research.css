@@ -361,3 +361,264 @@ body.is-mobile .attest-research-progress__toggle {
   min-width: 44px;
   min-height: 44px;
 }
+
+.attest-research-card--compact {
+  padding: var(--size-4-2) var(--size-4-3);
+  border-style: dashed;
+  background: transparent;
+}
+
+.attest-research-report {
+  display: flex;
+  flex-direction: column;
+  gap: var(--size-4-3);
+}
+
+.attest-research-report__head {
+  display: flex;
+  align-items: center;
+  gap: var(--size-4-2);
+}
+
+.attest-research-report__icon {
+  display: inline-flex;
+  flex: none;
+  color: var(--text-muted);
+}
+
+.attest-research-report__icon svg {
+  width: 18px;
+  height: 18px;
+}
+
+.attest-research-report.is-complete .attest-research-report__icon {
+  color: var(--color-green, #2ea043);
+}
+
+.attest-research-report.is-partial .attest-research-report__icon {
+  color: var(--color-yellow, #d4a72c);
+}
+
+.attest-research-report.is-failed .attest-research-report__icon {
+  color: var(--text-error);
+}
+
+.attest-research-report__title {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-weight: var(--font-semibold);
+}
+
+.attest-research-report__chip {
+  flex: none;
+  padding: 0.1rem 0.55rem;
+  border-radius: 999px;
+  background: var(--background-modifier-hover);
+  color: var(--text-muted);
+  font-size: var(--font-ui-smaller);
+  font-weight: var(--font-semibold);
+}
+
+.attest-research-report__chip.is-complete {
+  background: rgba(var(--color-green-rgb, 68, 207, 110), 0.15);
+  color: var(--color-green, #2ea043);
+}
+
+.attest-research-report__chip.is-partial {
+  background: rgba(var(--color-yellow-rgb, 229, 164, 66), 0.15);
+  color: var(--color-yellow, #d4a72c);
+}
+
+.attest-research-report__chip.is-failed {
+  background: rgba(var(--color-red-rgb, 251, 70, 76), 0.15);
+  color: var(--text-error);
+}
+
+.attest-research-report__reason,
+.attest-research-report__missing,
+.attest-research-report__status {
+  color: var(--text-muted);
+  font-size: var(--font-ui-small);
+}
+
+.attest-research-report.is-partial .attest-research-report__reason,
+.attest-research-report__missing {
+  color: var(--color-yellow, #d4a72c);
+}
+
+.attest-research-report.is-failed .attest-research-report__reason,
+.attest-research-report__status.is-error {
+  color: var(--text-error);
+}
+
+.attest-research-report__stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(7.5rem, 1fr));
+  gap: var(--size-4-2);
+}
+
+.attest-research-report__stat {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  padding: var(--size-4-2) var(--size-4-3);
+  border-radius: var(--radius-m);
+  background: var(--background-primary);
+}
+
+.attest-research-report__stat-value {
+  font-size: var(--font-ui-large);
+  font-weight: var(--font-bold);
+  font-variant-numeric: tabular-nums;
+}
+
+.attest-research-report__stat.is-full .attest-research-report__stat-value {
+  color: var(--color-green, #2ea043);
+}
+
+.attest-research-report__stat.is-some .attest-research-report__stat-value {
+  color: var(--color-yellow, #d4a72c);
+}
+
+.attest-research-report__stat.is-none .attest-research-report__stat-value {
+  color: var(--text-error);
+}
+
+.attest-research-report__stat-caption,
+.attest-research-report__label {
+  color: var(--text-muted);
+  font-size: var(--font-ui-smaller);
+}
+
+.attest-research-report__section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--size-4-2);
+  padding-top: var(--size-4-3);
+  border-top: 1px solid var(--background-modifier-border);
+}
+
+.attest-research-report__label {
+  font-weight: var(--font-semibold);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.attest-research-claims__bar {
+  display: flex;
+  height: 8px;
+  overflow: hidden;
+  border-radius: 4px;
+  background: var(--background-modifier-border);
+}
+
+.attest-research-claims__bar-part,
+.attest-research-claims__dot {
+  background: var(--text-faint);
+}
+
+.attest-research-claims__bar-part.is-supported,
+.attest-research-claims__legend-item.is-supported .attest-research-claims__dot {
+  background: var(--color-green, #2ea043);
+}
+
+.attest-research-claims__bar-part.is-conflicted,
+.attest-research-claims__legend-item.is-conflicted .attest-research-claims__dot {
+  background: var(--text-error);
+}
+
+.attest-research-claims__legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--size-4-1) var(--size-4-3);
+  color: var(--text-muted);
+  font-size: var(--font-ui-small);
+}
+
+.attest-research-claims__legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--size-4-1);
+}
+
+.attest-research-claims__dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+
+.attest-research-report__warning {
+  display: flex;
+  flex-direction: column;
+  gap: var(--size-4-1);
+  padding: var(--size-4-2) var(--size-4-3);
+  border-radius: var(--radius-m);
+  background: rgba(var(--color-yellow-rgb, 229, 164, 66), 0.08);
+}
+
+.attest-research-report__warning-title {
+  display: flex;
+  align-items: center;
+  gap: var(--size-4-2);
+  color: var(--color-yellow, #d4a72c);
+  font-weight: var(--font-semibold);
+}
+
+.attest-research-report__warning-title svg {
+  width: 16px;
+  height: 16px;
+}
+
+.attest-research-report__warning ul {
+  margin: 0;
+  padding-inline-start: var(--size-4-5);
+}
+
+.attest-research-report__warning li[hidden] {
+  display: none;
+}
+
+.attest-research-report__export {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--size-4-2) var(--size-4-3);
+}
+
+.attest-research-report__folder {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--size-4-1);
+  color: var(--text-muted);
+  font-size: var(--font-ui-small);
+}
+
+.attest-research-report__section input[hidden] {
+  display: none;
+}
+
+.attest-research-report__link {
+  height: auto;
+  padding: 0;
+  border: none;
+  background: none;
+  box-shadow: none;
+  color: var(--text-accent);
+  font-size: var(--font-ui-small);
+  cursor: pointer;
+}
+
+.attest-research-report__link:hover {
+  background: none;
+  text-decoration: underline;
+}
+
+.attest-research-report__earlier {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--size-4-1) var(--size-4-3);
+  color: var(--text-muted);
+  font-size: var(--font-ui-small);
+}

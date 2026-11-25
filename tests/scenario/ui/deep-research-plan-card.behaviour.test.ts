@@ -399,8 +399,7 @@ describe("deep research plan card", () => {
     );
   });
 
-  it("renders a finished partial report with its verification sections from the history", () => {
-    const host = document.createElement("div");
+  it("renders a finished partial report once and links earlier turns to it", () => {
     const entry = {
       researchId: "research-1",
       question: "Q",
@@ -412,7 +411,7 @@ describe("deep research plan card", () => {
         reportId: "report-1",
         quality: "partial" as const,
         completedBranches: ["branch-1"],
-        missingBranches: [{ branchId: "branch-2", reason: "Time" }],
+        missingBranches: [{ branchId: "branch-2", reason: "Time", title: "Tides" }],
         stopReason: "The active execution time limit was reached.",
         createdAt: "2026-01-01T00:00:00.000Z",
         verification: {
@@ -420,25 +419,58 @@ describe("deep research plan card", () => {
           conflicted: 1,
           unsupported: 1,
           unresolved: 2,
-          uncoveredObjectives: ["Explain neap tides"],
+          uncoveredObjectives: ["Neap tides", "Spring tides", "Storm surges", "Seiches"],
         },
+        scale: { objectives: 5, activeMs: 125_000, activeLimitMs: 1_800_000 },
       },
     };
-    renderResearchCard(
-      host,
-      { researchId: "research-1", artifact: "plan", revision: 9 },
-      {
-        view: { status: "ready", active: null, history: [entry] },
-        t,
-        sentTurns: new Set(),
-        onTurn: vi.fn(),
-      },
-    );
-    expect(host.textContent).toContain("Partial: 1 of 2 branches");
-    expect(host.textContent).toContain("Missing branch-2: Time");
-    expect(host.textContent).toContain("Conflicting claims: 1");
-    expect(host.textContent).toContain("Unsupported or unresolved claims: 3");
-    expect(host.textContent).toContain("Explain neap tides");
-    expect(host.querySelectorAll("button")).toHaveLength(0);
+    const transcript = document.createElement("div");
+    transcript.className = "attest-chat__transcript";
+    const context = {
+      view: { status: "ready" as const, active: null, history: [entry] },
+      t,
+      sentTurns: new Set<string>(),
+      latestRevisions: new Map([["research-1", 9]]),
+      onTurn: vi.fn(),
+    };
+    const card = (revision: number): HTMLElement => {
+      const host = transcript.createDiv();
+      renderResearchCard(host, { researchId: "research-1", artifact: "plan", revision }, context);
+      return host;
+    };
+    const earlier = card(4);
+    const final = card(9);
+    const texts = (selector: string): string[] =>
+      [...final.querySelectorAll(selector)].map((el) => el.textContent ?? "");
+
+    expect([
+      texts(".attest-research-report__chip"),
+      texts(".attest-research-report__reason"),
+      texts(".attest-research-report__stat"),
+      texts(".attest-research-report__missing"),
+      texts(".attest-research-claims__legend-item"),
+      texts(".attest-research-report__warning-title"),
+      [...final.querySelectorAll<HTMLElement>(".attest-research-report__warning li")].map(
+        (item) => item.hidden,
+      ),
+      earlier.querySelector(".attest-research-report"),
+    ]).toEqual([
+      ["Partial"],
+      ["The active execution time limit was reached. · 2 of 30 min"],
+      ["1 / 2plan items gathered", "2 / 6claims supported", "1 / 5objectives covered"],
+      ["Not gathered: Tides — Time"],
+      ["Supported: 2", "Conflicting: 1", "Unverified: 3"],
+      ["Objectives not covered: 4"],
+      [false, false, false, true],
+      null,
+    ]);
+    final.querySelector<HTMLButtonElement>(".attest-research-report__warning button")!.click();
+    expect(final.querySelectorAll(".attest-research-report__warning li[hidden]")).toHaveLength(0);
+    const report = final.querySelector<HTMLElement>(".attest-research-report")!;
+    report.scrollIntoView = vi.fn();
+    [...earlier.querySelectorAll("button")]
+      .find((button) => button.textContent === "Go to report")!
+      .click();
+    expect(report.scrollIntoView).toHaveBeenCalledTimes(1);
   });
 });

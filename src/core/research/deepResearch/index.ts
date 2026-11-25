@@ -2,6 +2,13 @@ export * from "./types";
 export * from "./limits";
 export { budgetLimits } from "./budgetLimits";
 export {
+  reportFacts,
+  type ReportClaims,
+  type ReportFacts,
+  type ReportOutcome,
+  type ReportShare,
+} from "./reportFacts";
+export {
   BRANCH_PROGRESS_STATUSES,
   branchProgressCounts,
   branchProgressRows,

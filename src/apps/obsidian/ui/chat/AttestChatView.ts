@@ -67,7 +67,7 @@ import type { DocumentImageResolver } from "@application/ports";
 import type { Translate, UiTranslator } from "@adapters/i18n";
 import { legacyIndexImageNotice, searchUnavailableMessage } from "./chatViewStatus";
 import { contextWindowUsage } from "./contextWindowUsage";
-import { ChatDisplayMessage } from "@core/conversation";
+import { ChatDisplayMessage, latestResearchRevisions } from "@core/conversation";
 import { citationTarget } from "./conversationFormatting";
 import { renderSavedChatsEmptyState } from "./history/SavedChatsPanel";
 import { SavedChatSessionController } from "./history/SavedChatSessionController";
@@ -709,6 +709,7 @@ export class AttestChatView extends ItemView {
         t: this.t,
         sentTurns: this.sentResearchTurns,
         expandedBranches: this.expandedResearchBranches,
+        latestRevisions: latestResearchRevisions(this.session.messages),
         running: this.isRunning,
         onTurn: (input, label) => void this.researchController.submitResearchTurn(input, label),
         onEditPlan: (request) => this.sessions.editResearchPlan(this.session.sessionId, request),

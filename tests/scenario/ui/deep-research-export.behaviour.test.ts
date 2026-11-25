@@ -80,6 +80,15 @@ describe("deep research export from the report card", () => {
     const { card, entry, notes, render, input, button, exportTo } = exportCard();
     const before = JSON.stringify(entry);
     expect(input().placeholder).toBe("Attest/Research");
+    const folderLink = (): HTMLButtonElement =>
+      card.host.querySelector<HTMLButtonElement>(".attest-research-report__folder button")!;
+    expect([input().hidden, folderLink().textContent]).toEqual([true, "Attest/Research"]);
+    folderLink().click();
+    expect(input().hidden).toBe(false);
+
+    input().value = "Typed";
+    input().dispatchEvent(new Event("input"));
+    expect(folderLink().textContent).toBe("Typed");
 
     exportTo(".attest/x");
     await settle();

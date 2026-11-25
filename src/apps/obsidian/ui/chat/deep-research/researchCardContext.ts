@@ -8,6 +8,7 @@ export interface ResearchCardContext {
   t: Translate;
   sentTurns: Set<string>;
   expandedBranches?: Set<string>;
+  latestRevisions?: ReadonlyMap<string, number>;
   running?: boolean;
   onTurn(input: ResearchTurnInput, label: string): void;
   onEditPlan?(request: ResearchPlanEditRequest): Promise<ResearchPlanEditResult>;
