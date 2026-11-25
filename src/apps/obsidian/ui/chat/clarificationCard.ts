@@ -30,6 +30,7 @@ export function clarificationReplyLabels(t: Translate): ClarificationReplyLabels
  * Renders the clarifying questions of a Thinking turn. While the message is the latest one and no
  * run is active, each question gets an answer field with suggestion chips and the card sends the
  * answers or asks to proceed without them; otherwise it shows the answers the next message gave.
+ * Service notices such as the automatic compaction line are not conversation messages here.
  */
 export function renderClarificationCard(
   containerEl: HTMLElement,
@@ -40,13 +41,14 @@ export function renderClarificationCard(
   const clarification = message.answer?.clarification;
   if (!clarification) return;
   const { t } = context;
-  const index = messages.indexOf(message);
-  const interactive = !context.running && index >= 0 && index === messages.length - 1;
+  const conversation = messages.filter((item) => item.kind !== "notice");
+  const index = conversation.indexOf(message);
+  const interactive = !context.running && index >= 0 && index === conversation.length - 1;
   const cardEl = containerEl.createDiv({ cls: "attest-research-card attest-clarification-card" });
   const briefEl = cardEl.createDiv({ cls: "attest-research-card__brief" });
   briefEl.createDiv({ cls: "attest-research-card__title", text: t("chat.clarification.title") });
   const labels = clarificationReplyLabels(t);
-  const next = index >= 0 ? messages[index + 1] : undefined;
+  const next = index >= 0 ? conversation[index + 1] : undefined;
   const given = next?.role === "user" ? (next.clarificationReply?.answers ?? {}) : {};
   const fields = new Map<string, HTMLTextAreaElement>();
   for (const question of clarification.questions) {

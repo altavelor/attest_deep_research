@@ -124,6 +124,10 @@ export function compactChatMessages(
 export function chatHistoryForPrompt(messages: ChatDisplayMessage[]): ResearchChatHistoryMessage[] {
   return messages
     .filter((message) => {
+      if (message.kind === "notice") {
+        return false;
+      }
+
       if (message.kind === "compact-summary") {
         return true;
       }

@@ -65,6 +65,7 @@ export class ChatHistoryCompactor {
         ...messages,
         {
           role: "assistant",
+          kind: "notice",
           content: this.options.t("chat.compact.automaticMessage"),
           createdAt: new Date().toISOString(),
         },
