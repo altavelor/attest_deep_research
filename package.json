@@ -45,6 +45,8 @@
     "vitest": "^4.1.11"
   },
   "dependencies": {
-    "franc-min": "^6.2.0"
+    "@jitl/quickjs-singlefile-browser-release-sync": "0.32.0",
+    "franc-min": "^6.2.0",
+    "quickjs-emscripten-core": "0.32.0"
   }
 }
