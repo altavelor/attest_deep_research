@@ -334,20 +334,23 @@ export class ThinkingResearchRunner {
           continuation: Boolean(continuation),
           forceSynthesis,
         };
-        const endingCall = response.toolCalls.find((call) => call.name === this.options.endingTool);
-        const endingRound = endingCall
-          ? await toolExecutor.execute({ ...roundOptions, calls: [endingCall] })
-          : undefined;
-        if (this.endedByTool(toolExecutor, round)) return success("");
-        const otherCalls = response.toolCalls.filter((call) => call !== endingCall);
-        const otherRound =
-          otherCalls.length > 0 || !endingRound
-            ? await toolExecutor.execute({ ...roundOptions, calls: otherCalls })
-            : undefined;
+        const endingRounds = [];
+        for (const call of response.toolCalls) {
+          if (call.name !== this.options.endingTool) continue;
+          endingRounds.push(await toolExecutor.execute({ ...roundOptions, calls: [call] }));
+          if (this.endedByTool(toolExecutor, round)) return success("");
+        }
+        const otherCalls = response.toolCalls.filter(
+          (call) => call.name !== this.options.endingTool,
+        );
+        const executed =
+          otherCalls.length > 0 || endingRounds.length === 0
+            ? [...endingRounds, await toolExecutor.execute({ ...roundOptions, calls: otherCalls })]
+            : endingRounds;
         const toolRound = {
-          toolMessages: [...(endingRound?.toolMessages ?? []), ...(otherRound?.toolMessages ?? [])],
-          toolOutputs: [...(endingRound?.toolOutputs ?? []), ...(otherRound?.toolOutputs ?? [])],
-          noProgress: (endingRound?.noProgress ?? true) && (otherRound?.noProgress ?? true),
+          toolMessages: executed.flatMap((item) => item.toolMessages),
+          toolOutputs: executed.flatMap((item) => item.toolOutputs),
+          noProgress: executed.every((item) => item.noProgress),
         };
         if (continuation) {
           toolOutputs = toolRound.toolOutputs;
