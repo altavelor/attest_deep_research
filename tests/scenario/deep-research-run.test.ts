@@ -123,6 +123,7 @@ describe("deep research run", () => {
     expect(report.answer).toContain("1 citation(s) without a source in the findings were removed.");
     const cited = /causes tides \[(\S+)\]/u.exec(report.answer)?.[1];
     expect(run.registry.resolveEvidence([cited!])).toHaveLength(1);
+    expect(report.citations.map((citation) => citation.id)).toEqual([cited]);
     expect(report.evidence?.map((chunk) => chunk.id)).toEqual([cited]);
   });
 

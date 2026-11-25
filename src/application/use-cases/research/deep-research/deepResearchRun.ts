@@ -1,6 +1,7 @@
 import type { ResearchStreamEvent } from "@application/contracts/research";
 import type { ResearchStatePort } from "@application/ports/researchState";
 import type { ResearchAnswer } from "@core/answer";
+import { formatCitation } from "@core/retrieval";
 import { label, researchLanguageOf, type ResearchState } from "@core/research/deepResearch";
 import type {
   ResearchExecutionContext,
@@ -107,7 +108,7 @@ export async function* runApprovedTurn(
           followUpQuestions: [],
           createdAt: deps.now().toISOString(),
         };
-        finalAnswer = ctx.request.finalizeAnswer?.(answer) ?? answer;
+        finalAnswer = withEvidenceCitations(ctx.request.finalizeAnswer?.(answer) ?? answer);
         return finalAnswer.answer;
       },
       now: deps.now,
@@ -139,6 +140,15 @@ export async function* runApprovedTurn(
     );
   }
   return yield* finish(ctx, result.state, result.report.markdown, finalAnswer ?? undefined);
+}
+
+/** Cites every source the finalized report resolved, so its tokens render as citations. */
+function withEvidenceCitations(answer: ResearchAnswer): ResearchAnswer {
+  const evidence = answer.evidence ?? [];
+  return {
+    ...answer,
+    citations: evidence.map((chunk) => ({ ...formatCitation(chunk.source), id: chunk.id })),
+  };
 }
 
 function sourcesOf(deps: DeepResearchStrategyDeps) {
