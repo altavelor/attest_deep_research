@@ -34,11 +34,10 @@ export interface WrittenReport {
 }
 
 /**
- * Writes the report markdown. Verified claims are synthesized with the model when a finalization
- * round remains and at least one claim is supported, and the verification sections follow; without
- * a round or after a failed synthesis the assessments are formatted without a model and the cause
- * is returned. Without assessments or without a supported claim the findings are listed unverified
- * with their unresolvable citations removed.
+ * Writes the report markdown. Supported and conflicted claims, with supported hypotheses the
+ * checker left unresolved, are synthesized by the model when a round remains and one claim is
+ * supported, followed by the verification sections; otherwise the assessments, or without them
+ * the findings, are formatted without a model, and a failed synthesis returns its cause.
  */
 export async function writeReportMarkdown(input: ReportWritingInput): Promise<WrittenReport> {
   const written = await writeMarkdown(input);
@@ -62,7 +61,9 @@ async function writeMarkdown(input: ReportWritingInput): Promise<string | Writte
   const removedTokens = cited.removedTokens;
   const claims = verifiedClaims(verification).filter(
     (entry) =>
-      entry.assessment.verdict === "supported" || entry.assessment.verdict === "conflicted",
+      entry.assessment.verdict === "supported" ||
+      entry.assessment.verdict === "conflicted" ||
+      (entry.claim.kind === "hypothesis" && entry.assessment.verdict === "unresolved"),
   );
   if (!claims.some((entry) => entry.assessment.verdict === "supported")) {
     return withCitationNotes(

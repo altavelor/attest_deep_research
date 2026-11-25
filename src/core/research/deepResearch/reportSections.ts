@@ -70,8 +70,9 @@ export function supportedClaimsSection(verification: ResearchVerification): stri
 
 /**
  * Builds the honest sections every verified report ends with: conflicts with both sides, claims
- * that are unsupported or unresolved, findings of every work whose claims were not extracted,
- * uncovered objectives and the stop reason. Empty sections are left out.
+ * that are unsupported or unresolved except hypotheses, which have their own section, findings of
+ * every work whose claims were not extracted, uncovered objectives and the stop reason. Empty
+ * sections are left out.
  */
 export function verificationSections(
   plan: ResearchPlan,
@@ -96,7 +97,8 @@ export function verificationSections(
   const weak = entries
     .filter(
       (entry) =>
-        entry.assessment.verdict === "unsupported" || entry.assessment.verdict === "unresolved",
+        entry.claim.kind !== "hypothesis" &&
+        (entry.assessment.verdict === "unsupported" || entry.assessment.verdict === "unresolved"),
     )
     .map(
       (entry) =>

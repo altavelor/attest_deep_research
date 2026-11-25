@@ -13,6 +13,7 @@ import {
   type ResearchClaim,
 } from "@core/research/deepResearch";
 import type { RetrievedChunk } from "@core/model";
+import { writeReportMarkdown } from "@application/use-cases/research/deep-research/researchReportWriting";
 import { gatheringResearch, researchBranch, researchPlan } from "../support/deepResearch";
 import { markdownSource, retrieved, webSource } from "../support/factories";
 import { FakeChatModel } from "../support/researchFakes";
@@ -203,6 +204,52 @@ describe("deep research claim verification", () => {
     expect(markdown).toContain("The moon causes tides [t1].\n\nSources: [t1]");
     expect(markdown).toContain("- (unresolved) The moon causes tides.");
     expect(markdown).toContain("Stop reason: Stop.");
+  });
+
+  it("writes a supported hypothesis the checker left unresolved as tested, not as unresolved", async () => {
+    const plan = researchPlan([researchBranch(1)], "balanced");
+    const execution = {
+      ...gatheringResearch(plan).executions[0]!,
+      workId: "w-1",
+      state: "completed" as const,
+      finding: { text: "The moon causes tides [t1].", citationTokens: ["t1"], partial: false },
+    };
+    const hypothesis = {
+      ...claim,
+      claimId: "c-h",
+      kind: "hypothesis" as const,
+      text: "Wind lifts waves.",
+    };
+    const model = new FakeChatModel([
+      [{ content: "Tides follow the moon [t1].", isComplete: true }],
+    ]);
+    const written = await writeReportMarkdown({
+      question: "Tides?",
+      plan,
+      executions: [execution],
+      verification: {
+        claims: [claim, hypothesis],
+        assessments: [
+          supported,
+          { ...supported, claimId: "c-h", verdict: "unresolved", quote: null },
+        ],
+        coverage: [],
+        verifiedWorks: ["w-1"],
+        followUps: [],
+        followUpsUsed: 0,
+      },
+      stopReason: "Stop.",
+      labels: ENGLISH_RESEARCH_LABELS,
+      synthesis: new ReportSynthesisService({ chatModel: model, model: "model", chatOptions: {} }),
+      spendRound: () => true,
+      now: new Date("2026-11-25T00:00:00.000Z"),
+      resolveEvidence: () => [retrieved("t1", markdownSource("Notes/a.md"), "The moon pulls.")],
+    });
+
+    expect(String(model.requests[0]!.messages.at(-1)!.content)).toContain(
+      '<claim verdict="supported by a hypothesis test">\nWind lifts waves. [t1]',
+    );
+    expect(written.markdown).not.toContain("Wind lifts waves");
   });
 
   it("attributes each claim of one batch to the work that produced it", async () => {
