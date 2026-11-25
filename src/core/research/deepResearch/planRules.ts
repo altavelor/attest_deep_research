@@ -6,6 +6,7 @@ import type {
   PlanBranchEdit,
   PlanDecisionPayload,
   PlanEdit,
+  ResearchBranch,
   ResearchDecision,
   ResearchPlan,
   ResearchState,
@@ -183,26 +184,62 @@ export function applyPlanEdit(
       code: "research-invalid-plan",
       message: "The edit names an unknown branch.",
     };
+  const edited = plan.branches.map((branch) => {
+    const change = edits.get(branch.branchId);
+    return change
+      ? {
+          ...branch,
+          ...(change.title !== undefined ? { title: change.title } : {}),
+          ...(change.task !== undefined ? { task: change.task } : {}),
+          ...(change.enabled !== undefined ? { enabled: change.enabled } : {}),
+        }
+      : branch;
+  });
+  const branches = withoutDisabledDependencies(edited);
   const next: ResearchPlan = {
     ...plan,
     revision: plan.revision + 1,
-    branches: plan.branches.map((branch) => {
-      const change = edits.get(branch.branchId);
-      return change
-        ? {
-            ...branch,
-            ...(change.title !== undefined ? { title: change.title } : {}),
-            ...(change.task !== undefined ? { task: change.task } : {}),
-            ...(change.enabled !== undefined ? { enabled: change.enabled } : {}),
-          }
-        : branch;
-    }),
-    knownOmissions: edit.knownOmissions ?? plan.knownOmissions,
+    branches,
+    knownOmissions: omissionsAfterEdit(plan, branches, edit.knownOmissions ?? plan.knownOmissions),
   };
   const problem = validatePlan(next);
   return problem
     ? { ok: false, code: "research-invalid-plan", message: problem }
     : { ok: true, plan: next };
+}
+
+/** Drops the dependencies of enabled branches on disabled ones, so removing a branch frees its dependents. */
+function withoutDisabledDependencies(branches: readonly ResearchBranch[]): ResearchBranch[] {
+  const enabled = new Set(branches.filter((b) => b.enabled).map((b) => b.branchId));
+  return branches.map((branch) =>
+    branch.enabled && branch.dependsOn.some((id) => !enabled.has(id))
+      ? { ...branch, dependsOn: branch.dependsOn.filter((id) => enabled.has(id)) }
+      : branch,
+  );
+}
+
+/**
+ * Records the objectives an edit left without an enabled branch as known omissions, and drops
+ * the omissions of objectives that an edit covered again. Objectives untouched by the edit keep
+ * their omissions as they were.
+ */
+function omissionsAfterEdit(
+  plan: ResearchPlan,
+  branches: readonly ResearchBranch[],
+  omissions: readonly string[],
+): readonly string[] {
+  const covered = (list: readonly ResearchBranch[], objective: string): boolean =>
+    list.some((branch) => branch.enabled && branch.objectives.includes(objective));
+  const lost = plan.objectives.filter(
+    (objective) => covered(plan.branches, objective) && !covered(branches, objective),
+  );
+  const regained = new Set(
+    plan.objectives.filter(
+      (objective) => !covered(plan.branches, objective) && covered(branches, objective),
+    ),
+  );
+  const kept = omissions.filter((omission) => !regained.has(omission));
+  return [...kept, ...lost.filter((objective) => !kept.includes(objective))];
 }
 
 /** Reads an untrusted plan decision payload, or returns null when it is malformed. */

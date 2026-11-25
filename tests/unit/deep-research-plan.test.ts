@@ -69,6 +69,22 @@ describe("deep research decisions", () => {
     });
   });
 
+  it("removes a branch that others depend on and records its objective as omitted", () => {
+    const plan = researchPlan([
+      researchBranch(1),
+      researchBranch(2, { objectives: [], dependsOn: ["branch-1"] }),
+      researchBranch(3, { objectives: [], dependsOn: ["branch-1", "branch-2"] }),
+    ]);
+    const removed = applyPlanEdit(plan, { branches: [{ branchId: "branch-1", enabled: false }] });
+    if (!removed.ok) throw new Error(removed.message);
+    expect(removed.plan.branches.map((branch) => branch.dependsOn)).toEqual([[], [], ["branch-2"]]);
+    expect(removed.plan.knownOmissions).toEqual(["Objective"]);
+    const restored = applyPlanEdit(removed.plan, {
+      branches: [{ branchId: "branch-1", enabled: true }],
+    });
+    expect(restored.ok && restored.plan.knownOmissions).toEqual([]);
+  });
+
   it("allows the third generation and consumes it even when it failed", () => {
     const result = regenerate(2);
     expect(result.ok && result.state.plan?.generationsUsed).toBe(3);
