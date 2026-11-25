@@ -75,6 +75,26 @@ describe("research budget owner", () => {
     expect(budget.allocate("w-3", "branch-3").ok).toBe(true);
   });
 
+  it("waits for searches and rounds held by open allocations instead of closing the budget", () => {
+    const budget = new ResearchBudgetOwner({ ...limits, searchesTotal: 20 }, () => 0, 1);
+    budget.open(null);
+    const settle = (result: ReturnType<typeof budget.allocate>, searches: number) =>
+      budget.settle(result.ok ? result.allocation : (undefined as never), {
+        modelRounds: 12,
+        searches,
+        evidenceItems: 0,
+      });
+    const first = budget.allocate("w-1", "branch-1");
+    expect(budget.allocate("w-2", "branch-2")).toEqual({ ok: false, dimension: "reserved" });
+    settle(first, 19);
+    const second = budget.allocate("w-2", "branch-2");
+    expect(second).toMatchObject({ ok: true, allocation: { searches: 1 } });
+    expect(budget.allocate("w-3", "branch-3")).toEqual({ ok: false, dimension: "reserved" });
+    expect(budget.snapshot().closed).toBeNull();
+    settle(second, 1);
+    expect(budget.allocate("w-3", "branch-3")).toEqual({ ok: false, dimension: "modelRounds" });
+  });
+
   it("consumes in full an allocation a dead turn left open", () => {
     const budget = new ResearchBudgetOwner(limits, () => 0);
     const allocation = {

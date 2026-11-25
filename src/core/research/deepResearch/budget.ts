@@ -16,7 +16,7 @@ export interface BranchUsage {
 
 export type AllocationResult =
   | { ok: true; allocation: BranchAllocation }
-  | { ok: false; dimension: BudgetDimension | "branch-attempts" | "closed" };
+  | { ok: false; dimension: BudgetDimension | "branch-attempts" | "closed" | "reserved" };
 
 /** Returns the budget snapshot of a research that has not spent anything yet. */
 export function emptyBudgetState(): ResearchBudgetState {
@@ -61,8 +61,8 @@ export class ResearchBudgetOwner {
 
   /**
    * Grants one attempt of a branch work or names the dimension that denies it. Reserved attempts
-   * stay free for later works: a work that would take one of them is denied without closing the
-   * budget.
+   * stay free for later works, and rounds or searches held only by open allocations are waited
+   * for: either denial leaves the budget open.
    */
   allocate(workId: string, branchId: string, reservedAttempts = 0): AllocationResult {
     const { consumed, attemptsByBranch, openAllocations } = this.state;
@@ -94,6 +94,11 @@ export class ResearchBudgetOwner {
               ? "evidenceItems"
               : null;
     if (denied) {
+      const held =
+        denied === "modelRounds"
+          ? rounds + openRounds >= 1
+          : denied === "searches" && searches + sum(openAllocations, "searches") >= 1;
+      if (held) return { ok: false, dimension: "reserved" };
       this.close("exhausted", denied);
       return { ok: false, dimension: denied };
     }
