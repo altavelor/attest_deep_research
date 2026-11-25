@@ -57,6 +57,7 @@ export const deepResearch: EnDeepResearchMessages = {
     "Aussagen {from}–{to} an Zitaten prüfen · Paket {batch} von {batches}",
   "chat.deepResearch.progress.step.followingUp": "Zusatzsuchen: {count}",
   "chat.deepResearch.progress.step.writing": "Bericht wird geschrieben · {words} Wörter",
+  "chat.deepResearch.progress.step.thinking": "Bericht wird durchdacht · {words} Wörter Überlegung",
   "chat.deepResearch.progress.step.writingSection": "„{section}“ wird geschrieben · {words} Wörter",
   "chat.deepResearch.progress.extracted": "Extrahierte Aussagen: {count}",
   "chat.deepResearch.progress.checked": "Geprüfte Aussagen: {count}",

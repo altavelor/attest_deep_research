@@ -147,6 +147,8 @@ describe("deep research activity", () => {
     reporter.writing(words(25));
     reporter.writing(words(26));
     reporter.writing(`${words(26)}\n## Risks`);
+    reporter.writing(`${words(26)}\n## Risks`, 24);
+    reporter.writing(`${words(26)}\n## Risks`, 25);
     expect(emitted.map((activity) => activity.step)).toEqual([
       {
         kind: "checking",
@@ -159,6 +161,7 @@ describe("deep research activity", () => {
       { kind: "writing", words: 1, headings: [] },
       { kind: "writing", words: 26, headings: [] },
       { kind: "writing", words: 28, headings: ["Risks"] },
+      { kind: "writing", words: 28, headings: ["Risks"], thinking: 25 },
     ]);
   });
 });

@@ -23,7 +23,7 @@ export interface ReportSynthesisInput {
   claims: readonly VerifiedClaim[];
   evidence: readonly RetrievedChunk[];
   signal?: AbortSignal;
-  onText?(markdown: string): void;
+  onText?(markdown: string, thinking: number): void;
 }
 
 export interface SynthesizedReport {
@@ -44,7 +44,7 @@ const SYSTEM_PROMPT = [
 /**
  * Synthesizes the report summary with one model call in a fresh context that sees only the
  * question, the objectives, the outline and the verified claims, with no tools, reporting the
- * streamed text as it grows. Citation normalization and verification run on the reply, and tokens
+ * streamed text and the count of streamed reasoning words as they grow. Citation normalization and verification run on the reply, and tokens
  * of no listed claim are removed.
  */
 export class ReportSynthesisService {
@@ -53,6 +53,7 @@ export class ReportSynthesisService {
   async synthesize(input: ReportSynthesisInput): Promise<SynthesizedReport> {
     const { options } = this;
     let reply = "";
+    const thinking = new WordCounter();
     try {
       for await (const chunk of options.chatModel.streamChat({
         model: options.model,
@@ -65,7 +66,10 @@ export class ReportSynthesisService {
         ...(input.signal ? { signal: input.signal } : {}),
       })) {
         reply += chunk.content;
-        input.onText?.(reply);
+        for (const event of chunk.events ?? []) {
+          if (event.type === "reasoning-delta") thinking.push(event.text);
+        }
+        input.onText?.(reply, thinking.words);
       }
     } catch (error) {
       if ((error as { name?: unknown }).name === "AbortError") throw error;
@@ -110,6 +114,20 @@ function synthesisRequest(input: ReportSynthesisInput): string {
     `Report outline:\n${input.plan.reportOutline.map((heading) => `- ${escapePromptText(heading)}`).join("\n")}`,
     `Verified claims:\n${claims.join("\n\n")}`,
   ].join("\n\n");
+}
+
+/** Counts the words of a text that arrives in pieces, joining a word split between two pieces. */
+class WordCounter {
+  words = 0;
+  private inWord = false;
+
+  push(text: string): void {
+    for (const char of text) {
+      const blank = /\s/.test(char);
+      if (!blank && !this.inWord) this.words += 1;
+      this.inWord = !blank;
+    }
+  }
 }
 
 function escapeAttribute(text: string): string {

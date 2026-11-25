@@ -55,6 +55,8 @@ export const deepResearch = {
     "Checking claims {from}–{to} against quotes · batch {batch} of {batches}",
   "chat.deepResearch.progress.step.followingUp": "Running extra searches: {count}",
   "chat.deepResearch.progress.step.writing": "Writing the report · {words} words",
+  "chat.deepResearch.progress.step.thinking":
+    "Thinking over the report · {words} words of reasoning",
   "chat.deepResearch.progress.step.writingSection": "Writing “{section}” · {words} words",
   "chat.deepResearch.progress.extracted": "Extracted claims: {count}",
   "chat.deepResearch.progress.checked": "Checked claims: {count}",

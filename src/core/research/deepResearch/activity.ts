@@ -28,7 +28,7 @@ export type ResearchStep =
       tally: ClaimTally;
     }
   | { kind: "following-up"; count: number }
-  | { kind: "writing"; words: number; headings: readonly string[] };
+  | { kind: "writing"; words: number; headings: readonly string[]; thinking?: number };
 
 export interface ResearchActivityBudget {
   activeMs: number;
@@ -78,16 +78,22 @@ export function addTally(earlier: ClaimTally, current: ClaimTally): ClaimTally {
 
 /**
  * Reads the progress of a report being written from its streamed markdown: the word count and the
- * headings written so far, bounded in number and length.
+ * headings written so far, bounded in number and length, and the words the model reasoned before.
  */
-export function writingStep(markdown: string): Extract<ResearchStep, { kind: "writing" }> {
+export function writingStep(
+  markdown: string,
+  thinking = 0,
+): Extract<ResearchStep, { kind: "writing" }> {
   const headings: string[] = [];
   for (const line of markdown.split("\n")) {
     const match = HEADING.exec(line.trim());
     if (!match || headings.length >= MAX_HEADINGS) continue;
     headings.push(match[1]!.slice(0, MAX_HEADING_CHARS));
   }
-  return { kind: "writing", words: markdown.match(/\S+/g)?.length ?? 0, headings };
+  const words = markdown.match(/\S+/g)?.length ?? 0;
+  return thinking > 0
+    ? { kind: "writing", words, headings, thinking }
+    : { kind: "writing", words, headings };
 }
 
 /**

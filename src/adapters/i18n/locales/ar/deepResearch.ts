@@ -55,6 +55,7 @@ export const deepResearch: EnDeepResearchMessages = {
     "مطابقة الادعاءات {from}–{to} مع الاقتباسات · الدفعة {batch} من {batches}",
   "chat.deepResearch.progress.step.followingUp": "عمليات البحث الإضافية: {count}",
   "chat.deepResearch.progress.step.writing": "كتابة التقرير · {words} كلمة",
+  "chat.deepResearch.progress.step.thinking": "التفكير في التقرير · {words} كلمة من الاستدلال",
   "chat.deepResearch.progress.step.writingSection": "كتابة «{section}» · {words} كلمة",
   "chat.deepResearch.progress.extracted": "الادعاءات المستخرجة: {count}",
   "chat.deepResearch.progress.checked": "الادعاءات المُتحقق منها: {count}",

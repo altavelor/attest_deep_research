@@ -348,7 +348,7 @@ async function writeReport(
     spendRound: () => owner.spendFinalization(1),
     ...(deps.resolveEvidence ? { resolveEvidence: deps.resolveEvidence } : {}),
     ...(deps.signal ? { signal: deps.signal } : {}),
-    onText: (text) => activity.writing(text),
+    onText: (text, thinking) => activity.writing(text, thinking),
   });
   const resolve = deps.resolveEvidence ?? (() => []);
   const hypotheses = hypothesesSection(current.discovery, deps.labels, (text, allowed) =>

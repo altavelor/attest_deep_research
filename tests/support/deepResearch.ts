@@ -294,7 +294,8 @@ export function cooperativeResearchReply(request: ChatRequest): string | null {
 
 /**
  * A chat model that answers clarification and verification cooperatively, drafts a three-branch
- * plan and writes a summary citing the first verified claim token and one token no claim holds.
+ * plan and writes a summary, after streamed reasoning, citing the first verified claim token and
+ * one token no claim holds.
  */
 export class PlanAndReportModel implements ChatModelProvider {
   readonly requests: ChatRequest[] = [];
@@ -318,6 +319,13 @@ export class PlanAndReportModel implements ChatModelProvider {
     this.onReport();
     const claims = String(request.messages.at(-1)?.content);
     const token = /\[([^\]\s]+)\]/u.exec(claims.slice(claims.indexOf("Verified claims:")))?.[1];
+    for (const text of ["Weigh the mo", "on pull"]) {
+      yield {
+        content: "",
+        isComplete: false,
+        events: [{ type: "reasoning-delta", segmentId: "reasoning-0", text }],
+      };
+    }
     yield {
       content: `# Report\n\nThe moon pulls the oceans and causes tides [${token}]. Waves exist [source-9:revision-9].`,
       isComplete: true,

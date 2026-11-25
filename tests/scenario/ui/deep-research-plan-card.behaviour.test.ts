@@ -529,6 +529,10 @@ describe("deep research plan card", () => {
       ["is-done DoneBranch 1", "is-current Summary", "is-pending Risks"],
       ["Writing “Summary” · 40 words"],
     ]);
+    const thinking = render(writing, { kind: "writing", words: 0, headings: [], thinking: 120 });
+    expect(thinking.querySelector(".attest-research-stage__now")?.textContent).toBe(
+      "Thinking over the report · 120 words of reasoning",
+    );
   });
 
   it("asks for a supplied observation under the hypothesis list and sends it as the decision", () => {

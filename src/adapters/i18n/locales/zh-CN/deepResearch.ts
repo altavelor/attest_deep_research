@@ -52,6 +52,7 @@ export const deepResearch: EnDeepResearchMessages = {
     "对照引文核查论断 {from}–{to} · 第 {batch} / {batches} 批",
   "chat.deepResearch.progress.step.followingUp": "补充检索：{count}",
   "chat.deepResearch.progress.step.writing": "正在撰写报告 · {words} 词",
+  "chat.deepResearch.progress.step.thinking": "正在构思报告 · 已推理 {words} 词",
   "chat.deepResearch.progress.step.writingSection": "正在撰写“{section}” · {words} 词",
   "chat.deepResearch.progress.extracted": "已提取论断：{count}",
   "chat.deepResearch.progress.checked": "已核查论断：{count}",

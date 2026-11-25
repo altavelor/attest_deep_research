@@ -106,10 +106,11 @@ describe("deep research discovery", () => {
     ]);
     const writing = events.flatMap((event) =>
       event.type === "research-activity" && event.activity.step.kind === "writing"
-        ? [event.activity.step.words]
+        ? [event.activity.step]
         : [],
     );
-    expect(writing.at(-1)).toBeGreaterThan(0);
+    expect(writing[1]).toEqual({ kind: "writing", words: 0, headings: [], thinking: 3 });
+    expect(writing.at(-1)).toMatchObject({ headings: ["Report"], thinking: 4 });
     const tests = rounds.tasks.filter((task) => task.startsWith("Test this hypothesis"));
     expect(tests).toHaveLength(2);
     expect(tests[0]).toContain("Claim: The moon causes tides");

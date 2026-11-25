@@ -23,7 +23,7 @@ export interface ReportWritingInput {
   spendRound(): boolean;
   resolveEvidence?(revisionIds: readonly string[]): RetrievedChunk[];
   signal?: AbortSignal;
-  onText?(markdown: string): void;
+  onText?(markdown: string, thinking: number): void;
 }
 
 /**

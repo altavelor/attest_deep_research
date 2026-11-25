@@ -30,6 +30,9 @@ export function researchStepText(step: ResearchStep, t: Translate): string {
       return t("chat.deepResearch.progress.step.followingUp", { count: step.count });
     case "writing": {
       const section = step.headings.at(-1);
+      if (step.words === 0 && step.thinking !== undefined) {
+        return t("chat.deepResearch.progress.step.thinking", { words: step.thinking });
+      }
       return section === undefined
         ? t("chat.deepResearch.progress.step.writing", { words: step.words })
         : t("chat.deepResearch.progress.step.writingSection", { section, words: step.words });

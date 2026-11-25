@@ -56,6 +56,7 @@ export const deepResearch: EnDeepResearchMessages = {
     "Сверяю утверждения {from}–{to} с цитатами · пакет {batch} из {batches}",
   "chat.deepResearch.progress.step.followingUp": "Дополнительных поисков: {count}",
   "chat.deepResearch.progress.step.writing": "Пишу отчёт · слов: {words}",
+  "chat.deepResearch.progress.step.thinking": "Обдумываю отчёт · слов рассуждения: {words}",
   "chat.deepResearch.progress.step.writingSection": "Пишу раздел «{section}» · слов: {words}",
   "chat.deepResearch.progress.extracted": "Извлечено утверждений: {count}",
   "chat.deepResearch.progress.checked": "Проверено утверждений: {count}",

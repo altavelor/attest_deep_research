@@ -16,8 +16,8 @@ const WRITING_WORDS_STEP = 25;
  * Reports what a research turn does after its gather wave without committing the state: each
  * step names its stage, every stage keeps its start and end time within the turn, and the spent
  * budget goes along. Entering a stage ends the open ones, except the verification that runs the
- * follow-ups it requested. Streamed report text is reported when a heading appears or the text
- * grows by a few words.
+ * follow-ups it requested. Streamed report text is reported when a heading appears or the text, or
+ * the reasoning before it, grows by a few words.
  */
 export class ResearchActivityReporter {
   private readonly stages: Partial<Record<ResearchStage, ResearchStageTime>> = {};
@@ -65,13 +65,14 @@ export class ResearchActivityReporter {
       );
   }
 
-  writing(markdown: string): void {
-    const step = writingStep(markdown);
+  writing(markdown: string, thinking = 0): void {
+    const step = writingStep(markdown, thinking);
     const last = this.lastWriting;
     if (
       last &&
       last.headings.length === step.headings.length &&
-      step.words - last.words < WRITING_WORDS_STEP
+      step.words - last.words < WRITING_WORDS_STEP &&
+      thinking - (last.thinking ?? 0) < WRITING_WORDS_STEP
     ) {
       return;
     }
