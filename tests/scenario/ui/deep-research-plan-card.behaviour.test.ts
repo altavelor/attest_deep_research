@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createTranslator } from "@adapters/i18n";
 import { renderResearchCard } from "@apps/obsidian/ui/chat/deep-research/researchPlanCard";
 import { installObsidianDomHelpers, resetDom } from "../../support/domHarness";
-import { pendingResearch } from "../../support/deepResearch";
+import { pendingResearch, researchBranch, researchPlan } from "../../support/deepResearch";
 import { settle } from "../../support/async";
 import { initialExecutions, startResearchState } from "@core/research/deepResearch";
 
@@ -57,7 +57,9 @@ describe("deep research plan card", () => {
   });
 
   it("edits the plan in place, cancels without sending and commits without a turn", async () => {
-    const state = pendingResearch();
+    const state = pendingResearch(
+      researchPlan([researchBranch(1), researchBranch(2), researchBranch(3)], "conservative"),
+    );
     const onTurn = vi.fn();
     const onEditPlan = vi
       .fn()
@@ -75,40 +77,54 @@ describe("deep research plan card", () => {
         onEditPlan,
       },
     );
-    const click = (label: string): void =>
-      [...host.querySelectorAll("button")].find((button) => button.textContent === label)!.click();
+    const button = (label: string, scope: ParentNode = host): HTMLButtonElement =>
+      [...scope.querySelectorAll("button")].find((entry) => entry.textContent === label)!;
+    const click = (label: string, scope?: ParentNode): void => button(label, scope).click();
+    const items = (): HTMLLIElement[] => [...host.querySelectorAll("ol > li")] as HTMLLIElement[];
+    const fill = (item: Element, title: string, task: string): void => {
+      item.querySelector<HTMLInputElement>("input[type=text]")!.value = title;
+      item.querySelector("textarea")!.value = task;
+    };
 
     click("Edit");
-    expect(host.querySelectorAll("ol")).toHaveLength(1);
-    expect(host.querySelectorAll("li textarea")).toHaveLength(2);
-    expect(host.querySelector("textarea")!.getAttribute("maxlength")).toBe("4000");
+    expect(host.querySelectorAll("li textarea")).toHaveLength(3);
+    expect(host.querySelector("li textarea")!.getAttribute("maxlength")).toBe("4000");
     click("Cancel editing");
-    expect(host.querySelector("textarea")).toBeNull();
+    expect(host.querySelector("li textarea")).toBeNull();
     click("Edit");
-    host.querySelector("textarea")!.value = "Measure tides";
+    expect(button("Add branch").disabled).toBe(true);
+    expect(host.textContent).toContain("At most 3 enabled branches");
     const toggle = (checked: boolean): void => {
-      const box = host.querySelector<HTMLInputElement>("input[type=checkbox]")!;
+      const box = items()[0]!.querySelector<HTMLInputElement>("input[type=checkbox]")!;
       box.checked = checked;
       box.dispatchEvent(new Event("change"));
     };
     const struck = (): boolean =>
-      host.querySelector("li")!.classList.contains("attest-research-card__branch--disabled");
+      items()[0]!.classList.contains("attest-research-card__branch--disabled");
     toggle(false);
     expect(struck()).toBe(true);
+    expect(button("Add branch").disabled).toBe(false);
     toggle(true);
     expect(struck()).toBe(false);
     toggle(false);
+    fill(items()[0]!, "Tides", "Measure tides");
+    items()[1]!.querySelector("select")!.value = "optional";
+    click("Remove", items()[2]);
     click("Add branch");
+    fill(items()[2]!, "Dropped", "Gone");
+    click("Remove", items()[2]);
     click("Add branch");
-    expect(host.querySelectorAll("li")).toHaveLength(4);
-    const dropped = host.querySelectorAll("li")[2]!;
-    dropped.querySelector("input")!.value = "Dropped";
-    dropped.querySelector("button")!.click();
+    fill(items()[2]!, "Costs", "Compare costs");
     click("Add branch");
-    const [, , kept, blank] = [...host.querySelectorAll("li")];
-    kept!.querySelector("input")!.value = "Costs";
-    kept!.querySelector("textarea")!.value = "Compare costs";
-    expect(blank!.querySelector("input")!.value).toBe("");
+    click("↑", items()[2]);
+    expect(items()[1]!.querySelector<HTMLInputElement>("input[type=text]")!.value).toBe("Costs");
+    expect(button("↑", items()[0]).disabled).toBe(true);
+    click("Add omission");
+    host.querySelector<HTMLInputElement>("ul input")!.value = "Dropped";
+    click("Remove", host.querySelector("ul")!);
+    click("Add omission");
+    host.querySelector<HTMLInputElement>("ul input")!.value = " No budget ";
+    click("Add omission");
     click("Save changes");
     click("Save changes");
     await settle();
@@ -123,11 +139,53 @@ describe("deep research plan card", () => {
       decisionId: "decision-1",
       expectedRevision: state.revision,
       branches: [
-        { branchId: "branch-1", enabled: false, task: "Measure tides" },
-        { branchId: "branch-2", enabled: true, task: "Investigate aspect 2" },
+        {
+          branchId: "branch-1",
+          enabled: false,
+          title: "Tides",
+          task: "Measure tides",
+          priority: "required",
+        },
+        {
+          branchId: "branch-2",
+          enabled: true,
+          title: "Branch 2",
+          task: "Investigate aspect 2",
+          priority: "optional",
+        },
       ],
       added: [{ title: "Costs", task: "Compare costs" }],
+      removed: ["branch-3"],
+      order: ["branch-1", 0, "branch-2"],
+      knownOmissions: ["No budget"],
     });
+  });
+
+  it("sends the regeneration instruction typed under the plan", () => {
+    const state = pendingResearch();
+    const onTurn = vi.fn();
+    const host = document.createElement("div");
+    renderResearchCard(
+      host,
+      { researchId: state.researchId, artifact: "plan", revision: state.revision },
+      { view: { status: "ready", active: state, history: [] }, t, sentTurns: new Set(), onTurn },
+    );
+    host.querySelector("textarea")!.value = " Focus on costs ";
+    [...host.querySelectorAll("button")]
+      .find((entry) => entry.textContent === "Regenerate")!
+      .click();
+    expect(onTurn).toHaveBeenCalledWith(
+      {
+        type: "decision",
+        decision: {
+          researchId: state.researchId,
+          decisionId: "decision-1",
+          expectedRevision: state.revision,
+          payload: { action: "regenerate", instruction: "Focus on costs" },
+        },
+      },
+      "Regenerate the research plan: Focus on costs",
+    );
   });
 
   it("offers Cancel for a research still in planning", () => {

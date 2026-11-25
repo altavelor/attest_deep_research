@@ -26,6 +26,9 @@ export interface ResearchPlanEditRequest {
   expectedRevision: number;
   branches: readonly PlanBranchEdit[];
   added?: readonly PlanBranchAddition[];
+  removed?: readonly string[];
+  order?: readonly (string | number)[];
+  knownOmissions?: readonly string[];
 }
 
 /**
@@ -65,7 +68,13 @@ export class ChatResearchState implements ResearchStatePort {
             expectedRevision: request.expectedRevision,
             payload: {
               action: "edit",
-              edit: { branches: request.branches, added: request.added ?? [] },
+              edit: {
+                branches: request.branches,
+                added: request.added ?? [],
+                ...(request.removed ? { removed: request.removed } : {}),
+                ...(request.order ? { order: request.order } : {}),
+                ...(request.knownOmissions ? { knownOmissions: request.knownOmissions } : {}),
+              },
             },
           },
           context,

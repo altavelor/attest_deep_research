@@ -57,11 +57,25 @@
   min-width: 0;
 }
 
-.attest-research-card__editor-title {
-  box-sizing: border-box;
-  width: 100%;
-  min-width: 0;
+.attest-research-card__editor-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--size-4-1);
   margin-bottom: var(--size-4-1);
+}
+
+.attest-research-card__editor-title {
+  flex: 1 1 12em;
+  box-sizing: border-box;
+  min-width: 0;
+}
+
+.attest-research-card__omissions {
+  margin: 0;
+  padding-inline-start: var(--size-4-5);
+  color: var(--text-muted);
+  font-size: var(--font-ui-small);
 }
 
 .attest-research-card__editor-task {

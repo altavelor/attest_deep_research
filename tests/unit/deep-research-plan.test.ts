@@ -38,6 +38,15 @@ describe("deep research plan validity", () => {
     expect(validatePlan(plan)).toBe("A plan needs between one and 8 branches.");
   });
 
+  it("limits the enabled branches to the preset and not the disabled ones", () => {
+    const branches = Array.from({ length: 4 }, (_, index) => researchBranch(index + 1));
+    expect(validatePlan(researchPlan(branches, "conservative"))).toBe(
+      "A plan runs at most 3 enabled branches; disable or remove one.",
+    );
+    branches[3] = researchBranch(4, { enabled: false });
+    expect(validatePlan(researchPlan(branches, "conservative"))).toBeNull();
+  });
+
   it("rejects an enabled branch depending on a disabled one", () => {
     const plan = researchPlan([
       researchBranch(1, { enabled: false, priority: "optional" }),
@@ -74,10 +83,16 @@ describe("deep research decisions", () => {
       researchBranch(1),
       researchBranch(2, { objectives: [], dependsOn: ["branch-1"] }),
       researchBranch(3, { objectives: [], dependsOn: ["branch-1", "branch-2"] }),
+      researchBranch(4, { enabled: false, objectives: [], dependsOn: ["branch-1"] }),
     ]);
     const removed = applyPlanEdit(plan, { branches: [{ branchId: "branch-1", enabled: false }] });
     if (!removed.ok) throw new Error(removed.message);
-    expect(removed.plan.branches.map((branch) => branch.dependsOn)).toEqual([[], [], ["branch-2"]]);
+    expect(removed.plan.branches.map((branch) => branch.dependsOn)).toEqual([
+      [],
+      [],
+      ["branch-2"],
+      ["branch-1"],
+    ]);
     expect(removed.plan.knownOmissions).toEqual(["Objective"]);
     const restored = applyPlanEdit(removed.plan, {
       branches: [{ branchId: "branch-1", enabled: true }],
@@ -85,11 +100,27 @@ describe("deep research decisions", () => {
     expect(restored.ok && restored.plan.knownOmissions).toEqual([]);
   });
 
-  it("adds optional independent branches after the existing identifiers", () => {
-    const plan = researchPlan([researchBranch(1), researchBranch(3, { sourceScope: "webOnly" })]);
-    const edited = applyPlanEdit(plan, { added: [{ title: " Costs ", task: "Compare costs" }] });
+  it("removes, reprioritises, adds and reorders branches in one edit", () => {
+    const plan = researchPlan([
+      researchBranch(1),
+      researchBranch(2, { dependsOn: ["branch-1"] }),
+      researchBranch(3, { sourceScope: "webOnly" }),
+    ]);
+    const edit = {
+      removed: ["branch-1"],
+      branches: [{ branchId: "branch-3", priority: "optional" as const }],
+      added: [{ title: " Costs ", task: "Compare costs" }],
+      order: ["branch-3", 0, "branch-2"],
+    };
+    const edited = applyPlanEdit(plan, edit);
     if (!edited.ok) throw new Error(edited.message);
-    expect(edited.plan.branches[2]).toEqual({
+    expect(edited.plan.branches.map((branch) => branch.branchId)).toEqual([
+      "branch-3",
+      "branch-4",
+      "branch-2",
+    ]);
+    expect(edited.plan.branches[0]!.priority).toBe("optional");
+    expect(edited.plan.branches[1]).toEqual({
       branchId: "branch-4",
       title: "Costs",
       task: "Compare costs",
@@ -99,6 +130,11 @@ describe("deep research decisions", () => {
       objectives: [],
       sourceScope: "indexAndWeb",
       dependsOn: [],
+    });
+    expect(edited.plan.branches[2]!.dependsOn).toEqual([]);
+    expect(applyPlanEdit(plan, { ...edit, order: ["branch-3", 0, 0] })).toMatchObject({
+      ok: false,
+      message: "The edit order does not match the branches.",
     });
     expect(applyPlanEdit(plan, { added: [{ title: "Costs", task: " " }] })).toMatchObject({
       ok: false,
@@ -167,6 +203,8 @@ describe("deep research untrusted plan input", () => {
       { action: "launch" },
       { action: "edit", edit: { branches: [{ branchId: "branch-1", enabled: "yes" }] } },
       { action: "edit", edit: { added: [{ title: 1, task: "Do" }] } },
+      { action: "edit", edit: { branches: [{ branchId: "branch-1", priority: "high" }] } },
+      { action: "edit", edit: { order: [-1] } },
       { action: "regenerate", instruction: "x".repeat(4001) },
     ]) {
       expect(parsePlanDecisionPayload(payload), JSON.stringify(payload).slice(0, 40)).toBeNull();

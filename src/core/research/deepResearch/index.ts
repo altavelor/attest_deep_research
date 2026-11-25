@@ -1,9 +1,8 @@
 export * from "./types";
 export * from "./limits";
-export { isResearchId, isRevision, validatePlan } from "./planValidation";
+export { isResearchId, isRevision, maxEnabledBranches, validatePlan } from "./planValidation";
 export {
   applyDecision,
-  applyPlanEdit,
   canRegenerate,
   decisionMismatch,
   endResearch,
@@ -14,6 +13,7 @@ export {
   type ResearchRuleCode,
   type ResearchTransition,
 } from "./planRules";
+export { applyPlanEdit, type PlanEditResult } from "./planEdit";
 export { parsePlanDraft, planGenerationPrompt, type PlanDraftContext } from "./planDraft";
 export { nextResearchSection, validateResearchSection } from "./sectionValidation";
 export { fitResearchSection } from "./sectionSize";

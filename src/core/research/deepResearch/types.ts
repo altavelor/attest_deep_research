@@ -267,6 +267,7 @@ export interface PlanBranchEdit {
   title?: string;
   task?: string;
   enabled?: boolean;
+  priority?: "required" | "optional";
 }
 
 export interface PlanBranchAddition {
@@ -277,6 +278,8 @@ export interface PlanBranchAddition {
 export interface PlanEdit {
   branches?: readonly PlanBranchEdit[];
   added?: readonly PlanBranchAddition[];
+  removed?: readonly string[];
+  order?: readonly (string | number)[];
   knownOmissions?: readonly string[];
 }
 

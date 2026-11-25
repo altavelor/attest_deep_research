@@ -1,4 +1,5 @@
 import {
+  MAX_RESEARCH_TEXT_CHARS,
   canRegenerate,
   isResearchId,
   isRevision,
@@ -103,6 +104,18 @@ function renderPlanControls(
       payload,
     },
   });
+  const regenerable = canRegenerate(plan);
+  const instructionEl = regenerable
+    ? parentEl.createEl("textarea", {
+        cls: "attest-research-card__editor-task attest-research-card__instruction",
+        attr: {
+          maxlength: String(MAX_RESEARCH_TEXT_CHARS),
+          rows: "2",
+          placeholder: t("chat.deepResearch.regenerateInstruction"),
+        },
+      })
+    : null;
+  const instruction = (): string | null => instructionEl?.value.trim() || null;
   const actionsEl = renderActions(parentEl, state, context, [
     {
       label: t("chat.deepResearch.action.approve"),
@@ -112,9 +125,14 @@ function renderPlanControls(
     },
     {
       label: t("chat.deepResearch.action.regenerate"),
-      turnLabel: t("chat.deepResearch.turn.regenerate"),
-      input: decide({ action: "regenerate", instruction: null }),
-      disabled: !canRegenerate(plan),
+      turnLabel: () => {
+        const text = instruction();
+        return text
+          ? t("chat.deepResearch.turn.regenerateWith", { instruction: text })
+          : t("chat.deepResearch.turn.regenerate");
+      },
+      input: () => decide({ action: "regenerate", instruction: instruction() }),
+      disabled: !regenerable,
     },
     cancelAction(state, t),
   ]);

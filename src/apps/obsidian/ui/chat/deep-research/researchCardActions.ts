@@ -4,8 +4,8 @@ import type { ResearchCardContext } from "./researchCardContext";
 
 export interface CardAction {
   label: string;
-  turnLabel: string;
-  input: ResearchTurnInput;
+  turnLabel: string | (() => string);
+  input: ResearchTurnInput | (() => ResearchTurnInput);
   disabled?: boolean;
   primary?: boolean;
 }
@@ -37,7 +37,9 @@ export function renderActions(
     if (context.sentTurns.has(key)) return;
     context.sentTurns.add(key);
     for (const button of buttons) button.disabled = true;
-    context.onTurn(action.input, action.turnLabel);
+    const input = typeof action.input === "function" ? action.input() : action.input;
+    const label = typeof action.turnLabel === "function" ? action.turnLabel() : action.turnLabel;
+    context.onTurn(input, label);
   };
   const add = (label: string, primary: boolean, disabled: boolean, onClick: () => void): void => {
     const button = actionsEl.createEl("button", {

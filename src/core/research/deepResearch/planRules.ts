@@ -1,22 +1,8 @@
-import {
-  DEEP_RESEARCH_SCHEMA,
-  MAX_PLAN_GENERATIONS,
-  MAX_RESEARCH_BRANCHES,
-  MAX_RESEARCH_TEXT_CHARS,
-} from "./limits";
+import { DEEP_RESEARCH_SCHEMA, MAX_PLAN_GENERATIONS, MAX_RESEARCH_TEXT_CHARS } from "./limits";
 import { boundedReason } from "./rejection";
-import { validatePlan } from "./planValidation";
+import { applyPlanEdit, parsePlanEdit } from "./planEdit";
 import { initialExecutions } from "./schedule";
-import type {
-  PlanBranchAddition,
-  PlanBranchEdit,
-  PlanDecisionPayload,
-  PlanEdit,
-  ResearchBranch,
-  ResearchDecision,
-  ResearchPlan,
-  ResearchState,
-} from "./types";
+import type { PlanDecisionPayload, ResearchDecision, ResearchPlan, ResearchState } from "./types";
 
 export type ResearchRuleCode =
   | "research-stale-decision"
@@ -176,113 +162,6 @@ export function applyDecision(
   };
 }
 
-/** Applies a manual edit to a plan, producing a new validated revision without a model call. */
-export function applyPlanEdit(
-  plan: ResearchPlan,
-  edit: PlanEdit,
-):
-  { ok: true; plan: ResearchPlan } | { ok: false; code: "research-invalid-plan"; message: string } {
-  const edits = new Map((edit.branches ?? []).map((entry) => [entry.branchId, entry]));
-  const unknown = [...edits.keys()].some((id) => !plan.branches.some((b) => b.branchId === id));
-  if (unknown)
-    return {
-      ok: false,
-      code: "research-invalid-plan",
-      message: "The edit names an unknown branch.",
-    };
-  const edited = plan.branches.map((branch) => {
-    const change = edits.get(branch.branchId);
-    return change
-      ? {
-          ...branch,
-          ...(change.title !== undefined ? { title: change.title } : {}),
-          ...(change.task !== undefined ? { task: change.task } : {}),
-          ...(change.enabled !== undefined ? { enabled: change.enabled } : {}),
-        }
-      : branch;
-  });
-  const branches = withoutDisabledDependencies([
-    ...edited,
-    ...addedBranches(edited, edit.added ?? []),
-  ]);
-  const next: ResearchPlan = {
-    ...plan,
-    revision: plan.revision + 1,
-    branches,
-    knownOmissions: omissionsAfterEdit(plan, branches, edit.knownOmissions ?? plan.knownOmissions),
-  };
-  const problem = validatePlan(next);
-  return problem
-    ? { ok: false, code: "research-invalid-plan", message: problem }
-    : { ok: true, plan: next };
-}
-
-/**
- * Builds the branches a user added in an edit: optional, independent, tied to no objective, with
- * host identifiers after the existing ones and the widest source scope the plan already uses.
- */
-function addedBranches(
-  existing: readonly ResearchBranch[],
-  additions: readonly PlanBranchAddition[],
-): ResearchBranch[] {
-  const used = new Set(existing.map((branch) => branch.branchId));
-  const scopes = new Set(existing.map((branch) => branch.sourceScope));
-  const index = scopes.has("indexAndWeb") || scopes.has("indexOnly");
-  const web = scopes.has("indexAndWeb") || scopes.has("webOnly");
-  const sourceScope = index && web ? "indexAndWeb" : web ? "webOnly" : "indexOnly";
-  let next = existing.length + 1;
-  return additions.map((addition) => {
-    while (used.has(`branch-${next}`)) next += 1;
-    const branchId = `branch-${next}`;
-    next += 1;
-    return {
-      branchId,
-      title: addition.title.trim(),
-      task: addition.task.trim(),
-      expectedOutput: "",
-      priority: "optional",
-      enabled: true,
-      objectives: [],
-      sourceScope,
-      dependsOn: [],
-    };
-  });
-}
-
-/** Drops the dependencies of enabled branches on disabled ones, so removing a branch frees its dependents. */
-function withoutDisabledDependencies(branches: readonly ResearchBranch[]): ResearchBranch[] {
-  const enabled = new Set(branches.filter((b) => b.enabled).map((b) => b.branchId));
-  return branches.map((branch) =>
-    branch.enabled && branch.dependsOn.some((id) => !enabled.has(id))
-      ? { ...branch, dependsOn: branch.dependsOn.filter((id) => enabled.has(id)) }
-      : branch,
-  );
-}
-
-/**
- * Records the objectives an edit left without an enabled branch as known omissions, and drops
- * the omissions of objectives that an edit covered again. Objectives untouched by the edit keep
- * their omissions as they were.
- */
-function omissionsAfterEdit(
-  plan: ResearchPlan,
-  branches: readonly ResearchBranch[],
-  omissions: readonly string[],
-): readonly string[] {
-  const covered = (list: readonly ResearchBranch[], objective: string): boolean =>
-    list.some((branch) => branch.enabled && branch.objectives.includes(objective));
-  const lost = plan.objectives.filter(
-    (objective) => covered(plan.branches, objective) && !covered(branches, objective),
-  );
-  const regained = new Set(
-    plan.objectives.filter(
-      (objective) => !covered(plan.branches, objective) && covered(branches, objective),
-    ),
-  );
-  const kept = omissions.filter((omission) => !regained.has(omission));
-  return [...kept, ...lost.filter((objective) => !kept.includes(objective))];
-}
-
 /** Reads an untrusted plan decision payload, or returns null when it is malformed. */
 export function parsePlanDecisionPayload(value: unknown): PlanDecisionPayload | null {
   if (!isRecord(value)) return null;
@@ -293,50 +172,8 @@ export function parsePlanDecisionPayload(value: unknown): PlanDecisionPayload | 
     return boundedText(instruction) ? { action: "regenerate", instruction } : null;
   }
   if (value.action !== "edit" || !isRecord(value.edit)) return null;
-  const { branches, added, knownOmissions } = value.edit;
-  const parsedBranches = branches === undefined ? [] : parseBranchEdits(branches);
-  const parsedAdded = added === undefined ? [] : parseBranchAdditions(added);
-  const omissionsValid =
-    knownOmissions === undefined ||
-    (Array.isArray(knownOmissions) && knownOmissions.every(boundedText));
-  if (!parsedBranches || !parsedAdded || !omissionsValid) return null;
-  return {
-    action: "edit",
-    edit: {
-      branches: parsedBranches,
-      ...(parsedAdded.length > 0 ? { added: parsedAdded } : {}),
-      ...(knownOmissions !== undefined ? { knownOmissions: knownOmissions as string[] } : {}),
-    },
-  };
-}
-
-function parseBranchEdits(value: unknown): PlanBranchEdit[] | null {
-  if (!Array.isArray(value)) return null;
-  const edits: PlanBranchEdit[] = [];
-  for (const entry of value) {
-    if (!isRecord(entry) || typeof entry.branchId !== "string") return null;
-    const { title, task, enabled } = entry;
-    if (title !== undefined && !boundedText(title)) return null;
-    if (task !== undefined && !boundedText(task)) return null;
-    if (enabled !== undefined && typeof enabled !== "boolean") return null;
-    edits.push({
-      branchId: entry.branchId,
-      ...(title !== undefined ? { title: title as string } : {}),
-      ...(task !== undefined ? { task: task as string } : {}),
-      ...(enabled !== undefined ? { enabled: enabled as boolean } : {}),
-    });
-  }
-  return edits;
-}
-
-function parseBranchAdditions(value: unknown): PlanBranchAddition[] | null {
-  if (!Array.isArray(value) || value.length > MAX_RESEARCH_BRANCHES) return null;
-  const additions: PlanBranchAddition[] = [];
-  for (const entry of value) {
-    if (!isRecord(entry) || !boundedText(entry.title) || !boundedText(entry.task)) return null;
-    additions.push({ title: entry.title, task: entry.task });
-  }
-  return additions;
+  const edit = parsePlanEdit(value.edit);
+  return edit ? { action: "edit", edit } : null;
 }
 
 function boundedText(value: unknown): value is string {

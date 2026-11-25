@@ -18,6 +18,11 @@ export function isRevision(value: unknown): value is number {
   return Number.isSafeInteger(value) && (value as number) >= 0;
 }
 
+/** Returns how many enabled branches the plan's preset lets it run. */
+export function maxEnabledBranches(plan: ResearchPlan): number {
+  return Math.min(MAX_RESEARCH_BRANCHES, plan.limits.branches);
+}
+
 /**
  * Checks the semantic rules of a plan and returns the first violation as readable text, or null.
  * Branch identity, dependency graph, enablement, objective coverage and the preset limits row
@@ -38,9 +43,12 @@ export function validatePlan(plan: ResearchPlan): string | null {
   ) {
     return `A plan list holds at most ${MAX_PLAN_LIST_ITEMS} entries.`;
   }
-  const maxBranches = Math.min(MAX_RESEARCH_BRANCHES, plan.limits.branches);
-  if (branches.length === 0 || branches.length > maxBranches) {
-    return `A plan needs between one and ${maxBranches} branches.`;
+  if (branches.length === 0 || branches.length > MAX_RESEARCH_BRANCHES) {
+    return `A plan needs between one and ${MAX_RESEARCH_BRANCHES} branches.`;
+  }
+  const maxEnabled = maxEnabledBranches(plan);
+  if (branches.filter((branch) => branch.enabled).length > maxEnabled) {
+    return `A plan runs at most ${maxEnabled} enabled branches; disable or remove one.`;
   }
   const byId = new Map<string, ResearchBranch>();
   for (const branch of branches) {
