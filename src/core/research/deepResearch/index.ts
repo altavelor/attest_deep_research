@@ -95,6 +95,7 @@ export {
   requiredObjectives,
   type ReferenceCheck,
 } from "./verification";
+export { CLAIM_PASSAGE_CHARS, claimPassage } from "./claimPassage";
 export {
   supportedClaimsSection,
   uncoveredRequired,

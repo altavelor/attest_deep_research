@@ -6,6 +6,7 @@ import {
   MAX_RESEARCH_CLAIMS,
   acceptedAssessment,
   checkClaimReferences,
+  claimPassage,
   claimTally,
   escapePromptText,
   followUpWorks,
@@ -54,13 +55,12 @@ const ASSESS_PROMPT = [
 const MAX_BATCH_CHARS = 40_000;
 const MAX_CLAIMS_PER_FINDING = 12;
 const MAX_ASSESS_BATCH = 10;
-const MAX_PASSAGE_CHARS = 3000;
 
 /**
  * Verifies branch findings on the main path with tool-free model calls in a fresh context, each
  * paid with one finalization round: claims are extracted per batch of findings, citations are
- * checked against the registry without a model, and cited passages are assessed. When no round
- * remains, the claims not yet assessed get no assessment at all.
+ * checked against the registry without a model, and the parts of cited sources the claims need
+ * are assessed. When no round remains, the claims not yet assessed get no assessment at all.
  */
 export class EvidenceVerificationService {
   constructor(private readonly options: EvidenceVerificationOptions) {}
@@ -145,21 +145,12 @@ export class EvidenceVerificationService {
     settled: readonly ClaimAssessment[],
     total: number,
   ): Promise<ClaimAssessment[]> {
-    const passages = new Map(
-      evidence.map((chunk) => [chunk.id, chunk.text.slice(0, MAX_PASSAGE_CHARS)]),
-    );
+    const sources = new Map(evidence.map((chunk) => [chunk.id, chunk.text]));
     const groups = independenceGroups(evidence);
     const assessments: ClaimAssessment[] = [];
     for (let start = 0; start < claims.length; start += MAX_ASSESS_BATCH) {
       const batch = claims.slice(start, start + MAX_ASSESS_BATCH);
-      const shown = new Map(
-        batch.flatMap((claim) =>
-          claim.citationTokens.flatMap((token) => {
-            const passage = passages.get(token);
-            return passage === undefined ? [] : [[token, passage] as const];
-          }),
-        ),
-      );
+      const shown = batchPassages(batch, sources);
       if (!this.options.spendRound()) break;
       this.options.onProgress?.({
         kind: "checking",
@@ -202,6 +193,23 @@ export class EvidenceVerificationService {
     }
     return reply;
   }
+}
+
+/** Shows each cited source once per batch, cut to the parts the batch's claims citing it need. */
+function batchPassages(
+  batch: readonly ResearchClaim[],
+  sources: ReadonlyMap<string, string>,
+): Map<string, string> {
+  const claimsByToken = new Map<string, string[]>();
+  for (const claim of batch) {
+    for (const token of claim.citationTokens) {
+      if (!sources.has(token)) continue;
+      claimsByToken.set(token, [...(claimsByToken.get(token) ?? []), claim.text]);
+    }
+  }
+  return new Map(
+    [...claimsByToken].map(([token, claims]) => [token, claimPassage(sources.get(token)!, claims)]),
+  );
 }
 
 function batches(findings: readonly BranchExecution[]): BranchExecution[][] {

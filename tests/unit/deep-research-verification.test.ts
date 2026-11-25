@@ -2,6 +2,7 @@ import { ENGLISH_RESEARCH_LABELS } from "@core/research/deepResearch";
 import { EvidenceVerificationService } from "@application/use-cases/research/deep-research";
 import {
   acceptedAssessment,
+  claimPassage,
   formatWithoutModel,
   reportDecision,
   independenceGroups,
@@ -366,6 +367,24 @@ describe("deep research claim verification", () => {
     expect(summary.claims).toMatchObject([{ branchId: "branch-2", objective: null }]);
     expect(summary.assessments).toMatchObject([{ verdict: "supported" }]);
     expect(summary.coverage).toEqual([{ objective: "Objective", covered: false }]);
+  });
+
+  it("shows the opening and the parts of a long source that share terms with its claims", () => {
+    const filler = (mark: string) => `${mark}${" ".repeat(1499)}`;
+    const source = [
+      filler("Opening"),
+      filler("Annex III applies from 2027"),
+      filler("Unrelated"),
+      filler("Article 9(6) testing"),
+      filler("Annex"),
+    ].join("");
+    const passage = claimPassage(source, ["По ст. 9(6) и Annex III с 2027 года"], 4500);
+    expect(passage.split("\n…\n").map((window) => window.trim())).toEqual([
+      "Opening",
+      "Annex III applies from 2027",
+      "Article 9(6) testing",
+    ]);
+    expect(claimPassage("Short source.", ["Anything"], 4500)).toBe("Short source.");
   });
 
   it("downgrades verdicts the cited passages of the request do not bear out", () => {
