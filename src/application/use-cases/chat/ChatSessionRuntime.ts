@@ -9,6 +9,7 @@ import { ResearchAnswer } from "@core/answer";
 import {
   answerMessageId,
   attachAnswerDetailsToLastAssistantMessage,
+  attachAnswerUsage,
   attachResearchReference,
   completeAssistantCheckpoint,
   finalizeLastAssistantReasoning,
@@ -303,6 +304,11 @@ export class ChatSessionRuntime {
     }
 
     if (event.type === "context") return;
+
+    if (event.type === "usage") {
+      this.state.messages = attachAnswerUsage(this.state.messages, event);
+      return;
+    }
 
     if (event.type === "research-activity") {
       this.state.researchActivity = event.activity;

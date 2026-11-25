@@ -129,6 +129,35 @@ function renderMessage(
     renderUserMessageContent(contentEl, message, options.t);
   }
   renderMessageCitationBlocks(messageEl, message, options);
+  renderMessageUsage(messageEl, message, options);
+}
+
+/**
+ * Renders the tokens an answer used as a faint line at the end of its message, replacing an
+ * earlier one; stored counts that are not non-negative integers are not shown.
+ */
+function renderMessageUsage(
+  messageEl: HTMLElement,
+  message: ChatDisplayMessage,
+  options: ChatTranscriptOptions,
+): void {
+  messageEl.querySelector(".attest-chat__message-usage")?.remove();
+  const usage: unknown = message.role === "assistant" ? message.usage : undefined;
+  if (typeof usage !== "object" || usage === null) return;
+  const { inputTokens, outputTokens } = usage as Record<string, unknown>;
+  if (!isTokenCount(inputTokens) || !isTokenCount(outputTokens)) return;
+  const format = new Intl.NumberFormat(options.locale);
+  messageEl.createDiv({
+    cls: "attest-chat__message-usage",
+    text: options.t("chat.message.tokens", {
+      input: format.format(inputTokens),
+      output: format.format(outputTokens),
+    }),
+  });
+}
+
+function isTokenCount(value: unknown): value is number {
+  return Number.isSafeInteger(value) && (value as number) >= 0;
 }
 
 function renderMessageHeader(
@@ -318,6 +347,7 @@ export function patchActiveAssistantMessage(
   if (!patchAssistantMessageContent(messageEl, message, options)) return false;
   patchMessageHeaderActions(messageEl, message, index, options);
   renderMessageCitationBlocks(messageEl, message, options);
+  renderMessageUsage(messageEl, message, options);
   applyScrollAnchor(transcriptEl, scroll);
   return true;
 }

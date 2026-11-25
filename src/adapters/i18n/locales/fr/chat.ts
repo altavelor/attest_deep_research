@@ -104,6 +104,7 @@ export const chat: EnChatMessages = {
   "chat.message.contextDocuments.aria": "Documents de contexte",
   "chat.message.edit": "Modifier la question",
   "chat.message.copy": "Copier le message",
+  "chat.message.tokens": "Jetons : {input} en entrée · {output} en sortie",
   "chat.message.diagnostic": "Ouvrir le rapport de diagnostic",
   "chat.answer.saveToNewNote": "Enregistrer la réponse dans une nouvelle note",
   "chat.answer.appendToActiveNote": "Ajouter la réponse à la note active",

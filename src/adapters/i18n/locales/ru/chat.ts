@@ -102,6 +102,7 @@ export const chat: EnChatMessages = {
   "chat.message.contextDocuments.aria": "Документы контекста",
   "chat.message.edit": "Изменить вопрос",
   "chat.message.copy": "Копировать сообщение",
+  "chat.message.tokens": "Токены: {input} вход · {output} выход",
   "chat.message.diagnostic": "Открыть диагностический отчёт",
   "chat.answer.saveToNewNote": "Сохранить ответ в новую заметку",
   "chat.answer.appendToActiveNote": "Добавить ответ в активную заметку",

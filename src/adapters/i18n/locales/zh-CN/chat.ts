@@ -97,6 +97,7 @@ export const chat: EnChatMessages = {
   "chat.message.contextDocuments.aria": "上下文文档",
   "chat.message.edit": "编辑问题",
   "chat.message.copy": "复制消息",
+  "chat.message.tokens": "令牌：输入 {input} · 输出 {output}",
   "chat.message.diagnostic": "打开诊断报告",
   "chat.answer.saveToNewNote": "将回答保存为新笔记",
   "chat.answer.appendToActiveNote": "将回答追加到当前笔记",

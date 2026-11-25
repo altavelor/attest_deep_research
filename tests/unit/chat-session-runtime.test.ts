@@ -165,7 +165,7 @@ describe("chat session runtime streaming", () => {
     expect(harness.changes.map((change) => change.kind)).toContain("answer");
   });
 
-  it("reports streaming progress and research activity through progress changes only", async () => {
+  it("reports progress and research activity as progress and keeps the answer's token usage", async () => {
     const gate = deferred();
     const activity = {
       researchId: "research-1",
@@ -179,6 +179,7 @@ describe("chat session runtime streaming", () => {
       yield { type: "status", message: "Searching" };
       yield { type: "research-activity", activity };
       await gate.promise;
+      yield { type: "usage", inputTokens: 7, outputTokens: 3 };
       yield { type: "complete", answer: answerFor("Done") };
     });
 
@@ -191,6 +192,7 @@ describe("chat session runtime streaming", () => {
 
     expect(harness.changes.filter((change) => change.kind === "progress")).toHaveLength(2);
     expect([harness.state.progressLabel, harness.state.researchActivity]).toEqual([null, null]);
+    expect(harness.state.messages.at(-1)?.usage).toEqual({ inputTokens: 7, outputTokens: 3 });
   });
 });
 

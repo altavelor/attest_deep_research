@@ -98,6 +98,7 @@ export const chat: EnChatMessages = {
   "chat.message.contextDocuments.aria": "مستندات السياق",
   "chat.message.edit": "تحرير السؤال",
   "chat.message.copy": "نسخ الرسالة",
+  "chat.message.tokens": "الرموز: {input} إدخال · {output} إخراج",
   "chat.message.diagnostic": "فتح تقرير التشخيص",
   "chat.answer.saveToNewNote": "حفظ الإجابة في ملاحظة جديدة",
   "chat.answer.appendToActiveNote": "إلحاق الإجابة بالملاحظة النشطة",

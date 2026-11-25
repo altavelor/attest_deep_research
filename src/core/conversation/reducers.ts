@@ -121,6 +121,20 @@ export function attachResearchReference(
   return messages.map((message, at) => (at === index ? { ...message, research } : message));
 }
 
+/** Records the input and output tokens the last assistant answer used. */
+export function attachAnswerUsage(
+  messages: ChatDisplayMessage[],
+  usage: { inputTokens: number; outputTokens: number },
+): ChatDisplayMessage[] {
+  const index = messages.map((message) => message.role).lastIndexOf("assistant");
+  if (index < 0) return messages;
+  return messages.map((message, at) =>
+    at === index
+      ? { ...message, usage: { inputTokens: usage.inputTokens, outputTokens: usage.outputTokens } }
+      : message,
+  );
+}
+
 export function stampLastAssistantModel(
   messages: ChatDisplayMessage[],
   modelName: string,

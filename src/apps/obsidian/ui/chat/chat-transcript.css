@@ -125,3 +125,11 @@
 .attest-chat__message:hover .attest-chat__message-actions {
   opacity: 1;
 }
+
+.attest-chat__message-usage {
+  margin-top: var(--size-4-2);
+  color: var(--text-faint);
+  font-size: var(--font-ui-smaller);
+  font-variant-numeric: tabular-nums;
+  text-align: end;
+}

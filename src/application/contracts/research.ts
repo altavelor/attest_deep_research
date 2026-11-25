@@ -178,6 +178,7 @@ export type ResearchStreamEvent =
   | { type: "answer-reset" }
   | { type: "research"; reference: ResearchArtifactReference }
   | { type: "research-activity"; activity: ResearchActivity }
+  | { type: "usage"; inputTokens: number; outputTokens: number }
   | { type: "context"; diagnostics: ContextDiagnostics }
   | { type: "complete"; answer: ResearchAnswer };
 

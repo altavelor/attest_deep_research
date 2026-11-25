@@ -34,6 +34,7 @@ export interface ChatDisplayMessage {
   timelineSequence?: number;
   research?: ResearchArtifactReference;
   researchTurn?: true;
+  usage?: { inputTokens: number; outputTokens: number };
 }
 
 export interface ReasoningSegment {

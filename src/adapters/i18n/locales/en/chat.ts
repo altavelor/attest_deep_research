@@ -97,6 +97,7 @@ export const chat = {
   "chat.message.contextDocuments.aria": "Context documents",
   "chat.message.edit": "Edit question",
   "chat.message.copy": "Copy message",
+  "chat.message.tokens": "Tokens: {input} in · {output} out",
   "chat.message.diagnostic": "Open diagnostic report",
   "chat.answer.saveToNewNote": "Save answer to new note",
   "chat.answer.appendToActiveNote": "Append answer to active note",

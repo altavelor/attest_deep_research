@@ -1,3 +1,4 @@
+import { TokenUsageMeter } from "./TokenUsageMeter";
 import { summarizeCompactionWithModel } from "@application/use-cases/chat/ChatCompaction";
 import { SearchProvider } from "@application/ports/web";
 import { VaultWriter } from "@application/ports/vault";
@@ -129,7 +130,16 @@ export class ResearchService implements ConversationEngine {
   >;
   private readonly now: () => Date;
 
-  constructor(options: ResearchServiceOptions) {
+  private readonly usage = new TokenUsageMeter();
+
+  constructor(unmetered: ResearchServiceOptions) {
+    const options: ResearchServiceOptions = {
+      ...unmetered,
+      chatModel: this.usage.chatModel(unmetered.chatModel),
+      ...(unmetered.modelRound
+        ? { modelRound: this.usage.roundProvider(unmetered.modelRound) }
+        : {}),
+    };
     const evidenceLimit = options.evidenceLimit ?? DEFAULT_EVIDENCE_LIMIT;
     const now = options.now ?? (() => new Date());
     const chatOptions = {
@@ -249,7 +259,20 @@ export class ResearchService implements ConversationEngine {
     });
   }
 
+  /**
+   * Answers one request in its research mode and reports the tokens its model calls used, child
+   * runs included, just before the final answer.
+   */
   async *answer(request: ResearchRequest): AsyncIterable<ResearchStreamEvent> {
+    this.usage.reset();
+    for await (const event of this.route(request)) {
+      const usage = event.type === "complete" ? this.usage.total() : null;
+      if (usage) yield { type: "usage", ...usage };
+      yield event;
+    }
+  }
+
+  private async *route(request: ResearchRequest): AsyncIterable<ResearchStreamEvent> {
     const question = request.question.trim();
     const searchMode = resolveSearchMode(request);
     const mode = request.forceSubAgent === true ? "thinking" : (request.mode ?? "instant");

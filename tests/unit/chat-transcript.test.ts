@@ -244,6 +244,38 @@ describe("ChatTranscript", () => {
     ).toEqual([true, true, false, true, false]);
   });
 
+  it("ends an answer with its token usage and skips counts that are not token counts", () => {
+    const transcript = document.createElement("div");
+    const at = "2026-01-01T12:34:00.000Z";
+    renderChatTranscript(
+      transcript,
+      options({
+        locale: "en",
+        t: ((key: string, params?: Record<string, unknown>) =>
+          `${key} ${JSON.stringify(params)}`) as never,
+        messages: [
+          {
+            role: "assistant",
+            content: "A",
+            createdAt: at,
+            usage: { inputTokens: 12345, outputTokens: 6 },
+          },
+          {
+            role: "assistant",
+            content: "B",
+            createdAt: at,
+            usage: { inputTokens: -1, outputTokens: 6 },
+          },
+        ],
+      }),
+    );
+    const messages = [...transcript.querySelectorAll(".attest-chat__message")];
+    expect(messages.map((el) => el.lastElementChild?.textContent)).toEqual([
+      'chat.message.tokens {"input":"12,345","output":"6"}',
+      expect.not.stringContaining("chat.message.tokens"),
+    ]);
+  });
+
   it("exposes a debug diagnostic for an assistant response and preserves its model label", () => {
     const transcript = document.createElement("div");
     const onOpenDiagnosticReport = vi.fn();
@@ -292,6 +324,7 @@ describe("ChatTranscript", () => {
       ...streaming,
       content: "Final answer",
       evidence: [chunk],
+      usage: { inputTokens: 1, outputTokens: 2 },
       answer: {
         question: "Question",
         answer: "Final answer",
@@ -313,6 +346,9 @@ describe("ChatTranscript", () => {
     expect(header?.querySelector(".attest-chat__message-save-answer")).not.toBeNull();
     expect(header?.querySelector(".attest-chat__message-append-answer")).not.toBeNull();
     expect(transcript.querySelectorAll(".attest-chat__message-actions")).toHaveLength(1);
+    expect(transcript.querySelector(".attest-chat__message")?.lastElementChild?.className).toBe(
+      "attest-chat__message-usage",
+    );
   });
 
   it("keeps readers at their position unless they are already near the transcript bottom", () => {
