@@ -713,8 +713,7 @@ export class AttestChatView extends ItemView {
       clarification: {
         t: this.t,
         running: this.isRunning,
-        onReply: (text, reply) =>
-          void this.researchController.submitClarificationReply(text, reply),
+        onReply: (text, reply) => this.researchController.submitClarificationReply(text, reply),
       },
       onHighlightCitation: (key, highlighted) =>
         this.citationPopover.setHighlight(key, highlighted),
