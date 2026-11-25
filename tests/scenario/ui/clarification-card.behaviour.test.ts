@@ -3,8 +3,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { createTranslator } from "@adapters/i18n";
-import { renderClarificationCard } from "@apps/obsidian/ui/chat/clarificationCard";
+import {
+  renderClarificationCard,
+  type ClarificationReplyOutcome,
+} from "@apps/obsidian/ui/chat/clarificationCard";
 import type { ChatDisplayMessage } from "@core/conversation";
+import { settle } from "../../support/async";
 import { installObsidianDomHelpers, resetDom } from "../../support/domHarness";
 
 const t = createTranslator("en").t;
@@ -31,8 +35,13 @@ const asked: ChatDisplayMessage = {
 beforeEach(() => installObsidianDomHelpers());
 afterEach(() => resetDom());
 
-function render(messages: ChatDisplayMessage[], running = false, translate = t) {
-  const onReply = vi.fn();
+function render(
+  messages: ChatDisplayMessage[],
+  running = false,
+  translate = t,
+  outcome: ClarificationReplyOutcome = { started: true },
+) {
+  const onReply = vi.fn(async () => outcome);
   const host = document.createElement("div");
   renderClarificationCard(host, asked, messages, { t: translate, running, onReply });
   const button = (label: string) =>
@@ -52,6 +61,23 @@ describe("clarification card", () => {
         "2. How large?\nAnswer: Not answered",
       { answers: { "question-1": "Postgres" }, skipped: false },
     );
+  });
+
+  it("re-enables the buttons with the typed answers and shows the reason when the reply is refused", async () => {
+    const { host, onReply, button } = render([asked], false, t, {
+      started: false,
+      reason: "Turn on web search.",
+    });
+    host.querySelector("textarea")!.value = "Files";
+    button("Send answers")!.click();
+    expect(button("Send answers")!.disabled).toBe(true);
+    await settle();
+    expect(button("Send answers")!.disabled).toBe(false);
+    expect(button("Answer without clarification")!.disabled).toBe(false);
+    expect(host.querySelector("[role=alert]")!.textContent).toBe("Turn on web search.");
+    expect(host.querySelector("textarea")!.value).toBe("Files");
+    button("Send answers")!.click();
+    expect(onReply).toHaveBeenCalledTimes(2);
   });
 
   it("asks to proceed on stated assumptions", () => {

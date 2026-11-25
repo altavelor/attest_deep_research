@@ -8,10 +8,13 @@ import {
 } from "@core/research";
 import type { Translate } from "@adapters/i18n";
 
+export type ClarificationReplyOutcome =
+  { started: true } | { started: false; reason: string | null };
+
 export interface ClarificationCardContext {
   t: Translate;
   running: boolean;
-  onReply(text: string, reply: ClarificationReply): void;
+  onReply(text: string, reply: ClarificationReply): Promise<ClarificationReplyOutcome>;
 }
 
 /** Builds the localized labels of the reply message text the card sends to the model. */
@@ -83,9 +86,23 @@ function renderReplyActions(
   const { t } = context;
   const actionsEl = parentEl.createDiv({ cls: "attest-research-card__actions" });
   const buttons: HTMLButtonElement[] = [];
+  const errorEl = parentEl.createDiv({
+    cls: "attest-research-card__branch-notes attest-clarification-card__error",
+    attr: { role: "alert" },
+  });
   const send = (text: string, reply: ClarificationReply): void => {
     for (const button of buttons) button.disabled = true;
-    context.onReply(text, reply);
+    errorEl.setText("");
+    void context.onReply(text, reply).then(
+      (outcome) => {
+        if (outcome.started) return;
+        for (const button of buttons) button.disabled = false;
+        errorEl.setText(outcome.reason ?? "");
+      },
+      () => {
+        for (const button of buttons) button.disabled = false;
+      },
+    );
   };
   const add = (label: string, primary: boolean, onClick: () => void): void => {
     const button = actionsEl.createEl("button", {

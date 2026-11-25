@@ -8,7 +8,13 @@ import { estimateResearchRequestTokens } from "@core/research";
 import { ChatDisplayMessage } from "@core/conversation";
 import type { Translate } from "@adapters/i18n";
 import type { ResearchTurnInput } from "@core/research/deepResearch";
+import type { ClarificationReplyOutcome } from "../clarificationCard";
 import { ChatHistoryCompactor } from "./ChatHistoryCompactor";
+
+interface ThinkingTurnOptions {
+  thinking?: true;
+  clarificationReply?: ClarificationReply;
+}
 
 export interface ResearchQuestionControllerOptions {
   getSessionId(): string;
@@ -102,7 +108,8 @@ export class ResearchQuestionController {
     model: string,
     activeFilePath: string | undefined,
     includeActiveFile: boolean,
-  ): Promise<void> {
+    turn: ThinkingTurnOptions = {},
+  ): Promise<ClarificationReplyOutcome> {
     const chatHistory = this.options.getMessages(sessionId);
     if (await this.historyCompactor.compactIfNeeded(sessionId, question)) {
       return this.runCapturedQuestion(
@@ -111,18 +118,20 @@ export class ResearchQuestionController {
         model,
         activeFilePath,
         includeActiveFile,
+        turn,
       );
     }
 
     if (this.rejectIfContextWindowExceeded(sessionId, question, chatHistory)) {
-      return;
+      return { started: false, reason: this.options.t("chat.research.contextTooLong") };
     }
 
-    await this.runQuestion(sessionId, question, model, {
+    return this.runQuestion(sessionId, question, model, {
       appendQuestion: true,
       chatHistory,
       activeFilePath,
       includeActiveFile,
+      ...turn,
     });
   }
 
@@ -200,18 +209,26 @@ export class ResearchQuestionController {
     });
   }
 
-  /** Sends a reply to clarifying questions as an ordinary user message of a Thinking turn. */
-  async submitClarificationReply(text: string, reply: ClarificationReply): Promise<void> {
+  /**
+   * Sends a reply to clarifying questions as an ordinary user message of a Thinking turn through the
+   * same compaction and context-window checks as a typed question. Reports a refusal with its reason.
+   */
+  async submitClarificationReply(
+    text: string,
+    reply: ClarificationReply,
+  ): Promise<ClarificationReplyOutcome> {
     const sessionId = this.options.getSessionId();
-    if (this.isRunning() || this.options.getSearchUnavailableMessage() !== null) return;
-    await this.runQuestion(sessionId, text, this.options.getModelInputValue(), {
-      clarificationReply: reply,
-      appendQuestion: true,
-      chatHistory: this.options.getMessages(sessionId),
-      activeFilePath: undefined,
-      includeActiveFile: false,
-      thinking: true,
-    });
+    if (this.isRunning()) return { started: false, reason: null };
+    const unavailable = this.options.getSearchUnavailableMessage();
+    if (unavailable !== null) return { started: false, reason: unavailable };
+    return this.runCapturedQuestion(
+      sessionId,
+      text,
+      this.options.getModelInputValue(),
+      undefined,
+      false,
+      { thinking: true, clarificationReply: reply },
+    );
   }
 
   stopRunningQuestion(): void {
@@ -232,7 +249,7 @@ export class ResearchQuestionController {
       thinking?: true;
       clarificationReply?: ClarificationReply;
     },
-  ): Promise<void> {
+  ): Promise<ClarificationReplyOutcome> {
     const contextPaths = options.contextPaths ?? this.options.getContextPaths(sessionId);
     await this.options.updateChatModel(sessionId, model || this.options.getCurrentModel(sessionId));
     this.setProgressStatus(sessionId, null);
@@ -252,18 +269,18 @@ export class ResearchQuestionController {
     });
 
     if (!result.started) {
-      if (result.error !== undefined) {
-        const message = this.options.t("chat.session.startFailed");
-        this.setProgressStatus(sessionId, message);
-        new Notice(message);
-      }
-      return;
+      if (result.error === undefined) return { started: false, reason: null };
+      const message = this.options.t("chat.session.startFailed");
+      this.setProgressStatus(sessionId, message);
+      new Notice(message);
+      return { started: false, reason: message };
     }
 
     if (this.options.isSessionDisplayed(sessionId)) {
       this.options.clearQuestionInput();
     }
     this.clearContextPaths(sessionId);
+    return { started: true };
   }
 
   private rejectIfContextWindowExceeded(

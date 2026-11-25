@@ -66,7 +66,7 @@ function run(
 }
 
 describe("Thinking clarification tool", () => {
-  it("ends the turn with the stored questions and no synthesis round", async () => {
+  it("ends the turn with the stored questions before the parallel call runs", async () => {
     const { modelRound, events } = run(() => {
       const round = clarifyingCall([
         { prompt: " Which database now? ", suggestions: ["Postgres", "Files"] },
@@ -84,7 +84,9 @@ describe("Thinking clarification tool", () => {
     expect(modelRound.requests).toHaveLength(1);
     expect(modelRound.requests[0]!.messages[0]!.content).toContain(`(${ASK})`);
     expect(modelRound.requests[0]!.messages[0]!.content).toContain(`only in the ${ASK} arguments`);
-    expect(all.filter((event) => event.type === "tool-call-end")).toHaveLength(2);
+    const ended = all.filter((event) => event.type === "tool-call-end");
+    expect(ended).toHaveLength(1);
+    expect(ended[0]).toMatchObject({ id: "c1" });
     expect(complete).toMatchObject({
       answer: {
         answer: "",

@@ -34,14 +34,26 @@ function savedWith(clarification: unknown, clarificationReply?: unknown) {
 }
 
 describe("Thinking clarification rules", () => {
-  it("bounds tool questions to three and rejects input without a prompt", () => {
-    const four = Array.from({ length: 4 }, (_, i) => ({ prompt: `Q${i}` }));
-    const parsed = parseClarificationArguments({ questions: four });
-    expect(parsed.ok && parsed.clarification.questions).toHaveLength(3);
-    expect(parseClarificationArguments({ questions: [{ prompt: " " }] })).toEqual({
+  it("rejects the whole tool call when the count or any entry is invalid", () => {
+    const failure = {
       ok: false,
-      message: "Pass 1-3 questions, each with a non-empty prompt.",
-    });
+      message:
+        "Pass 1-3 questions, each with a non-empty prompt of at most 500 characters and at most " +
+        "3 string suggestions of at most 200 characters.",
+    };
+    const three = Array.from({ length: 3 }, (_, i) => ({ prompt: `Q${i}` }));
+    const parsed = parseClarificationArguments({ questions: three });
+    expect(parsed.ok && parsed.clarification.questions).toHaveLength(3);
+    expect(parseClarificationArguments({ questions: [...three, { prompt: "Q3" }] })).toEqual(
+      failure,
+    );
+    expect(parseClarificationArguments({ questions: [{ prompt: "Q" }, { prompt: 7 }] })).toEqual(
+      failure,
+    );
+    expect(parseClarificationArguments({ questions: [{ prompt: " " }] })).toEqual(failure);
+    expect(
+      parseClarificationArguments({ questions: [{ prompt: "Q", suggestions: ["a", 2] }] }),
+    ).toEqual(failure);
   });
 
   it("keeps a valid stored clarification and reply and drops malformed ones with the message", () => {

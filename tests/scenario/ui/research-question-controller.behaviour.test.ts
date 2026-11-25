@@ -185,6 +185,28 @@ describe("ResearchQuestionController submission", () => {
     );
   });
 
+  it("checks a clarification reply against the context window and keeps its Thinking turn", async () => {
+    const reply = { answers: { "question-1": "Postgres" }, skipped: false };
+    let limit = 1;
+    const harness = createHarness({ getContextLimitTokens: () => limit });
+
+    await expect(harness.controller.submitClarificationReply("Answers", reply)).resolves.toEqual({
+      started: false,
+      reason: "The current chat is too long for the selected model context window.",
+    });
+    expect(harness.requests).toEqual([]);
+
+    limit = 100_000;
+    await expect(harness.controller.submitClarificationReply("Answers", reply)).resolves.toEqual({
+      started: true,
+    });
+    expect(harness.requests[0]).toMatchObject({
+      question: "Answers",
+      thinking: true,
+      clarificationReply: reply,
+    });
+  });
+
   it("forwards a stop request to the session manager", () => {
     const harness = createHarness();
 

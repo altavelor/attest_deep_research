@@ -325,8 +325,7 @@ export class ThinkingResearchRunner {
           });
         }
 
-        const toolRound = await toolExecutor.execute({
-          calls: response.toolCalls,
+        const roundOptions = {
           round,
           phase,
           repairTool,
@@ -334,7 +333,22 @@ export class ThinkingResearchRunner {
           satisfiedTools: satisfied,
           continuation: Boolean(continuation),
           forceSynthesis,
-        });
+        };
+        const endingCall = response.toolCalls.find((call) => call.name === this.options.endingTool);
+        const endingRound = endingCall
+          ? await toolExecutor.execute({ ...roundOptions, calls: [endingCall] })
+          : undefined;
+        if (this.endedByTool(toolExecutor, round)) return success("");
+        const otherCalls = response.toolCalls.filter((call) => call !== endingCall);
+        const otherRound =
+          otherCalls.length > 0 || !endingRound
+            ? await toolExecutor.execute({ ...roundOptions, calls: otherCalls })
+            : undefined;
+        const toolRound = {
+          toolMessages: [...(endingRound?.toolMessages ?? []), ...(otherRound?.toolMessages ?? [])],
+          toolOutputs: [...(endingRound?.toolOutputs ?? []), ...(otherRound?.toolOutputs ?? [])],
+          noProgress: (endingRound?.noProgress ?? true) && (otherRound?.noProgress ?? true),
+        };
         if (continuation) {
           toolOutputs = toolRound.toolOutputs;
         } else {
