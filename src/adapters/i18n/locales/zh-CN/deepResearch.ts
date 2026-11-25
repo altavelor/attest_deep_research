@@ -75,4 +75,13 @@ export const deepResearch: EnDeepResearchMessages = {
   "settings.advanced.researchExportFolder.desc":
     "用于保存导出研究报告的库文件夹。绝对路径、反斜杠，以及为空、首尾带空格或以点开头或结尾的路径段（如 ..、.attest、.obsidian）会被拒绝。",
   "chat.deepResearch.export.folder": "导出文件夹；留空则使用默认文件夹",
+  "chat.clarification.title": "澄清问题",
+  "chat.clarification.unanswered": "未回答",
+  "chat.clarification.send": "发送回答",
+  "chat.clarification.skip": "不澄清直接回答",
+  "chat.clarification.skipMessage": "不澄清直接回答：按原问题作答，并说明你所做的假设。",
+  "chat.clarification.reply.heading": "对澄清问题的回答：",
+  "chat.clarification.reply.answer": "回答",
+  "chat.clarification.reply.summary": "已回答澄清问题（{count}）",
+  "chat.clarification.reply.skipped": "未澄清，直接继续",
 };

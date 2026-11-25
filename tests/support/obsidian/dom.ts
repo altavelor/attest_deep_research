@@ -9,7 +9,7 @@ export const MarkdownRenderer = {
     _sourcePath: string,
     _component: Component,
   ): Promise<void> {
-    element.textContent = markdown;
+    element.append(markdown);
   },
 };
 

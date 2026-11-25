@@ -19,6 +19,7 @@ import {
 } from "./workflowRenderer";
 import { disposeAnswerArtifacts, renderAnswerArtifacts } from "./artifacts";
 import { renderResearchCard } from "./deep-research/researchPlanCard";
+import { renderClarificationCard } from "./clarificationCard";
 
 const renderVersionsByAnswer = new WeakMap<HTMLElement, RenderVersionTracker>();
 
@@ -108,6 +109,9 @@ function renderAssistantAnswer(
   renderAssistantAnswerHeader(answerEl, message, hasWorkflow);
   if (message.research && options.research) {
     renderResearchCard(answerEl, message.research, options.research);
+  }
+  if (message.answer?.clarification && options.clarification) {
+    renderClarificationCard(answerEl, message, options.messages, options.clarification);
   }
   void MarkdownRenderer.render(
     options.app,

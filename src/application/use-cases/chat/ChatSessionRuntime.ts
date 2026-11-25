@@ -194,7 +194,7 @@ export class ChatSessionRuntime {
     const { forceSubAgent, cleanedQuestion } = parseSubAgentDirective(request.question);
     const mode: ResearchMode = request.research
       ? "deep-research"
-      : forceSubAgent
+      : forceSubAgent || request.thinking
         ? "thinking"
         : (this.state.chatSettings.researchMode ?? "instant");
 

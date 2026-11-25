@@ -44,6 +44,11 @@ Attest separates the stable `instant` and `thinking` strategies:
   selected model cannot satisfy the tool/reasoning policy. A call to a tool the run does not offer
   or permit fails with `tool-unavailable`; the model receives the offered tool names and the
   timeline row shows a localized reason.
+  The main agent may call `ask_clarification` with 1–3 questions (bounded like the Deep Research
+  brief); a valid call ends the turn without an answer and stores the questions on the assistant
+  message, which renders as a question card. Its answers are sent as the next ordinary user message
+  in Thinking mode. The tool is not offered in the turn right after a clarification, nor to
+  sub-agent sessions; malformed arguments fail with `invalid-clarification`.
 - **Deep Research** is offered in the composer's mode selector. Its lifecycle is
   `plan → user review → gather → verify → synthesize → export`. The composer disables the item
   with the same readable reason as Thinking when the model has no verified tool calling.

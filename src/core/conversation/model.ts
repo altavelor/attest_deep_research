@@ -1,6 +1,6 @@
 import { RetrievedChunk } from "@core/model/source";
 import { ContextDiagnostics } from "@core/diagnostics";
-import { ResearchAnswer } from "@core/answer";
+import { ClarificationReply, ResearchAnswer } from "@core/answer";
 import { ResearchMode } from "@core/research/researchMode";
 import type { ResearchArtifactReference } from "@core/research/deepResearch/types";
 
@@ -14,7 +14,7 @@ export interface ConversationCompactionSummary {
 export interface ChatDisplayMessage {
   id?: string;
   role: "user" | "assistant";
-  kind?: "message" | "compact-summary";
+  kind?: "message" | "compact-summary" | "notice";
   content: string;
   createdAt: string;
 
@@ -24,6 +24,7 @@ export interface ChatDisplayMessage {
   compactSummary?: ConversationCompactionSummary;
   evidence?: RetrievedChunk[];
   answer?: ResearchAnswer;
+  clarificationReply?: ClarificationReply;
   contextDiagnostics?: ContextDiagnostics;
   reasoning?: Array<{ id: string; content: string }>;
   reasoningOpen?: boolean;

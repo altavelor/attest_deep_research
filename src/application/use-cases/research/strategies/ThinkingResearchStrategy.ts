@@ -12,7 +12,12 @@ import { buildThinkingResearchMessages } from "@core/research";
 import { isWebQueryIntent, isWebQueryRecency } from "@core/web";
 import { ResearchStreamEvent } from "@application/contracts/research";
 import type { WebSearchOptions } from "@application/ports";
-import { SUB_AGENT_TOOL } from "@core/agent";
+import { ASK_CLARIFICATION_TOOL, SUB_AGENT_TOOL } from "@core/agent";
+import {
+  AskClarificationTool,
+  clarificationAllowed,
+  type ClarificationRecorder,
+} from "../clarificationTool";
 import { subAgentRoundHooks } from "../subAgentRoundHooks";
 import { createAsyncEventChannel } from "@application/AsyncEventChannel";
 import { ThinkingResearchRunner, ThinkingResearchFailure } from "../ThinkingResearchRunner";
@@ -173,6 +178,10 @@ export class ThinkingResearchStrategy implements ResearchStrategy {
       vaultWriter: this.deps.vaultWriter,
       downloadFolder: this.deps.downloadFolder,
     });
+    const clarification: ClarificationRecorder = {};
+    if (clarificationAllowed(request.chatHistory)) {
+      created.tools.register(new AskClarificationTool(clarification));
+    }
     const effectivePolicy =
       request.forceSubAgent === true && created.tools.has(SUB_AGENT_TOOL)
         ? { ...policy, requiredTools: Object.freeze([...policy.requiredTools, SUB_AGENT_TOOL]) }
@@ -224,6 +233,7 @@ export class ThinkingResearchStrategy implements ResearchStrategy {
         maxTokens: this.deps.chatOptions.maxTokens,
         reasoning: this.deps.reasoning,
         signal: request.signal,
+        endingTool: ASK_CLARIFICATION_TOOL,
         onDelta: (delta, round) => {
           if (delta.type === "text") {
             onEvent({
@@ -434,6 +444,9 @@ export class ThinkingResearchStrategy implements ResearchStrategy {
       followUpQuestions: result.ok ? extractFollowUpQuestions(answerText) : [],
       ...(result.ok && created.artifacts.snapshot()
         ? { artifacts: created.artifacts.snapshot()! }
+        : {}),
+      ...(result.ok && clarification.clarification
+        ? { clarification: clarification.clarification }
         : {}),
       createdAt: this.deps.now().toISOString(),
     };

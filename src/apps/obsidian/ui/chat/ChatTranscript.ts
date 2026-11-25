@@ -36,6 +36,7 @@ import { dispatchEvent } from "@core/chat/subAgentPlacement";
 import { transcriptEventPlacement } from "./subAgentEventPlacement";
 import type { SubAgentDispatchEntry, SubAgentNoticeEntry } from "@core/research";
 import type { ResearchCardContext } from "./deep-research/researchPlanCard";
+import type { ClarificationCardContext } from "./clarificationCard";
 
 export interface ChatTranscriptOptions {
   app: App;
@@ -66,6 +67,7 @@ export interface ChatTranscriptOptions {
   subAgentNotices?: readonly SubAgentNoticeEntry[];
   onOpenSubAgentSession?: (sessionId: string) => void;
   research?: ResearchCardContext;
+  clarification?: ClarificationCardContext;
 }
 
 export function renderChatTranscript(
@@ -203,8 +205,15 @@ function renderUserMessageContent(
   }
   containerEl.createDiv({
     cls: "attest-chat__message-text",
-    text: messageDisplayContent(message),
+    text: userMessageText(message, t),
   });
+}
+
+function userMessageText(message: ChatDisplayMessage, t: Translate): string {
+  const reply = message.clarificationReply;
+  if (!reply) return messageDisplayContent(message);
+  if (reply.skipped) return t("chat.clarification.reply.skipped");
+  return t("chat.clarification.reply.summary", { count: Object.keys(reply.answers).length });
 }
 
 function attachmentDisplayName(path: string): string {

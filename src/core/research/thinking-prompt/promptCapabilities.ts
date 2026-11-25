@@ -1,4 +1,5 @@
 import {
+  ASK_CLARIFICATION_TOOL,
   CHECK_URLS_TOOL,
   DOWNLOAD_DOCUMENT_TOOL,
   FIND_CLAIMS_TOOL,
@@ -33,6 +34,7 @@ export interface PromptCapabilities {
   findClaims: boolean;
   richMedia: boolean;
   imageSearch: boolean;
+  clarification: boolean;
 
   parallelToolCalls: boolean;
 }
@@ -61,6 +63,7 @@ export function resolvePromptCapabilities(input: PromptCapabilityInput): PromptC
     findClaims: tools.has(FIND_CLAIMS_TOOL),
     richMedia: tools.has(PRESENT_CHART_TOOL),
     imageSearch: tools.has(IMAGE_SEARCH_TOOL),
+    clarification: tools.has(ASK_CLARIFICATION_TOOL),
     parallelToolCalls: input.parallelToolCalls === true,
   };
 }

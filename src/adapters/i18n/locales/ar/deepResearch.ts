@@ -75,4 +75,14 @@ export const deepResearch: EnDeepResearchMessages = {
   "settings.advanced.researchExportFolder.desc":
     "مجلد في الخزنة للتقارير المصدَّرة. تُرفض المسارات المطلقة والشرطات المائلة العكسية والمقاطع الفارغة أو المحاطة بمسافات أو التي تبدأ أو تنتهي بنقطة (مثل ‎..‎ و‎.attest‎ و‎.obsidian‎).",
   "chat.deepResearch.export.folder": "مجلد التصدير؛ يُستخدم الافتراضي إذا تُرك فارغًا",
+  "chat.clarification.title": "أسئلة توضيحية",
+  "chat.clarification.unanswered": "لم تتم الإجابة",
+  "chat.clarification.send": "إرسال الإجابات",
+  "chat.clarification.skip": "الإجابة دون توضيح",
+  "chat.clarification.skipMessage":
+    "أجب دون توضيح: تابع السؤال كما طُرح واذكر الافتراضات التي تعتمدها.",
+  "chat.clarification.reply.heading": "إجابات الأسئلة التوضيحية:",
+  "chat.clarification.reply.answer": "الإجابة",
+  "chat.clarification.reply.summary": "إجابات الأسئلة التوضيحية ({count})",
+  "chat.clarification.reply.skipped": "تمت المتابعة دون توضيح",
 };

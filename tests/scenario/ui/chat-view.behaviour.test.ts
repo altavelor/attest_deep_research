@@ -816,3 +816,48 @@ describe("chat view research composition", () => {
     await leaf.detach();
   });
 });
+
+describe("chat view clarification card", () => {
+  it("keeps the typed answers and shows the refusal after the transcript re-rendered", async () => {
+    const { manager, repository } = createTestSessionManager();
+    const start = vi.fn(async () => ({ started: false, error: new Error("disk full") }));
+    manager.start = start as unknown as typeof manager.start;
+    const asked: ChatDisplayMessage = {
+      id: "asked",
+      role: "assistant",
+      content: "",
+      createdAt: summary.updatedAt,
+      answer: {
+        ...completedAnswer,
+        answer: "",
+        clarification: {
+          questions: [{ questionId: "question-1", prompt: "Which database?", suggestions: [] }],
+        },
+      },
+    };
+    const chat: SavedChat = { ...savedChat, messages: [...savedChat.messages, asked] };
+    await repository.saveChat(chat);
+    const { view, leaf } = await openView({ sessions: manager, loadSavedChat: async () => chat });
+    view.contentEl.querySelector<HTMLButtonElement>(".attest-chat__saved-open")?.click();
+    const card = () => view.contentEl.querySelector(".attest-clarification-card")!;
+    const send = () =>
+      [...card().querySelectorAll("button")].find((el) => el.textContent === "Send answers")!;
+    await eventually(() => expect(card()).not.toBeNull());
+    const field = card().querySelector("textarea")!;
+    field.value = "Postgres";
+    field.dispatchEvent(new Event("input"));
+
+    send().click();
+
+    await eventually(() => {
+      expect(card().querySelector("[role=alert]")!.textContent).toBe(
+        "The chat could not be saved, so the run did not start.",
+      );
+    });
+    expect(card().querySelector("textarea")).not.toBe(field);
+    expect(card().querySelector("textarea")!.value).toBe("Postgres");
+    send().click();
+    await eventually(() => expect(start).toHaveBeenCalledTimes(2));
+    await leaf.detach();
+  });
+});

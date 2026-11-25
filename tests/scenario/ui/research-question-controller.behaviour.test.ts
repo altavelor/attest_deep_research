@@ -8,8 +8,17 @@ import type { ChatRunRequest, ChatRunStartResult } from "@application/use-cases/
 import type { ResearchService } from "@application/use-cases/research";
 import type { ChatDisplayMessage } from "@core/conversation";
 import { createTranslator } from "@adapters/i18n";
+import { chatHistoryForPrompt } from "@application/use-cases/chat";
+import { clarificationAllowed } from "@application/use-cases/research/clarificationTool";
+import { renderClarificationCard } from "@apps/obsidian/ui/chat/clarificationCard";
+import { ClarificationDrafts } from "@apps/obsidian/ui/chat/clarificationDrafts";
 import { takeNotices } from "../../support/obsidian";
-import { resetDom, restoreDomTimers, useDomFakeTimers } from "../../support/domHarness";
+import {
+  installObsidianDomHelpers,
+  resetDom,
+  restoreDomTimers,
+  useDomFakeTimers,
+} from "../../support/domHarness";
 
 const t = createTranslator("en").t;
 
@@ -185,6 +194,29 @@ describe("ResearchQuestionController submission", () => {
     );
   });
 
+  it("checks a clarification reply against the context window and keeps its Thinking turn", async () => {
+    const reply = { answers: { "question-1": "Postgres" }, skipped: false };
+    let limit = 1;
+    const harness = createHarness({ getContextLimitTokens: () => limit });
+
+    await expect(harness.controller.submitClarificationReply("Answers", reply)).resolves.toEqual({
+      started: false,
+      reason: "The current chat is too long for the selected model context window.",
+    });
+    expect(harness.requests).toEqual([]);
+    expect(takeNotices()).toEqual([]);
+
+    limit = 100_000;
+    await expect(harness.controller.submitClarificationReply("Answers", reply)).resolves.toEqual({
+      started: true,
+    });
+    expect(harness.requests[0]).toMatchObject({
+      question: "Answers",
+      thinking: true,
+      clarificationReply: reply,
+    });
+  });
+
   it("forwards a stop request to the session manager", () => {
     const harness = createHarness();
 
@@ -215,6 +247,75 @@ describe("ResearchQuestionController submission", () => {
 });
 
 describe("ResearchQuestionController compaction", () => {
+  it("keeps a card reply linked to its card when automatic compaction fires", async () => {
+    installObsidianDomHelpers();
+    const at = "2026-01-01T00:00:00.000Z";
+    const card: ChatDisplayMessage = {
+      role: "assistant",
+      content: "",
+      createdAt: at,
+      answer: {
+        question: "Q",
+        answer: "",
+        citations: [],
+        followUpQuestions: [],
+        createdAt: at,
+        clarification: {
+          questions: [{ questionId: "question-1", prompt: "Which database?", suggestions: [] }],
+        },
+      },
+    };
+    let messages: ChatDisplayMessage[] = [
+      ...Array.from({ length: 7 }, (_, index) => ({
+        role: index % 2 === 0 ? ("user" as const) : ("assistant" as const),
+        content: "Long history entry. ".repeat(60),
+        createdAt: at,
+      })),
+      card,
+    ];
+    const reply = { answers: { "question-1": "Postgres" }, skipped: false };
+    const harness = createHarness({
+      getMessages: () => messages,
+      setMessages: (_sessionId, next) => {
+        messages = next;
+      },
+      getContextLimitTokens: () => 2000,
+      createResearchService: () =>
+        ({
+          summarizeChatHistoryForCompaction: async () => ({
+            userGoals: [],
+            decisions: [],
+            unresolvedQuestions: [],
+            citedSourcesAlreadyUsed: [],
+          }),
+        }) as unknown as ResearchService,
+    });
+
+    await harness.controller.submitClarificationReply("Answers", reply);
+
+    expect(messages.some((message) => message.content === t("chat.compact.automaticMessage"))).toBe(
+      true,
+    );
+    expect(clarificationAllowed(chatHistoryForPrompt(harness.requests[0]!.chatHistory))).toBe(
+      false,
+    );
+    const stored = messages.find((message) => message.answer?.clarification)!;
+    const host = document.createElement("div");
+    renderClarificationCard(
+      host,
+      stored,
+      [...messages, { role: "user", content: "Answers", createdAt: at, clarificationReply: reply }],
+      {
+        t,
+        running: false,
+        onReply: async () => ({ started: true }),
+        drafts: new ClarificationDrafts(),
+        requestRedisplay: () => {},
+      },
+    );
+    expect(host.textContent).toContain("Postgres");
+  });
+
   it("reports that there is nothing to compact", async () => {
     const harness = createHarness({ getQuestionInput: () => "/compact" });
 

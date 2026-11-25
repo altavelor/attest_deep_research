@@ -379,7 +379,12 @@ export class ChatSessionManager {
     const status = this.queue.length > 0 ? "queued" : nextRunStatus(this.slots.size);
     if (status === "running") this.slots.set(sessionId, runId);
     const withQuestion = request.appendQuestion
-      ? nextUserMessage(state.messages, request.question, request.contextPaths)
+      ? nextUserMessage(
+          state.messages,
+          request.question,
+          request.contextPaths,
+          request.clarificationReply,
+        )
       : state.messages;
     const messages = startAssistantProgress(
       withQuestion,

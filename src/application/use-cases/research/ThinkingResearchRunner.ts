@@ -69,6 +69,8 @@ export interface ThinkingResearchRunnerOptions {
   onToolEvent?: (callId: string, event: ToolEvent) => void;
 
   roundHooks?: ThinkingRoundHooks;
+
+  endingTool?: string;
 }
 
 export type ThinkingResearchResult = ThinkingResearchSuccess | ThinkingResearchFailure;
@@ -145,6 +147,17 @@ export class ThinkingResearchRunner {
     return hooks ? hooks.beforeFinalize(this.options.signal) : "ready";
   }
 
+  /** Tells whether a successful call of the turn-ending tool happened in this round. */
+  private endedByTool(executor: ThinkingToolRoundExecutor, round: number): boolean {
+    const name = this.options.endingTool;
+    return (
+      name !== undefined &&
+      executor.diagnostics.some(
+        (call) => call.round === round && call.name === name && call.status === "success",
+      )
+    );
+  }
+
   async run(): Promise<ThinkingResearchResult> {
     const messages = this.options.messages.map((message) => ({ ...message }));
     const required = new Set(this.options.policy.requiredTools);
@@ -202,6 +215,11 @@ export class ThinkingResearchRunner {
       continuationRounds,
       usage,
     });
+
+    const success = (answerText: string): ThinkingResearchSuccess => {
+      const { ok: _ok, reason: _reason, ...stats } = failure("cancelled");
+      return { ...stats, ok: true, answerText };
+    };
 
     try {
       for (let round = 1; round <= maxRounds; round += 1) {
@@ -282,25 +300,7 @@ export class ThinkingResearchRunner {
           }
           if (missing.length === 0 && phase !== "repair") {
             this.options.onRoundClassified?.(round, "final");
-            return {
-              ok: true,
-              answerText: response.content,
-              diagnostics: toolExecutor.diagnostics,
-              satisfiedTools: [...satisfied],
-              repairedTools: [...repaired],
-              rounds,
-              totalCalls: toolExecutor.totalCalls,
-              duplicateCalls: toolExecutor.duplicateCalls,
-              phases,
-              promptRounds,
-              stopReasons,
-              maxResultChars,
-              totalResultChars: toolExecutor.totalResultChars,
-              reasoningItemCount,
-              reasoningSegments,
-              continuationRounds,
-              usage,
-            };
+            return success(response.content);
           }
           if (phase === "bootstrap" && missing.length === 1) {
             this.options.onRoundClassified?.(round, "intermediate");
@@ -325,8 +325,7 @@ export class ThinkingResearchRunner {
           });
         }
 
-        const toolRound = await toolExecutor.execute({
-          calls: response.toolCalls,
+        const roundOptions = {
           round,
           phase,
           repairTool,
@@ -334,12 +333,31 @@ export class ThinkingResearchRunner {
           satisfiedTools: satisfied,
           continuation: Boolean(continuation),
           forceSynthesis,
-        });
+        };
+        const endingRounds = [];
+        for (const call of response.toolCalls) {
+          if (call.name !== this.options.endingTool) continue;
+          endingRounds.push(await toolExecutor.execute({ ...roundOptions, calls: [call] }));
+          if (this.endedByTool(toolExecutor, round)) return success("");
+        }
+        const otherCalls = response.toolCalls.filter(
+          (call) => call.name !== this.options.endingTool,
+        );
+        const executed =
+          otherCalls.length > 0 || endingRounds.length === 0
+            ? [...endingRounds, await toolExecutor.execute({ ...roundOptions, calls: otherCalls })]
+            : endingRounds;
+        const toolRound = {
+          toolMessages: executed.flatMap((item) => item.toolMessages),
+          toolOutputs: executed.flatMap((item) => item.toolOutputs),
+          noProgress: executed.every((item) => item.noProgress),
+        };
         if (continuation) {
           toolOutputs = toolRound.toolOutputs;
         } else {
           messages.push(...toolRound.toolMessages);
         }
+        if (this.endedByTool(toolExecutor, round)) return success("");
 
         if (toolRound.noProgress) {
           consecutiveNoProgressRounds += 1;

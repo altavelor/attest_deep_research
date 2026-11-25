@@ -101,8 +101,9 @@ describe("chat rendering helpers", () => {
     ).toBe("instant");
   });
 
-  it("keeps included context paths on the sent user message", () => {
-    const messages = nextUserMessage([], "Summarize this", ["Docs/one.md", "Docs/two.pdf"]);
+  it("keeps included context paths and a clarification reply on the sent user message", () => {
+    const reply = { answers: { "question-1": "Postgres" }, skipped: false };
+    const messages = nextUserMessage([], "Summarize this", ["Docs/one.md", "Docs/two.pdf"], reply);
 
     expect(messages).toEqual([
       {
@@ -110,6 +111,7 @@ describe("chat rendering helpers", () => {
         role: "user",
         content: "Summarize this",
         contextPaths: ["Docs/one.md", "Docs/two.pdf"],
+        clarificationReply: reply,
         createdAt: expect.any(String),
       },
     ]);

@@ -55,7 +55,18 @@ export function parseClarification(text: string): ClarificationOutcome {
   const assumptions = boundedList(raw.assumptions, MAX_BRIEF_ASSUMPTIONS, MAX_BRIEF_PROMPT_CHARS);
   const language = normalizeResearchLanguage(raw.language);
   if (raw.status === "ready") return { kind: "ready", assumptions, failed: false, language };
-  const questions = (Array.isArray(raw.questions) ? raw.questions : [])
+  const questions = boundedClarificationQuestions(raw.questions);
+  if (questions.length === 0) return failed;
+  return { kind: "questions", questions, assumptions, language };
+}
+
+/**
+ * Reads untrusted clarifying questions: entries without a prompt are dropped, text and
+ * suggestions are trimmed and bounded, and at most the allowed number of questions get host
+ * identifiers. Non-list input yields no questions.
+ */
+export function boundedClarificationQuestions(value: unknown): ClarificationQuestion[] {
+  return (Array.isArray(value) ? value : [])
     .filter(isRecord)
     .map((entry) => ({
       prompt: bounded(entry.prompt, MAX_BRIEF_PROMPT_CHARS),
@@ -68,8 +79,6 @@ export function parseClarification(text: string): ClarificationOutcome {
     .filter((entry) => entry.prompt !== "")
     .slice(0, MAX_CLARIFICATION_QUESTIONS)
     .map((entry, index) => ({ questionId: `question-${index + 1}`, ...entry }));
-  if (questions.length === 0) return failed;
-  return { kind: "questions", questions, assumptions, language };
 }
 
 /** Records the questions of the clarification round and waits for the user's clarification decision. */

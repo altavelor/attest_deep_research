@@ -77,4 +77,14 @@ export const deepResearch: EnDeepResearchMessages = {
   "settings.advanced.researchExportFolder.desc":
     "Папка хранилища для экспортированных отчётов. Отклоняются абсолютные пути, обратные слэши и сегменты пустые, с пробелами по краям или начинающиеся либо заканчивающиеся точкой (например, .., .attest, .obsidian).",
   "chat.deepResearch.export.folder": "Папка экспорта; пусто — папка по умолчанию",
+  "chat.clarification.title": "Уточняющие вопросы",
+  "chat.clarification.unanswered": "Без ответа",
+  "chat.clarification.send": "Отправить ответы",
+  "chat.clarification.skip": "Ответить без уточнения",
+  "chat.clarification.skipMessage":
+    "Ответь без уточнения: исходи из вопроса как он задан и назови сделанные допущения.",
+  "chat.clarification.reply.heading": "Ответы на уточняющие вопросы:",
+  "chat.clarification.reply.answer": "Ответ",
+  "chat.clarification.reply.summary": "Ответы на уточняющие вопросы ({count})",
+  "chat.clarification.reply.skipped": "Продолжено без уточнения",
 };

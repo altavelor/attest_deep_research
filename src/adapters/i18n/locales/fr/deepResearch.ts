@@ -78,4 +78,14 @@ export const deepResearch: EnDeepResearchMessages = {
   "settings.advanced.researchExportFolder.desc":
     "Dossier du coffre pour les rapports exportés. Sont refusés les chemins absolus, les barres obliques inverses et les segments vides, entourés d’espaces ou qui commencent ou finissent par un point (comme .., .attest, .obsidian).",
   "chat.deepResearch.export.folder": "Dossier d’export ; vide utilise celui par défaut",
+  "chat.clarification.title": "Questions de clarification",
+  "chat.clarification.unanswered": "Sans réponse",
+  "chat.clarification.send": "Envoyer les réponses",
+  "chat.clarification.skip": "Répondre sans clarification",
+  "chat.clarification.skipMessage":
+    "Réponds sans clarification : traite la question telle quelle et indique les hypothèses retenues.",
+  "chat.clarification.reply.heading": "Réponses aux questions de clarification :",
+  "chat.clarification.reply.answer": "Réponse",
+  "chat.clarification.reply.summary": "Réponses aux questions de clarification ({count})",
+  "chat.clarification.reply.skipped": "Poursuivi sans clarification",
 };

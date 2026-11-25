@@ -39,7 +39,7 @@ const MAX_FOLLOW_UPS = 2;
 export function readBrief(value: unknown): ResearchBrief | null | undefined {
   if (value === undefined || value === null) return null;
   if (!isRecord(value) || !Array.isArray(value.questions) || !isRecord(value.answers)) return;
-  const questions = value.questions.map(readQuestion);
+  const questions = value.questions.map(readClarificationQuestion);
   const ids = new Set(questions.map((question) => question?.questionId));
   const answers = Object.entries(value.answers);
   if (
@@ -128,7 +128,8 @@ export function readVerification(
   };
 }
 
-function readQuestion(value: unknown): ClarificationQuestion | undefined {
+/** Reads one stored clarifying question, or returns undefined when any field is out of bounds. */
+export function readClarificationQuestion(value: unknown): ClarificationQuestion | undefined {
   if (
     !isRecord(value) ||
     !isResearchId(value.questionId) ||
