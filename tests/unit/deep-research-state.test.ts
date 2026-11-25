@@ -610,6 +610,10 @@ describe("deep research section validation", () => {
         ]),
       ],
       [
+        "summary failure that is not text",
+        section(null, [{ ...ended, report: { ...ended.report, summaryFailure: 42 } }]),
+      ],
+      [
         "report scale above the objective bound",
         section(null, [
           {
@@ -729,6 +733,7 @@ describe("deep research section validation", () => {
         ...ended.report,
         missingBranches: [{ branchId: "branch-2", reason: "Time", title: "Tides" }],
         scale: { objectives: 12, activeMs: 1_000, activeLimitMs: 2_000 },
+        summaryFailure: "The report came back empty.",
         verification: { ...ended.report.verification, coveredObjectives: 12 },
       },
     };

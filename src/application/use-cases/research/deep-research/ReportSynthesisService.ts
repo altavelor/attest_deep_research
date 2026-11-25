@@ -32,6 +32,8 @@ export interface SynthesizedReport {
   unverifiedTokens: number;
 }
 
+export const MAX_REPORT_OUTPUT_TOKENS = 32_000;
+
 const SYSTEM_PROMPT = [
   "You write the summary of a research from verified claims only.",
   "Follow the report outline and cover every objective the supported claims serve.",
@@ -43,8 +45,8 @@ const SYSTEM_PROMPT = [
 
 /**
  * Synthesizes the report summary with one model call in a fresh context that sees only the
- * question, the objectives, the outline and the verified claims, with no tools, reporting the
- * streamed text and the count of streamed reasoning words as they grow. Citation normalization and verification run on the reply, and tokens
+ * question, the objectives, the outline and the verified claims, with no tools and a bounded
+ * output, reporting the streamed text and the count of streamed reasoning words as they grow. Citation normalization and verification run on the reply, and tokens
  * of no listed claim are removed.
  */
 export class ReportSynthesisService {
@@ -53,12 +55,16 @@ export class ReportSynthesisService {
   async synthesize(input: ReportSynthesisInput): Promise<SynthesizedReport> {
     const { options } = this;
     let reply = "";
+    let cut = false;
     const thinking = new WordCounter();
     try {
       for await (const chunk of options.chatModel.streamChat({
         model: options.model,
         temperature: options.chatOptions.temperature,
-        maxTokens: options.chatOptions.maxTokens,
+        maxTokens: Math.min(
+          options.chatOptions.maxTokens ?? MAX_REPORT_OUTPUT_TOKENS,
+          MAX_REPORT_OUTPUT_TOKENS,
+        ),
         messages: [
           { role: "system", content: SYSTEM_PROMPT },
           { role: "user", content: synthesisRequest(input) },
@@ -68,6 +74,7 @@ export class ReportSynthesisService {
         reply += chunk.content;
         for (const event of chunk.events ?? []) {
           if (event.type === "reasoning-delta") thinking.push(event.text);
+          if (event.type === "complete" && event.stopReason === "length") cut = true;
         }
         input.onText?.(reply, thinking.words);
       }
@@ -89,7 +96,12 @@ export class ReportSynthesisService {
     });
     const markdown = removeUnknownCitationTokens(normalized.text, known).trim();
     if (markdown === "") {
-      throw deepResearchRejected("research-generation-failed", "The report came back empty.");
+      throw deepResearchRejected(
+        "research-generation-failed",
+        cut
+          ? `The output limit was reached after ${thinking.words} words of reasoning, before the report.`
+          : "The report came back empty.",
+      );
     }
     const removedTokens =
       normalized.rejectedTokens.length + [...normalized.ids].filter((id) => !known.has(id)).length;

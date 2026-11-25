@@ -246,6 +246,7 @@ export interface ResearchReport {
   createdAt: string;
   verification: ReportVerificationCounts | null;
   scale?: ResearchReportScale;
+  summaryFailure?: string;
 }
 
 export type ResearchReportSummary = Omit<ResearchReport, "markdown">;

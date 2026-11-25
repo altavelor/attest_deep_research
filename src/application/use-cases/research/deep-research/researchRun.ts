@@ -337,7 +337,7 @@ async function writeReport(
   }
   deps.onStatus("Writing the research report…");
   activity.step("writing", { kind: "writing", words: 0, headings: [] });
-  const markdown = await writeReportMarkdown({
+  const { markdown, summaryFailure } = await writeReportMarkdown({
     question: start.question,
     plan,
     executions,
@@ -376,6 +376,7 @@ async function writeReport(
         ? verificationCounts(plan, verification)
         : null,
     scale: reportScale(plan, owner.snapshot().activeMs),
+    ...(summaryFailure !== undefined ? { summaryFailure } : {}),
   };
   const state = await commit({ phase: "completed", report });
   return { state, report };

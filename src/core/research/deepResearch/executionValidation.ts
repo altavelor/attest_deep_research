@@ -217,6 +217,7 @@ export function readReportSummary(value: unknown): ResearchReportSummary | null 
         (entry.title === undefined || isText(entry.title)),
     ) ||
     readScale(value.scale) === null ||
+    (value.summaryFailure !== undefined && !isText(value.summaryFailure)) ||
     !isText(value.stopReason) ||
     !isTimestamp(value.createdAt)
   ) {
@@ -234,6 +235,7 @@ export function readReportSummary(value: unknown): ResearchReportSummary | null 
     createdAt: value.createdAt,
     verification,
     ...(value.scale !== undefined ? { scale: readScale(value.scale)! } : {}),
+    ...(typeof value.summaryFailure === "string" ? { summaryFailure: value.summaryFailure } : {}),
   };
 }
 

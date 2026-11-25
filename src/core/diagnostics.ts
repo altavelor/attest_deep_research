@@ -203,6 +203,7 @@ export interface DeepResearchDiagnostics {
   phaseAfter: string | null;
   terminalReason: string | null;
   stopReason: string | null;
+  summaryFailure?: string | null;
   plan: {
     revision: number;
     preset: string;

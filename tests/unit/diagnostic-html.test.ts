@@ -1,7 +1,12 @@
 import { formatDiagnosticReportHtml } from "@apps/obsidian/ui/diagnostics/html/document";
 import { ContextDiagnostics } from "@core/diagnostics";
 import { deepResearchTurnDiagnostics, emptyBudgetState } from "@core/research/deepResearch";
-import { pendingResearch, researchBranch, researchPlan } from "../support/deepResearch";
+import {
+  finishedReport,
+  pendingResearch,
+  researchBranch,
+  researchPlan,
+} from "../support/deepResearch";
 
 function diagnosticFixture(): ContextDiagnostics {
   return {
@@ -142,6 +147,7 @@ describe("readable diagnostic HTML (v3)", () => {
     const after = {
       ...pending,
       phase: "failed" as const,
+      report: { ...finishedReport("Report"), summaryFailure: "The report came back <empty>." },
       budget: {
         ...emptyBudgetState(),
         closed: { reason: "exhausted" as const, dimension: "searches" },
@@ -189,6 +195,7 @@ describe("readable diagnostic HTML (v3)", () => {
     const html = formatDiagnosticReportHtml({ ...diagnosticFixture(), deepResearch });
     expect(html).toContain('id="deep-research"');
     expect(html).toContain("exhausted searches");
+    expect(html).toContain("<dt>Summary failure</dt><dd>The report came back &lt;empty&gt;.</dd>");
     expect(html).toContain("<dt>Claims without a citation</dt><dd>1</dd>");
     expect(html).toContain("<dt>Claims not assessed</dt><dd>1</dd>");
     expect(html).toContain("&lt;img src=x onerror=alert(1)&gt;");

@@ -11,6 +11,7 @@ export function renderDeepResearch(research: DeepResearchDiagnostics | null): st
     ["Phase", `${text(research.phaseBefore)} → ${text(research.phaseAfter)}`],
     ["Terminal reason", text(research.terminalReason)],
     ["Stop reason", text(research.stopReason)],
+    ["Summary failure", text(research.summaryFailure ?? null)],
   ]);
   if (research.plan) {
     const rows = research.plan.branches

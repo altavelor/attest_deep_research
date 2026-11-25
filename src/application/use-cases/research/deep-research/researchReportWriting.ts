@@ -1,5 +1,6 @@
 import type { RetrievedChunk } from "@core/model";
 import {
+  boundedReason,
   formatWithoutModel,
   label,
   verificationSections,
@@ -26,13 +27,24 @@ export interface ReportWritingInput {
   onText?(markdown: string, thinking: number): void;
 }
 
+export interface WrittenReport {
+  markdown: string;
+  summaryFailure?: string;
+}
+
 /**
  * Writes the report markdown. Verified claims are synthesized with the model when a finalization
  * round remains and at least one claim is supported, and the verification sections follow; without
- * a round the assessments are formatted without a model. Without assessments or without a supported
- * claim the findings are listed unverified with their unresolvable citations removed.
+ * a round or after a failed synthesis the assessments are formatted without a model and the cause
+ * is returned. Without assessments or without a supported claim the findings are listed unverified
+ * with their unresolvable citations removed.
  */
-export async function writeReportMarkdown(input: ReportWritingInput): Promise<string> {
+export async function writeReportMarkdown(input: ReportWritingInput): Promise<WrittenReport> {
+  const written = await writeMarkdown(input);
+  return typeof written === "string" ? { markdown: written } : written;
+}
+
+async function writeMarkdown(input: ReportWritingInput): Promise<string | WrittenReport> {
   const { plan, verification, stopReason, labels } = input;
   if (!verification || verification.assessments.length === 0) {
     const cited = registryCitedFindings(input.executions, input.resolveEvidence);
@@ -66,7 +78,9 @@ export async function writeReportMarkdown(input: ReportWritingInput): Promise<st
     { removedTokens, unverifiedTokens: 0 },
     labels,
   );
-  if (!input.spendRound()) return fallback;
+  if (!input.spendRound()) {
+    return { markdown: fallback, summaryFailure: "No finalization round remained." };
+  }
   const tokens = claims.flatMap((entry) => [
     ...entry.claim.citationTokens,
     ...entry.assessment.contradictingTokens,
@@ -91,7 +105,10 @@ export async function writeReportMarkdown(input: ReportWritingInput): Promise<st
     );
   } catch (error) {
     if (input.signal?.aborted) throw error;
-    return fallback;
+    return {
+      markdown: fallback,
+      summaryFailure: boundedReason(error instanceof Error ? error.message : "model error"),
+    };
   }
 }
 

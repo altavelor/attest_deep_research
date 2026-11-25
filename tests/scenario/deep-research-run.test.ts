@@ -1,5 +1,6 @@
 import type { ResearchRequest, ResearchStreamEvent } from "@application/contracts/research";
 import { validateResearchSection, type ResearchState } from "@core/research/deepResearch";
+import { MAX_REPORT_OUTPUT_TOKENS } from "@application/use-cases/research/deep-research/ReportSynthesisService";
 import { collectAsync } from "../support/async";
 import {
   BranchModelRounds,
@@ -124,10 +125,11 @@ describe("deep research run", () => {
     const cited = /causes tides \[(\S+)\]/u.exec(report.answer)?.[1];
     expect(run.registry.resolveEvidence([cited!])).toHaveLength(1);
     expect(report.citations.map((citation) => citation.id)).toEqual([cited]);
+    expect(run.model.requests.at(-1)!.maxTokens).toBe(MAX_REPORT_OUTPUT_TOKENS);
     expect(report.evidence?.map((chunk) => chunk.id)).toEqual([cited]);
   });
 
-  it("continues a stopped research without rerunning completed branches and keeps its budget", async () => {
+  it("continues a stopped research without rerunning completed branches, keeps its budget and records a cut summary", async () => {
     const run = harness();
     const { port, decision } = await approvedResearch(run);
     run.rounds.hang.add("Collect details");
@@ -160,6 +162,7 @@ describe("deep research run", () => {
       },
     };
     const resumed = reloaded({ ...paused, executions: [tampered, ...rest] });
+    run.model.cutReport = true;
     const events = await answer(run, {
       question: "Continue",
       researchState: resumed,
@@ -176,7 +179,12 @@ describe("deep research run", () => {
     const synthesis = String(run.model.requests.at(-1)?.messages.at(-1)?.content);
     expect(synthesis).toContain(first!.finding!.citationTokens[0]);
     expect(synthesis).not.toContain("source-7:revision-7");
-    expect(completeAnswer(events)?.answer).toContain("citation(s) without a source");
+    expect(completeAnswer(events)?.answer).toContain(
+      "Verified claims are listed without a synthesized summary.",
+    );
+    expect(final.report!.summaryFailure).toBe(
+      "The output limit was reached after 4 words of reasoning, before the report.",
+    );
   });
 
   it("closes the budget at the time limit, aborts the running branch and reports without a model", async () => {

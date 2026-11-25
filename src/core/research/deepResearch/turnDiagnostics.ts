@@ -56,6 +56,7 @@ export function deepResearchTurnDiagnostics(
     phaseAfter: record.after?.phase ?? null,
     terminalReason: optionalText(state?.terminalReason ?? null),
     stopReason: state?.budget ? stopReasonOf(state.budget, ENGLISH_RESEARCH_LABELS) : null,
+    summaryFailure: optionalText(state?.report?.summaryFailure ?? null),
     plan: plan && {
       revision: plan.revision,
       preset: plan.preset,

@@ -295,11 +295,12 @@ export function cooperativeResearchReply(request: ChatRequest): string | null {
 /**
  * A chat model that answers clarification and verification cooperatively, drafts a three-branch
  * plan and writes a summary, after streamed reasoning, citing the first verified claim token and
- * one token no claim holds.
+ * one token no claim holds; with `cutReport` the reasoning reaches the output limit instead.
  */
 export class PlanAndReportModel implements ChatModelProvider {
   readonly requests: ChatRequest[] = [];
   onReport: () => void = () => undefined;
+  cutReport = false;
 
   async listModels(): Promise<string[]> {
     return ["model"];
@@ -325,6 +326,14 @@ export class PlanAndReportModel implements ChatModelProvider {
         isComplete: false,
         events: [{ type: "reasoning-delta", segmentId: "reasoning-0", text }],
       };
+    }
+    if (this.cutReport) {
+      yield {
+        content: "",
+        isComplete: true,
+        events: [{ type: "complete", stopReason: "length" }],
+      };
+      return;
     }
     yield {
       content: `# Report\n\nThe moon pulls the oceans and causes tides [${token}]. Waves exist [source-9:revision-9].`,
