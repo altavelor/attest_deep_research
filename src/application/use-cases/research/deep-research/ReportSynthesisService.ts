@@ -1,5 +1,6 @@
 import type { ChatModelProvider, ChatRequest } from "@core/agent";
 import type { RetrievedChunk } from "@core/model";
+import { currentDateLine } from "@core/research";
 import {
   boundedReason,
   deepResearchRejected,
@@ -22,6 +23,7 @@ export interface ReportSynthesisInput {
   plan: ResearchPlan;
   claims: readonly VerifiedClaim[];
   evidence: readonly RetrievedChunk[];
+  now: Date;
   signal?: AbortSignal;
   onText?(markdown: string, thinking: number): void;
 }
@@ -45,8 +47,8 @@ const SYSTEM_PROMPT = [
 
 /**
  * Synthesizes the report summary with one model call in a fresh context that sees only the
- * question, the objectives, the outline and the verified claims, with no tools and a bounded
- * output, reporting the streamed text and the count of streamed reasoning words as they grow.
+ * current date, the question, the objectives, the outline and the verified claims, with no tools
+ * and a bounded output, reporting the streamed text and the reasoning word count as they grow.
  * Tokens of no listed claim are removed, and each citation of the reply is checked against the
  * claims citing its source.
  */
@@ -67,7 +69,7 @@ export class ReportSynthesisService {
           MAX_REPORT_OUTPUT_TOKENS,
         ),
         messages: [
-          { role: "system", content: SYSTEM_PROMPT },
+          { role: "system", content: `${SYSTEM_PROMPT}\n${currentDateLine(input.now)}` },
           { role: "user", content: synthesisRequest(input) },
         ],
         ...(input.signal ? { signal: input.signal } : {}),

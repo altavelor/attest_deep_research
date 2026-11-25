@@ -399,6 +399,7 @@ describe("deep research claim verification", () => {
         chatOptions: {},
       }).synthesize({
         question: "Приливы?",
+        now: new Date("2026-11-25T00:00:00.000Z"),
         plan: researchPlan([researchBranch(1)], "balanced"),
         claims: [{ claim: { ...claim, text: claimText }, assessment: supported }],
         evidence: [retrieved("t1", markdownSource("Notes/a.md"), "The moon pulls the oceans.")],

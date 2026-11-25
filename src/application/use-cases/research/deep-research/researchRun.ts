@@ -346,6 +346,7 @@ async function writeReport(
     labels: deps.labels,
     synthesis: deps.synthesis,
     spendRound: () => owner.spendFinalization(1),
+    now: deps.now(),
     ...(deps.resolveEvidence ? { resolveEvidence: deps.resolveEvidence } : {}),
     ...(deps.signal ? { signal: deps.signal } : {}),
     onText: (text, thinking) => activity.writing(text, thinking),

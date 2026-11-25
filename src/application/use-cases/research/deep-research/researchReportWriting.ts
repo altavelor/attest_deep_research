@@ -22,6 +22,7 @@ export interface ReportWritingInput {
   labels: ResearchLabels;
   synthesis: ReportSynthesisService;
   spendRound(): boolean;
+  now: Date;
   resolveEvidence?(revisionIds: readonly string[]): RetrievedChunk[];
   signal?: AbortSignal;
   onText?(markdown: string, thinking: number): void;
@@ -88,6 +89,7 @@ async function writeMarkdown(input: ReportWritingInput): Promise<string | Writte
   try {
     const synthesized = await input.synthesis.synthesize({
       question: input.question,
+      now: input.now,
       plan,
       claims,
       evidence: input.resolveEvidence?.([...new Set(tokens)]) ?? [],

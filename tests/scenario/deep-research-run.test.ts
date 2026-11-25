@@ -126,6 +126,7 @@ describe("deep research run", () => {
     expect(run.registry.resolveEvidence([cited!])).toHaveLength(1);
     expect(report.citations.map((citation) => citation.id)).toEqual([cited]);
     expect(run.model.requests.at(-1)!.maxTokens).toBe(MAX_REPORT_OUTPUT_TOKENS);
+    expect(String(run.model.requests.at(-1)!.messages[0]!.content)).toContain("Current date:");
     expect(report.evidence?.map((chunk) => chunk.id)).toEqual([cited]);
   });
 
