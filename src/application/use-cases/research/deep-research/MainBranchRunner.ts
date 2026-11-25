@@ -19,7 +19,7 @@ import {
   removeUnknownCitationTokens,
   webUrlEvidenceIndex,
 } from "../strategies/citations";
-import { BranchUnavailableError, type BranchRunner } from "./branchRunner";
+import { BranchNoFindingsError, BranchUnavailableError, type BranchRunner } from "./branchRunner";
 import { subAgentToolContext, type SubAgentToolSources } from "../sub-agent/subAgentToolContext";
 
 export interface MainBranchRunnerDeps {
@@ -96,7 +96,7 @@ export class MainBranchRunner implements BranchRunner {
       normalized.text,
       new Set(evidence.map((chunk) => chunk.id)),
     ).trim();
-    if (text === "") throw new Error("The branch produced no findings.");
+    if (text === "") throw new BranchNoFindingsError();
     const answer: ResearchAnswer = {
       question: work.task,
       answer: text,

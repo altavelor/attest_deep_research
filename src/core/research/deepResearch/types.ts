@@ -101,6 +101,7 @@ export interface ResearchState {
   brief: ResearchBrief | null;
   verification: ResearchVerification | null;
   discovery: ResearchDiscovery | null;
+  language?: string;
 }
 
 export interface ClarificationQuestion {
@@ -290,4 +291,5 @@ export interface ResearchDiscovery {
   notes: readonly ResearchNote[];
   executions: readonly BranchExecution[];
   omissions: readonly string[];
+  observationsSkipped?: boolean;
 }

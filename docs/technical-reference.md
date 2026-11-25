@@ -55,6 +55,19 @@ Attest separates the stable `instant` and `thinking` strategies:
   The `searches` limit bounds searching; the evidence limit (`evidenceItemsTotal`) counts only
   documents a branch read — pages opened with `fetch_web_page` and notes read with `read_note`
   or `get_active_note` — while `search_web` and `search_index` results are not charged.
+  The user can skip either wait with one button: **Skip questions** plans with the recorded
+  assumptions, and **Skip observations** marks every open supplied-observation test unavailable,
+  stores `observationsSkipped` in the discovery state (absent in older states means not skipped)
+  so no later cycle asks again, and continues to verification and the report, which labels the
+  affected hypotheses as untested because the observation was skipped.
+  The research is written in the language of its question, except direct quotations and source
+  titles: every Deep Research prompt carries one shared language rule, and branch tasks name the
+  research language. That language is reported by the clarification call as a BCP 47 tag, falls
+  back to a script and stop-word guess over the question, and is stored as `language` in the
+  research state (older states derive it from the question). The report headings, labels, stop
+  and failure reasons and turn answers use the locale catalogue of that language; a language
+  outside the seven UI locales gets English labels, while buttons, cards and notices follow the
+  Obsidian UI language. The ar, de, es, fr and zh-CN answer labels need native review.
   New-chat defaults still offer only Instant and Thinking. The quality gates of the
   specification remain open and are tracked separately from availability:
   - Deep Research beats the recorded Thinking baseline on objective coverage and citation support

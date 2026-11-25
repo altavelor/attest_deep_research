@@ -16,6 +16,7 @@ import {
   reportSummary,
 } from "./executionValidation";
 import { readBrief, readVerification } from "./briefValidation";
+import { normalizeResearchLanguage } from "./researchLanguage";
 import { readDiscovery } from "./discoveryValidation";
 import type {
   DeepResearchSection,
@@ -141,10 +142,14 @@ function readState(value: unknown): ResearchState | undefined {
           ...executions,
           ...(discovery?.executions ?? []),
         ]);
+  const language =
+    value.language === undefined ? undefined : normalizeResearchLanguage(value.language);
   const extraWorks = [...(verification?.followUps ?? []), ...(discovery?.executions ?? [])];
   if (
     value.schema !== DEEP_RESEARCH_SCHEMA ||
     !isResearchId(value.researchId) ||
+    language === null ||
+    (language !== undefined && language !== value.language) ||
     !isRevision(value.revision) ||
     !isText(value.question, MAX_QUESTION) ||
     !PHASES.includes(phase) ||
@@ -186,6 +191,7 @@ function readState(value: unknown): ResearchState | undefined {
     brief,
     verification,
     discovery,
+    ...(language ? { language } : {}),
   };
 }
 

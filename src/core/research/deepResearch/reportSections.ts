@@ -1,4 +1,5 @@
 import { requiredObjectives } from "./verification";
+import { label, type ResearchLabels } from "./reportLabels";
 import type {
   BranchExecution,
   ClaimAssessment,
@@ -76,22 +77,30 @@ export function verificationSections(
   executions: readonly BranchExecution[],
   verification: ResearchVerification,
   stopReason: string,
+  labels: ResearchLabels,
 ): string {
   const entries = verifiedClaims(verification);
   const conflicts = entries
     .filter((entry) => entry.assessment.verdict === "conflicted")
     .map(
       (entry) =>
-        `- ${inline(entry.claim.text)} — cited ${citations(entry.claim)}; contradicted by ${entry.assessment.contradictingTokens
-          .map((token) => `[${token}]`)
-          .join(" ")}`,
+        `- ${label(labels, "conflictLine", {
+          claim: inline(entry.claim.text),
+          cited: citations(entry.claim),
+          contradicting: entry.assessment.contradictingTokens
+            .map((token) => `[${token}]`)
+            .join(" "),
+        })}`,
     );
   const weak = entries
     .filter(
       (entry) =>
         entry.assessment.verdict === "unsupported" || entry.assessment.verdict === "unresolved",
     )
-    .map((entry) => `- (${entry.assessment.verdict}) ${inline(entry.claim.text)}`);
+    .map(
+      (entry) =>
+        `- (${entry.assessment.verdict === "unsupported" ? labels.verdictUnsupported : labels.verdictUnresolved}) ${inline(entry.claim.text)}`,
+    );
   const assessed = new Set(entries.map((entry) => entry.claim.claimId));
   const checked = (workId: string): boolean => {
     const own = verification.claims.filter((claim) => claim.workId === workId);
@@ -110,11 +119,11 @@ export function verificationSections(
     (objective) => `- ${inline(objective)}`,
   );
   return [
-    ...(conflicts.length > 0 ? ["## Conflicting evidence", conflicts.join("\n")] : []),
-    ...(weak.length > 0 ? ["## Unsupported or unresolved claims", weak.join("\n")] : []),
-    ...(unverified.length > 0 ? ["## Unverified findings", ...unverified] : []),
-    ...(uncovered.length > 0 ? ["## Uncovered objectives", uncovered.join("\n")] : []),
-    `Stop reason: ${stopReason}`,
+    ...(conflicts.length > 0 ? [`## ${labels.conflictingEvidence}`, conflicts.join("\n")] : []),
+    ...(weak.length > 0 ? [`## ${labels.weakClaims}`, weak.join("\n")] : []),
+    ...(unverified.length > 0 ? [`## ${labels.unverifiedFindings}`, ...unverified] : []),
+    ...(uncovered.length > 0 ? [`## ${labels.uncoveredObjectives}`, uncovered.join("\n")] : []),
+    label(labels, "stopReasonLine", { reason: stopReason }),
   ].join("\n\n");
 }
 

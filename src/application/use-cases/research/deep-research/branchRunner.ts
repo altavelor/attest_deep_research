@@ -36,6 +36,14 @@ export class BranchUnavailableError extends Error {
   }
 }
 
+/** Signals that a branch attempt ended without any finding text. */
+export class BranchNoFindingsError extends Error {
+  constructor() {
+    super("The branch produced no findings.");
+    this.name = "BranchNoFindingsError";
+  }
+}
+
 /** The branch's mapped child session refused the attempt before it started; the main path takes it. */
 export class UnusableBranchSessionError extends Error {
   constructor(readonly sessionId: string) {

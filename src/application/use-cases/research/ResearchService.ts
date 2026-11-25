@@ -42,6 +42,8 @@ import { ThinkingResearchStrategy } from "./strategies/ThinkingResearchStrategy"
 import type { AnswerTranslate } from "./pseudoToolCallCleanup";
 import { InstantResearchStrategy } from "./strategies/InstantResearchStrategy";
 import { DeepResearchStrategy } from "./deep-research";
+import type { ResearchLabelsPort } from "@application/ports/researchLabels";
+import { ENGLISH_RESEARCH_LABELS } from "@core/research/deepResearch";
 import { SubAgentRunner, type SubAgentRunnerDeps } from "./sub-agent/SubAgentRunner";
 import { SubAgentLogger } from "@application/research/subAgentPort";
 import type { SubAgentExecutionPort } from "@application/ports/subAgent";
@@ -94,6 +96,7 @@ export interface ResearchServiceOptions {
 
   subAgentLogger?: SubAgentLogger;
   researchTimer?: (delayMs: number, callback: () => void) => () => void;
+  researchLabels?: ResearchLabelsPort;
 }
 
 const DEFAULT_EVIDENCE_LIMIT = 8;
@@ -242,6 +245,7 @@ export class ResearchService implements ConversationEngine {
       createBranchEngine: () => new SubAgentRunner(this.subAgentRunnerDeps),
       branchSources: this.subAgentSources,
       ...(options.researchTimer ? { setTimer: options.researchTimer } : {}),
+      researchLabels: options.researchLabels ?? { labelsFor: () => ENGLISH_RESEARCH_LABELS },
     });
   }
 

@@ -3,6 +3,7 @@ import {
   currentHypotheses,
   type ResearchDiscovery,
   type ResearchState,
+  type ResearchTurnInput,
 } from "@core/research/deepResearch";
 import type { ResearchCardContext } from "./researchCardContext";
 import { cancelAction, renderActions } from "./researchCardActions";
@@ -93,18 +94,24 @@ function renderObservationRequest(
     cls: "attest-research-card__editor-task",
     attr: { maxlength: String(MAX_RESEARCH_TEXT_CHARS) },
   });
-  renderActions(requestEl, state, context, [cancelAction(state, t)], () => ({
+  const decide = (payload: unknown): ResearchTurnInput => ({
+    type: "decision",
+    decision: {
+      researchId: state.researchId,
+      decisionId: state.pending!.decisionId,
+      expectedRevision: state.revision,
+      payload,
+    },
+  });
+  const skip = {
+    label: t("chat.deepResearch.action.skipObservations"),
+    turnLabel: t("chat.deepResearch.turn.skipObservations"),
+    input: decide({ action: "skip-observations", testId: test.testId }),
+  };
+  renderActions(requestEl, state, context, [skip, cancelAction(state, t)], () => ({
     label: t("chat.deepResearch.action.observe"),
     turnLabel: t("chat.deepResearch.turn.observe"),
-    input: {
-      type: "decision",
-      decision: {
-        researchId: state.researchId,
-        decisionId: state.pending!.decisionId,
-        expectedRevision: state.revision,
-        payload: { action: "observe", testId: test.testId, text: field.value.trim() },
-      },
-    },
+    input: decide({ action: "observe", testId: test.testId, text: field.value.trim() }),
     primary: true,
   }));
 }

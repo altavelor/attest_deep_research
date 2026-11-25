@@ -15,6 +15,7 @@ describe("deep research clarification", () => {
       kind: "ready",
       assumptions: [NO_CLARIFICATION_ASSUMPTION],
       failed: true,
+      language: null,
     });
     expect(model.requests).toHaveLength(1);
   });

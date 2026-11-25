@@ -1,7 +1,7 @@
 import type { ResearchStreamEvent } from "@application/contracts/research";
 import type { ResearchStatePort } from "@application/ports/researchState";
 import type { ResearchAnswer } from "@core/answer";
-import type { ResearchState } from "@core/research/deepResearch";
+import { label, researchLanguageOf, type ResearchState } from "@core/research/deepResearch";
 import type {
   ResearchExecutionContext,
   ResearchStrategyOutcome,
@@ -36,6 +36,7 @@ export async function* runApprovedTurn(
   const scope = preflightScope(ctx.searchMode, sourcesOf(deps));
   const signal = ctx.request.signal;
   let finalAnswer: ResearchAnswer | null = null;
+  const labels = deps.researchLabels.labelsFor(researchLanguageOf(approved));
   const result = yield* pumpEvents<ResearchStreamEvent, ResearchRunResult>((push) => {
     const recorder = turnRecorderOf(ctx);
     const mainRunner = new MainBranchRunner({
@@ -72,6 +73,7 @@ export async function* runApprovedTurn(
           }
         : {}),
       parallelRequests: deps.toolCapabilities.parallelCalls,
+      labels,
       synthesis: new ReportSynthesisService({
         chatModel: deps.chatModel,
         model: deps.chatModelName,
@@ -116,11 +118,7 @@ export async function* runApprovedTurn(
     });
   });
   if (result.state.pending?.kind === "stale-plan") {
-    return yield* finish(
-      ctx,
-      result.state,
-      "Observation recorded. The approved plan is old; continue anyway, replan or cancel the research.",
-    );
+    return yield* finish(ctx, result.state, labels.turnObservationStale);
   }
   if (result.state.phase === "awaiting-observation") {
     const test = result.state.discovery!.tests.find(
@@ -129,11 +127,15 @@ export async function* runApprovedTurn(
     return yield* finish(
       ctx,
       result.state,
-      `The research needs an observation you supply: ${test.method}`,
+      label(labels, "turnNeedsObservation", { method: test.method }),
     );
   }
   if (!result.report) {
-    return yield* finish(ctx, result.state, `Research failed: ${result.state.terminalReason}`);
+    return yield* finish(
+      ctx,
+      result.state,
+      label(labels, "turnFailed", { reason: result.state.terminalReason ?? "" }),
+    );
   }
   return yield* finish(ctx, result.state, result.report.markdown, finalAnswer ?? undefined);
 }

@@ -1,3 +1,4 @@
+import { ENGLISH_RESEARCH_LABELS } from "@core/research/deepResearch";
 import {
   USER_OBSERVATION_LIMITATION,
   acceptHypothesisDraft,
@@ -97,6 +98,24 @@ describe("deep research discovery rules", () => {
     expect(decide(3, true)).toBe("exhausted");
   });
 
+  it("never waits for a user observation once the user skipped observations", () => {
+    const awaiting = {
+      ...proposed,
+      kind: "supplied-observation" as const,
+      status: "awaiting-input" as const,
+    };
+    const input = {
+      cycle: 2,
+      researchCycles: 3,
+      budgetClosed: false,
+      hypotheses: [hypothesis],
+      tests: [awaiting],
+      progressed: true,
+    };
+    expect(nextCycleDecision(input)).toBe("await-observation");
+    expect(nextCycleDecision({ ...input, observationsSkipped: true })).toBe("continue");
+  });
+
   it("finishes a cycle without progress instead of continuing", () => {
     expect(decide(2, false)).toBe("finish");
   });
@@ -113,7 +132,7 @@ describe("deep research discovery rules", () => {
     expect(reported.limitations).toEqual([USER_OBSERVATION_LIMITATION]);
   });
 
-  it("labels user support with its limitations and always lists disconfirmed revisions", () => {
+  it("labels user support with its limitations and lists disconfirmed revisions without a skip label", () => {
     const reported = userObservation({
       observationId: "o-1",
       testId: "t-1",
@@ -121,26 +140,30 @@ describe("deep research discovery rules", () => {
       quote: "Tides followed the moon",
       receivedAt: "2026-01-01T00:00:00.000Z",
     });
-    const section = hypothesesSection({
-      hypotheses: [
-        { ...hypothesis, hypothesisId: "h-0", status: "disconfirmed", observationIds: ["o-2"] },
-        { ...hypothesis, status: "disconfirmed", observationIds: [] },
-        {
-          ...hypothesis,
-          revision: 2,
-          previousRevision: 1,
-          status: "supported",
-          observationIds: ["o-1"],
-        },
-      ],
-      tests: [],
-      observations: [reported, { ...reported, observationId: "o-2", verdict: "contradicts" }],
-      cycles: [],
-      notes: [],
-      executions: [],
-      omissions: [],
-    });
-    expect(section).toContain("(disconfirmed) The moon drives tides. (revision 1)");
+    const section = hypothesesSection(
+      {
+        hypotheses: [
+          { ...hypothesis, hypothesisId: "h-0", status: "disconfirmed", observationIds: ["o-2"] },
+          { ...hypothesis, status: "disconfirmed", observationIds: [] },
+          {
+            ...hypothesis,
+            revision: 2,
+            previousRevision: 1,
+            status: "supported",
+            observationIds: ["o-1"],
+          },
+        ],
+        tests: [{ ...proposed, kind: "supplied-observation", status: "unavailable" }],
+        observationsSkipped: true,
+        observations: [reported, { ...reported, observationId: "o-2", verdict: "contradicts" }],
+        cycles: [],
+        notes: [],
+        executions: [],
+        omissions: [],
+      },
+      ENGLISH_RESEARCH_LABELS,
+    );
+    expect(section).toContain("- (disconfirmed) The moon drives tides. (revision 1)");
     expect(section).toContain(
       `(disconfirmed by a user observation — ${USER_OBSERVATION_LIMITATION}) The moon drives tides.`,
     );

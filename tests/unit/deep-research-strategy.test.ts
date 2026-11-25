@@ -1,3 +1,4 @@
+import { ENGLISH_RESEARCH_LABELS } from "@core/research/deepResearch";
 import {
   DeepResearchStrategy,
   MainBranchRunner,
@@ -43,6 +44,7 @@ describe("deep research strategy", () => {
       now: () => new Date("2026-01-01T00:00:00.000Z"),
       createBranchEngine: () => ({ run: () => Promise.reject(new Error("unused")) }),
       branchSources: {},
+      researchLabels: { labelsFor: () => ENGLISH_RESEARCH_LABELS },
     });
     const ctx = {
       request: { question: "Question", researchState: port },
@@ -296,6 +298,7 @@ describe("research report citations", () => {
         }),
       },
       synthesis,
+      labels: ENGLISH_RESEARCH_LABELS,
       now: () => new Date("2026-01-01T00:00:00.000Z"),
       setTimer: () => () => undefined,
       createId: (prefix) => `${prefix}-1`,
