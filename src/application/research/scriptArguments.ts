@@ -34,13 +34,15 @@ export function validateScriptArguments(input: Record<string, unknown>): ScriptA
   }
 
   const inputs = input.inputs === undefined ? null : input.inputs;
-  const shapeError = jsonShapeError(inputs, 0);
-  if (shapeError) return reject(`inputs ${shapeError}`);
-  if (JSON.stringify(inputs).length > SCRIPT_ARGUMENT_LIMITS.inputsChars) {
+  const serialized = serializedLength(inputs);
+  if (serialized === undefined) return reject("inputs must contain only JSON values.");
+  if (serialized > SCRIPT_ARGUMENT_LIMITS.inputsChars) {
     return reject(
       `inputs are larger than ${SCRIPT_ARGUMENT_LIMITS.inputsChars} characters of JSON.`,
     );
   }
+  const shapeError = jsonShapeError(inputs, 0);
+  if (shapeError) return reject(`inputs ${shapeError}`);
 
   if (input.purpose !== undefined && typeof input.purpose !== "string") {
     return reject("purpose must be a string.");
@@ -75,6 +77,15 @@ function jsonShapeError(value: unknown, depth: number): string | undefined {
     return undefined;
   }
   return "must contain only JSON values.";
+}
+
+function serializedLength(value: unknown): number | undefined {
+  try {
+    const text: unknown = JSON.stringify(value);
+    return typeof text === "string" ? text.length : undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 function isPlainObject(value: object): boolean {

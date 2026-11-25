@@ -109,11 +109,7 @@ export class QuickJsScriptRunner implements ScriptRunner {
         logs,
       );
     } finally {
-      for (const handle of handles.reverse()) {
-        if (handle.alive) handle.dispose();
-      }
-      context.dispose();
-      runtime.dispose();
+      releaseSandbox(handles, context, runtime);
     }
   }
 
@@ -192,6 +188,23 @@ export class QuickJsScriptRunner implements ScriptRunner {
           logs,
         );
     }
+  }
+}
+
+/** Disposes the run's handles, context and runtime without letting an aborted instance replace the typed result. */
+function releaseSandbox(
+  handles: QuickJSHandle[],
+  context: QuickJSContext,
+  runtime: { dispose(): void },
+): void {
+  try {
+    for (const handle of handles.reverse()) {
+      if (handle.alive) handle.dispose();
+    }
+    context.dispose();
+    runtime.dispose();
+  } catch {
+    return;
   }
 }
 

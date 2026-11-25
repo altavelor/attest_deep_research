@@ -67,6 +67,7 @@ describe("run_js tool", () => {
     [{ code: "1", script: "2" }, 'run_js does not accept "script".'],
     [{ code: "1", inputs: { a: Number.NaN } }, "inputs must not contain NaN or Infinity."],
     [{ code: "1", inputs: { when: new Date(0) } }, "inputs must contain only JSON values."],
+    [{ code: "1", inputs: () => 1 }, "inputs must contain only JSON values."],
     [
       { code: "1", inputs: nested(SCRIPT_ARGUMENT_LIMITS.inputsDepth + 1) },
       `inputs are nested deeper than ${SCRIPT_ARGUMENT_LIMITS.inputsDepth} levels.`,
