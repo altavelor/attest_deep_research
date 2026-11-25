@@ -14,6 +14,7 @@ function renderTool(
   list: HTMLElement,
   item: ChainItem,
   onOpenToolOutput: (item: ChainItem) => void,
+  isDebugMode = true,
 ): void {
   const handle = renderWorkflowTimeline(
     list,
@@ -24,7 +25,7 @@ function renderTool(
       reasoningSegments: [],
       checkpoints: [],
     },
-    { t, isDebugMode: true, onOpenToolOutput, app: new App(), markdownContext: new Component() },
+    { t, isDebugMode, onOpenToolOutput, app: new App(), markdownContext: new Component() },
   );
   handles.push(handle);
 }
@@ -98,5 +99,24 @@ describe("tool workflow node renderer", () => {
     const cell = list.querySelector<HTMLElement>(".attest-chat__tool-cell")!;
     cell.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter" }));
     expect(onOpenToolOutput).toHaveBeenCalledWith(expect.objectContaining({ id: "update" }));
+  });
+
+  it("shows calculation cells outside debug mode and hides other tool payloads", () => {
+    const list = createContainer();
+    const calculation: ChainItem = {
+      kind: "tool-call",
+      id: "calc",
+      name: "run_js",
+      label: "Calculation",
+      status: "complete",
+      args: { code: "1 + 1" },
+      resultJson: JSON.stringify({ ok: true, computationId: "calc_1", result: 2, logs: [] }),
+    };
+    renderTool(list, calculation, vi.fn(), false);
+    renderTool(list, { ...calculation, id: "search", name: "search_index" }, vi.fn(), false);
+
+    expect(
+      [...list.querySelectorAll(".attest-chat__tool-cell-code")].map((cell) => cell.textContent),
+    ).toEqual(["1 + 1", "2"]);
   });
 });

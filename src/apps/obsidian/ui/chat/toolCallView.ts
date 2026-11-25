@@ -1,4 +1,4 @@
-import { humanizeToolName, TOOL_UNAVAILABLE_CODE, toolIntent } from "@core/agent";
+import { humanizeToolName, RUN_JS_TOOL, TOOL_UNAVAILABLE_CODE, toolIntent } from "@core/agent";
 import type { MessageKey, Translate } from "@adapters/i18n";
 import { computeLineDiff, DiffHunk, diffHasChanges } from "@apps/obsidian/ui/shared/lineDiff";
 
@@ -17,6 +17,8 @@ export interface ToolCallView {
   outCell?: ToolCell;
 
   badge?: { text: string; tooltip?: string };
+
+  cellsAlwaysVisible?: boolean;
 }
 
 export interface ToolCallViewInput {
@@ -40,6 +42,8 @@ export function describeToolCall(input: ToolCallViewInput): ToolCallView {
       ? unique(input.fetchTargets ?? fetchedPageHosts(resultJson))
       : [];
   const intent = describeIntent(name, args, input.label, fetchTargets.length, input.searchSources);
+
+  if (name === RUN_JS_TOOL) return describeCalculation(intent, args, resultJson);
 
   if (status === "failed") {
     const badge = unavailableToolBadge(input.t, resultJson);
@@ -85,6 +89,57 @@ export function describeToolCall(input: ToolCallViewInput): ToolCallView {
         ...(name === "search_index" ? { badge: keywordFallbackBadge(input.t, resultJson) } : {}),
       };
   }
+}
+
+/**
+ * Shows a sandboxed calculation to every user, not only in debug mode: the inputs and
+ * code go in, the result or the failure code comes out, so a derived figure can be
+ * checked against its source figures.
+ */
+function describeCalculation(
+  intent: string,
+  args: Record<string, unknown>,
+  resultJson?: string,
+): ToolCallView {
+  const code = typeof args.code === "string" ? args.code : "";
+  const inputs = args.inputs === undefined || args.inputs === null ? undefined : args.inputs;
+  const source = inputs === undefined ? code : `const inputs = ${prettyJson(inputs)};\n\n${code}`;
+  const outText = resultJson ? calculationOutcome(resultJson) : undefined;
+  return {
+    intent,
+    fetchTargets: [],
+    cellsAlwaysVisible: true,
+    ...(source ? { inCell: { kind: "code", text: source } } : { inCell: argsCell(args) }),
+    ...(outText ? { outCell: { kind: "code", text: outText } } : {}),
+  };
+}
+
+function calculationOutcome(resultJson: string): string {
+  try {
+    const parsed = JSON.parse(resultJson) as {
+      ok?: unknown;
+      result?: unknown;
+      logs?: unknown;
+      error?: { code?: unknown; message?: unknown };
+    };
+    const logs = Array.isArray(parsed.logs)
+      ? parsed.logs.filter((line): line is string => typeof line === "string")
+      : [];
+    if (parsed.ok === true && "result" in parsed) {
+      return [prettyJson(parsed.result), ...logs.map((line) => `// ${line}`)].join("\n");
+    }
+    const error = parsed.error;
+    if (error && typeof error.code === "string") {
+      return typeof error.message === "string" ? `${error.code}: ${error.message}` : error.code;
+    }
+    return compactJson(resultJson);
+  } catch {
+    return compactJson(resultJson);
+  }
+}
+
+function prettyJson(value: unknown): string {
+  return JSON.stringify(value, null, 2) ?? String(value);
 }
 
 /**

@@ -181,3 +181,68 @@ describe("describeToolCall detailed intent", () => {
     ).toBe("Custom tool name");
   });
 });
+
+describe("describeToolCall calculation", () => {
+  const code = "({ change: (inputs.b - inputs.a) / inputs.a * 100 })";
+
+  it("shows the inputs with the code and the result with its logs to every user", () => {
+    const view = describeToolCall({
+      t,
+      name: "run_js",
+      label: "Calculation",
+      status: "complete",
+      args: { code, inputs: { a: 80, b: 92 }, purpose: "revenue change" },
+      resultJson: JSON.stringify({
+        ok: true,
+        computationId: "calc_1",
+        result: { change: 15 },
+        logs: ["rows"],
+      }),
+    });
+
+    expect(view).toEqual({
+      intent: "Calculating “revenue change”",
+      fetchTargets: [],
+      cellsAlwaysVisible: true,
+      inCell: { kind: "code", text: `const inputs = {\n  "a": 80,\n  "b": 92\n};\n\n${code}` },
+      outCell: { kind: "code", text: '{\n  "change": 15\n}\n// rows' },
+    });
+  });
+
+  it("shows the failure code and message of a failed calculation", () => {
+    const view = describeToolCall({
+      t,
+      name: "run_js",
+      label: "Calculation",
+      status: "failed",
+      args: { code: "while (true) {}" },
+      resultJson: JSON.stringify({
+        ok: false,
+        error: { code: "timeout", message: "The script exceeded its time limit." },
+      }),
+    });
+
+    expect(view.inCell).toEqual({ kind: "code", text: "while (true) {}" });
+    expect(view.outCell).toEqual({
+      kind: "code",
+      text: "timeout: The script exceeded its time limit.",
+    });
+  });
+
+  it("falls back to the raw arguments and result when they are malformed", () => {
+    const view = describeToolCall({
+      t,
+      name: "run_js",
+      label: "Calculation",
+      status: "failed",
+      args: { code: 42 },
+      resultJson: '{"ok": false,  "reason": "tool-output-budget-exceeded"}',
+    });
+
+    expect(view.inCell).toEqual({ kind: "code", text: '{"code":42}' });
+    expect(view.outCell).toEqual({
+      kind: "code",
+      text: '{"ok":false,"reason":"tool-output-budget-exceeded"}',
+    });
+  });
+});
