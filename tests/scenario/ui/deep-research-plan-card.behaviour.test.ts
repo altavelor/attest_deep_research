@@ -223,7 +223,12 @@ describe("deep research plan card", () => {
       plan: { ...pending.plan!, approvedAt: "2026-01-01T00:00:00.000Z" },
       executions: initialExecutions(pending.plan!).map((execution, index) =>
         index === 0
-          ? { ...execution, state: "failed" as const, terminalReason: "Provider down" }
+          ? {
+              ...execution,
+              state: "failed" as const,
+              path: "main" as const,
+              terminalReason: "Provider down",
+            }
           : index === 2
             ? execution
             : {
@@ -278,7 +283,7 @@ describe("deep research plan card", () => {
         ["3", "Waiting"],
       ],
       ["Provider down"],
-      ["After 1"],
+      ["Main thread", "After 1"],
       true,
     ]);
     rows[1]!.querySelector<HTMLButtonElement>(".attest-research-progress__toggle")!.click();

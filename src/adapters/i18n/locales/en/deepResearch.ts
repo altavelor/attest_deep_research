@@ -48,6 +48,7 @@ export const deepResearch = {
   "chat.deepResearch.progress.status.blocked": "Blocked",
   "chat.deepResearch.progress.status.skipped": "Skipped",
   "chat.deepResearch.progress.after": "After {items}",
+  "chat.deepResearch.progress.mainPath": "Main thread",
   "chat.deepResearch.progress.expand": "Show details of {title}",
   "chat.deepResearch.progress.task": "Task",
   "chat.deepResearch.progress.details": "Open agent details",

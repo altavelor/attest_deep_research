@@ -48,6 +48,7 @@ export const deepResearch: EnDeepResearchMessages = {
   "chat.deepResearch.progress.status.blocked": "已阻塞",
   "chat.deepResearch.progress.status.skipped": "已跳过",
   "chat.deepResearch.progress.after": "在 {items} 之后",
+  "chat.deepResearch.progress.mainPath": "主线程",
   "chat.deepResearch.progress.expand": "显示详情：{title}",
   "chat.deepResearch.progress.task": "任务",
   "chat.deepResearch.progress.details": "打开代理详情",

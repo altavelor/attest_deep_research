@@ -87,6 +87,12 @@ function renderRow(
     text: row.branch.title,
     attr: { title: row.branch.title },
   });
+  if (row.execution?.path === "main") {
+    headEl.createSpan({
+      cls: "attest-research-progress__note",
+      text: t("chat.deepResearch.progress.mainPath"),
+    });
+  }
   if (row.status === "waiting" && row.after.length > 0) {
     headEl.createSpan({
       cls: "attest-research-progress__note",

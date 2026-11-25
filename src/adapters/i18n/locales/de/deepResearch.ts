@@ -51,6 +51,7 @@ export const deepResearch: EnDeepResearchMessages = {
   "chat.deepResearch.progress.status.blocked": "Blockiert",
   "chat.deepResearch.progress.status.skipped": "Übersprungen",
   "chat.deepResearch.progress.after": "Nach {items}",
+  "chat.deepResearch.progress.mainPath": "Hauptstrang",
   "chat.deepResearch.progress.expand": "Details anzeigen: {title}",
   "chat.deepResearch.progress.task": "Aufgabe",
   "chat.deepResearch.progress.details": "Agentendetails öffnen",
