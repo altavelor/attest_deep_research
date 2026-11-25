@@ -181,6 +181,23 @@ describe("placing sub-agent events", () => {
     ]);
   });
 
+  it("leaves out the events of a Deep Research turn instead of making them orphans", () => {
+    const researchAnswer = {
+      ...assistant("answer-p1", []),
+      research: { researchId: "research-1", artifact: "plan" as const, revision: 2 },
+    };
+    const placement = placeSubAgentEvents(
+      [researchAnswer],
+      [dispatch],
+      [notice("created", 3), notice("not-started", 9, null)],
+    );
+    expect([
+      placement.byMessageId.size,
+      placement.orphanDispatches,
+      placement.orphanNotices,
+    ]).toEqual([0, [], []]);
+  });
+
   it("flushes earlier events before each sequenced item, hidden anchors included, and the rest at the end", () => {
     const events = [9, 2, 5, 7].map((sequence) => ({
       kind: "agent-notice" as const,

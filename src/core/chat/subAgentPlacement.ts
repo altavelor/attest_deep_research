@@ -62,6 +62,7 @@ const SETTLED_KINDS = new Set<SubAgentNoticeKind>(
  * Assigns each dispatch and notice to the assistant message of its parent run, in
  * ascending sequence, keeping the first entry of a repeated event key. A run's outcome and
  * queued notices are shown inside its dispatch card, so they are not placed on their own.
+ * Events of a Deep Research turn are left out, since its research card shows the branches.
  * Events whose run has no rendered message stay orphans, shown by the transcript on their own.
  */
 export function placeSubAgentEvents(
@@ -70,6 +71,9 @@ export function placeSubAgentEvents(
   notices: readonly SubAgentNoticeEntry[],
 ): SubAgentEventPlacement {
   const ids = new Set(messages.map((message) => message.id).filter(Boolean));
+  const research = new Set(
+    messages.filter((message) => message.research).map((message) => message.id),
+  );
   const byMessageId = new Map<string, ParentTimelineEvent[]>();
   const placement = {
     byMessageId,
@@ -82,6 +86,7 @@ export function placeSubAgentEvents(
   const place = (parentRunId: string, event: ParentTimelineEvent): boolean => {
     const id = answerMessageId(parentRunId);
     if (!ids.has(id)) return false;
+    if (research.has(id)) return true;
     const events = byMessageId.get(id);
     if (events) events.push(event);
     else byMessageId.set(id, [event]);
