@@ -38,6 +38,30 @@ describe("WebFetchUrlTool", () => {
     expect(evidence.snapshot().evidence[0]?.text).toBe("Direct page body.");
   });
 
+  it("fetches a URL into the handles that search results may not take", async () => {
+    const fetchPage = vi.fn().mockResolvedValue(pageResponse("Direct page body."));
+    const evidence = new ResearchEvidenceRegistry({ maxWebResults: 5 });
+    const tool = new WebFetchUrlTool({ provider: { search: vi.fn(), fetchPage }, evidence });
+    const result = (index: number) => ({
+      url: `https://example.com/${index}`,
+      title: "",
+      snippet: "",
+      rank: 1,
+    });
+    for (const index of [1, 2, 3, 4]) {
+      evidence.registerWebResult(result(index), { callId: "search", query: "q" });
+    }
+    expect(() => evidence.registerWebResult(result(5), { callId: "search", query: "q" })).toThrow();
+    const fetchUrl = (url: string) =>
+      executeTool(tool, { id: "call", name: "fetch_url", arguments: { url } });
+
+    expect(await fetchUrl("https://example.com/article")).toMatchObject({ ok: true });
+    expect(await fetchUrl("https://example.com/other")).toMatchObject({
+      ok: false,
+      error: { code: "web-result-capacity" },
+    });
+  });
+
   it("returns the handles of images the fetched page referenced", async () => {
     const response = {
       ...pageResponse("Body with a picture."),

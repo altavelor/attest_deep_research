@@ -31,7 +31,7 @@ export const WebFetchUrlTool = defineTool<
     try {
       registered = deps.evidence.registerWebResult(
         { url: safeUrl.url, title: "", snippet: "", rank: 1 },
-        { callId: context.callId, query: safeUrl.url },
+        { callId: context.callId, query: safeUrl.url, fetch: true },
       );
     } catch {
       return toolFailure(
