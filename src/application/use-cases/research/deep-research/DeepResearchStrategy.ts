@@ -67,6 +67,7 @@ export interface DeepResearchStrategyDeps {
   branchSources: SubAgentToolSources;
   setTimer?(delayMs: number, callback: () => void): () => void;
   researchLabels: ResearchLabelsPort;
+  onStage?(stage: string): void;
 }
 
 /**

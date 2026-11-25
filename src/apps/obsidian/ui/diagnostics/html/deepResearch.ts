@@ -71,5 +71,14 @@ export function renderDeepResearch(research: DeepResearchDiagnostics | null): st
   if (research.cycleDecisions.length > 0) {
     body += `${sub("Cycles")}${dl(research.cycleDecisions.map((cycle) => [`Cycle ${cycle.ordinal}`, `${h(cycle.decision)} · ${h(cycle.reason)}`]))}`;
   }
+  if (research.tokensByStage && research.tokensByStage.length > 0) {
+    const rows = research.tokensByStage
+      .map(
+        (entry) =>
+          `<tr><td>${h(entry.stage)}</td><td>${h(entry.inputTokens)}</td><td>${h(entry.outputTokens)}</td></tr>`,
+      )
+      .join("");
+    body += `${sub("Tokens by stage")}<table class="data-table"><thead><tr><th>Stage</th><th>Input</th><th>Output</th></tr></thead><tbody>${rows}</tbody></table>`;
+  }
   return collapsedCard("deep-research", "Deep Research", body);
 }

@@ -1,4 +1,4 @@
-import { TokenUsageMeter } from "./TokenUsageMeter";
+import { TokenUsageMeter, type StageTokenUsage } from "./TokenUsageMeter";
 import { summarizeCompactionWithModel } from "@application/use-cases/chat/ChatCompaction";
 import { SearchProvider } from "@application/ports/web";
 import { VaultWriter } from "@application/ports/vault";
@@ -256,19 +256,24 @@ export class ResearchService implements ConversationEngine {
       branchSources: this.subAgentSources,
       ...(options.researchTimer ? { setTimer: options.researchTimer } : {}),
       researchLabels: options.researchLabels ?? { labelsFor: () => ENGLISH_RESEARCH_LABELS },
+      onStage: (stage) => this.usage.enter(stage),
     });
   }
 
   /**
    * Answers one request in its research mode and reports the tokens its model calls used, child
-   * runs included, just before the final answer.
+   * runs included, just before the final answer, whose deep research diagnostics get them per stage.
    */
   async *answer(request: ResearchRequest): AsyncIterable<ResearchStreamEvent> {
     this.usage.reset();
     for await (const event of this.route(request)) {
-      const usage = event.type === "complete" ? this.usage.total() : null;
+      if (event.type !== "complete") {
+        yield event;
+        continue;
+      }
+      const usage = this.usage.total();
       if (usage) yield { type: "usage", ...usage };
-      yield event;
+      yield { ...event, answer: withStageUsage(event.answer, this.usage.byStage()) };
     }
   }
 
@@ -384,4 +389,17 @@ export class ResearchService implements ConversationEngine {
       now: this.now,
     });
   }
+}
+
+/** Adds the token usage per stage to the deep research diagnostics of an answer that has them. */
+function withStageUsage(answer: ResearchAnswer, stages: StageTokenUsage[]): ResearchAnswer {
+  const diagnostics = answer.contextDiagnostics;
+  if (!diagnostics?.deepResearch || stages.length === 0) return answer;
+  return {
+    ...answer,
+    contextDiagnostics: {
+      ...diagnostics,
+      deepResearch: { ...diagnostics.deepResearch, tokensByStage: stages },
+    },
+  };
 }

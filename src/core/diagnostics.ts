@@ -204,6 +204,7 @@ export interface DeepResearchDiagnostics {
   terminalReason: string | null;
   stopReason: string | null;
   summaryFailure?: string | null;
+  tokensByStage?: Array<{ stage: string; inputTokens: number; outputTokens: number }>;
   plan: {
     revision: number;
     preset: string;

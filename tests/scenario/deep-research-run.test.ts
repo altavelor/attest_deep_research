@@ -95,6 +95,7 @@ describe("deep research run", () => {
       question: "Approve",
       researchState: port,
       research: decision,
+      includeContextDiagnostics: true,
     });
 
     const statuses = events.flatMap((event) => (event.type === "status" ? [event.message] : []));
@@ -127,6 +128,11 @@ describe("deep research run", () => {
     expect(report.citations.map((citation) => citation.id)).toEqual([cited]);
     expect(run.model.requests.at(-1)!.maxTokens).toBe(MAX_REPORT_OUTPUT_TOKENS);
     expect(String(run.model.requests.at(-1)!.messages[0]!.content)).toContain("Current date:");
+    expect(report.contextDiagnostics?.deepResearch?.tokensByStage).toContainEqual({
+      stage: "writing",
+      inputTokens: 40,
+      outputTokens: 9,
+    });
     expect(report.evidence?.map((chunk) => chunk.id)).toEqual([cited]);
   });
 

@@ -1,7 +1,7 @@
 import { TokenUsageMeter } from "@application/use-cases/research/TokenUsageMeter";
 
 describe("token usage meter", () => {
-  it("adds the usage of model rounds and ignores counts that are not token counts", async () => {
+  it("adds the usage of model rounds per stage and ignores counts that are not token counts", async () => {
     const meter = new TokenUsageMeter();
     const usages = [
       { inputTokens: 30, outputTokens: 5, reasoningTokens: 0, cachedInputTokens: 0 },
@@ -17,5 +17,13 @@ describe("token usage meter", () => {
     expect(meter.total()).toEqual({ inputTokens: 30, outputTokens: 5 });
     meter.add({ inputTokens: 1 });
     expect(meter.total()).toEqual({ inputTokens: 31, outputTokens: 5 });
+    meter.enter("writing");
+    meter.add({ outputTokens: 7 });
+    expect(meter.byStage()).toEqual([
+      { stage: "gathering", inputTokens: 31, outputTokens: 5 },
+      { stage: "writing", inputTokens: 0, outputTokens: 7 },
+    ]);
+    meter.reset();
+    expect(meter.byStage()).toEqual([]);
   });
 });

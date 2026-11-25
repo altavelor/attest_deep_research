@@ -192,9 +192,16 @@ describe("readable diagnostic HTML (v3)", () => {
       after,
       runs: new Map(),
     });
-    const html = formatDiagnosticReportHtml({ ...diagnosticFixture(), deepResearch });
+    const html = formatDiagnosticReportHtml({
+      ...diagnosticFixture(),
+      deepResearch: {
+        ...deepResearch,
+        tokensByStage: [{ stage: "writing", inputTokens: 40, outputTokens: 9 }],
+      },
+    });
     expect(html).toContain('id="deep-research"');
     expect(html).toContain("exhausted searches");
+    expect(html).toContain("<tr><td>writing</td><td>40</td><td>9</td></tr>");
     expect(html).toContain("<dt>Summary failure</dt><dd>The report came back &lt;empty&gt;.</dd>");
     expect(html).toContain("<dt>Claims without a citation</dt><dd>1</dd>");
     expect(html).toContain("<dt>Claims not assessed</dt><dd>1</dd>");

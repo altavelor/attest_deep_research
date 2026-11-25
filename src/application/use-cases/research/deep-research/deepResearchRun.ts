@@ -116,7 +116,10 @@ export async function* runApprovedTurn(
       createId: createId,
       onState: (state) => push(referenceEvent(state)),
       onStatus: (message) => push({ type: "status", message }),
-      onActivity: (activity) => push({ type: "research-activity", activity }),
+      onActivity: (activity) => {
+        deps.onStage?.(activity.stage);
+        push({ type: "research-activity", activity });
+      },
     });
   });
   if (result.state.pending?.kind === "stale-plan") {

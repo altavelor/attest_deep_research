@@ -338,6 +338,15 @@ export class PlanAndReportModel implements ChatModelProvider {
     yield {
       content: `# Report\n\nThe moon pulls the oceans and causes tides [${token}]. Waves exist [source-9:revision-9].`,
       isComplete: true,
+      events: [
+        {
+          type: "usage",
+          inputTokens: 40,
+          outputTokens: 9,
+          reasoningTokens: 0,
+          cachedInputTokens: 0,
+        },
+      ],
     };
   }
 }
