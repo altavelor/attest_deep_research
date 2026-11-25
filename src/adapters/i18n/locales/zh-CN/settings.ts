@@ -37,6 +37,10 @@ export const settings: EnSettingsMessages = {
   "settings.retrieval.expandSearchQuery.name": "扩展搜索查询",
   "settings.retrieval.expandSearchQuery.desc":
     "检索前生成跨语言查询变体，以便找到用其他语言撰写的笔记。每次搜索会额外调用一次聊天模型。",
+  "settings.retrieval.calculations.heading": "计算",
+  "settings.retrieval.scriptCalculations.name": "沙箱计算",
+  "settings.retrieval.scriptCalculations.desc":
+    "允许研究代理在隔离沙箱中用 JavaScript 计算派生数字（百分比、单位换算、求和），沙箱无法访问网络或库。代码和结果会显示在链路中。",
   "settings.retrieval.web.heading": "网络",
   "settings.retrieval.useWebWhenFreshnessNeeded.name": "时效性问题使用网络",
   "settings.retrieval.useWebWhenFreshnessNeeded.desc":

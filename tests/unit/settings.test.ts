@@ -123,6 +123,17 @@ describe("Attest settings", () => {
     expect(settings.expandSearchQuery).toBe(false);
   });
 
+  it.each([
+    [undefined, true],
+    [false, false],
+  ])("reads a saved calculation flag of %s as %s", (saved, expected) => {
+    const { scriptCalculations: _omitted, ...withoutFlag } = currentSettings();
+    const stored =
+      saved === undefined ? withoutFlag : { ...withoutFlag, scriptCalculations: saved };
+
+    expect(readSettings(stored).scriptCalculations).toBe(expected);
+  });
+
   it("resolves current tool and reasoning settings", () => {
     const profile = currentSettings({
       serverProfiles: [

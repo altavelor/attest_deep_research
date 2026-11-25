@@ -42,6 +42,10 @@ export const settings: EnSettingsMessages = {
   "settings.retrieval.expandSearchQuery.name": "Расширять поисковый запрос",
   "settings.retrieval.expandSearchQuery.desc":
     "Создавать межъязыковые варианты запроса до поиска, чтобы находить заметки на других языках. Требует дополнительного обращения к чат-модели на каждый поиск.",
+  "settings.retrieval.calculations.heading": "Вычисления",
+  "settings.retrieval.scriptCalculations.name": "Вычисления в песочнице",
+  "settings.retrieval.scriptCalculations.desc":
+    "Исследовательский агент считает производные числа (проценты, пересчёт единиц, суммы) на JavaScript в изолированной песочнице без доступа к сети и хранилищу. Код и результат видны в цепочке.",
   "settings.retrieval.web.heading": "Веб",
   "settings.retrieval.useWebWhenFreshnessNeeded.name":
     "Использовать веб для вопросов об актуальном",

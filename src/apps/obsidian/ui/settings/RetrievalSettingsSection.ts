@@ -27,6 +27,7 @@ export class RetrievalSettingsSection {
     renderCategoryHeading(contentEl, t("settings.retrieval.heading"), t("settings.retrieval.desc"));
     this.renderGraphContext(contentEl);
     this.renderSearch(contentEl);
+    this.renderCalculations(contentEl);
     this.renderWeb(contentEl);
   }
 
@@ -90,6 +91,17 @@ export class RetrievalSettingsSection {
     );
   }
 
+  private renderCalculations(containerEl: HTMLElement): void {
+    const { t } = this.options;
+    renderSubcategoryHeading(containerEl, t("settings.retrieval.calculations.heading"));
+    this.addToggle(
+      containerEl,
+      t("settings.retrieval.scriptCalculations.name"),
+      t("settings.retrieval.scriptCalculations.desc"),
+      "scriptCalculations",
+    );
+  }
+
   private renderWeb(containerEl: HTMLElement): void {
     const { t } = this.options;
     renderSubcategoryHeading(containerEl, t("settings.retrieval.web.heading"));
@@ -120,6 +132,7 @@ export class RetrievalSettingsSection {
       | "includeBacklinks"
       | "expandFilteredContextThroughLinks"
       | "expandSearchQuery"
+      | "scriptCalculations"
       | "useWebWhenFreshnessNeeded",
   ): void {
     new Setting(containerEl)

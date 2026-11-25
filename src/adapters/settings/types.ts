@@ -128,6 +128,7 @@ export interface AttestSettings {
   graphContextDepth: number;
   useWebWhenFreshnessNeeded: boolean;
   expandSearchQuery: boolean;
+  scriptCalculations: boolean;
   downloadFolder: string;
   debugMode: boolean;
   onboardingCompleted: boolean;

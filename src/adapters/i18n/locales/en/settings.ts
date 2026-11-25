@@ -41,6 +41,10 @@ export const settings = {
   "settings.retrieval.expandSearchQuery.name": "Expand search query",
   "settings.retrieval.expandSearchQuery.desc":
     "Generate cross-language query variants before retrieval so notes written in other languages are found. Uses an extra chat-model call per search.",
+  "settings.retrieval.calculations.heading": "Calculations",
+  "settings.retrieval.scriptCalculations.name": "Sandboxed calculations",
+  "settings.retrieval.scriptCalculations.desc":
+    "Let the research agent compute derived numbers (percentages, conversions, sums) as JavaScript in an isolated sandbox without network or vault access. The code and result appear in the chain.",
   "settings.retrieval.web.heading": "Web",
   "settings.retrieval.useWebWhenFreshnessNeeded.name": "Use web for freshness questions",
   "settings.retrieval.useWebWhenFreshnessNeeded.desc":
