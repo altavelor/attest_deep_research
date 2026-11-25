@@ -111,6 +111,7 @@ export {
   acceptHypothesisDraft,
   boundNotes,
   currentHypotheses,
+  cycleDecisionReason,
   nextCycleDecision,
   reduceHypothesis,
   userObservation,

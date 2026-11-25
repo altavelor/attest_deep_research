@@ -5,6 +5,7 @@ import {
   boundDiscovery,
   currentHypotheses,
   discoveryText,
+  cycleDecisionReason,
   nextCycleDecision,
   reduceHypothesis,
   resumeExecutions,
@@ -312,7 +313,7 @@ function decided(
 ): ResearchDiscovery {
   const skipped = discovery.observationsSkipped === true;
   if (skipped) discovery = withObservationsSkipped(discovery, ordinal);
-  const decision = nextCycleDecision({
+  const input = {
     cycle: ordinal,
     researchCycles: deps.plan.limits.researchCycles,
     budgetClosed: deps.budgetClosed(),
@@ -320,8 +321,9 @@ function decided(
     tests: discovery.tests,
     progressed,
     observationsSkipped: skipped,
-  });
-  return withCycle(discovery, ordinal, decision, reason ?? `Cycle ${ordinal}: ${decision}.`);
+  };
+  const decision = nextCycleDecision(input);
+  return withCycle(discovery, ordinal, decision, reason ?? cycleDecisionReason(decision, input));
 }
 
 function withCycle(

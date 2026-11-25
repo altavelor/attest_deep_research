@@ -110,6 +110,25 @@ export function nextCycleDecision(input: CycleDecisionInput): CycleDecision {
   return input.progressed ? "continue" : "finish";
 }
 
+/** Explains a cycle decision for the diagnostic report, naming what ended the cycles. */
+export function cycleDecisionReason(decision: CycleDecision, input: CycleDecisionInput): string {
+  const open = currentHypotheses(input.hypotheses).filter(
+    (hypothesis) => hypothesis.status !== "supported" && hypothesis.status !== "disconfirmed",
+  ).length;
+  switch (decision) {
+    case "continue":
+      return "Tests made progress.";
+    case "await-observation":
+      return "Waiting for user observations.";
+    case "finish":
+      return open === 0 ? "Every current hypothesis is settled." : "No test made progress.";
+    case "exhausted":
+      return input.cycle >= input.researchCycles
+        ? `All ${input.researchCycles} planned cycles ran; ${open} hypotheses stay open.`
+        : `The research budget closed; ${open} hypotheses stay open.`;
+  }
+}
+
 /**
  * Builds the observation a user reports. It is text only: no citation tokens and always the
  * limitation that it was reported and not independently checked.

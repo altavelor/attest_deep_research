@@ -6,6 +6,7 @@ import {
   parseHypothesisProposals,
   validateResearchSection,
   hypothesisClaims,
+  cycleDecisionReason,
   nextCycleDecision,
   reduceHypothesis,
   userObservation,
@@ -94,8 +95,22 @@ describe("deep research discovery rules", () => {
     expect(decide(2, true)).toBe("continue");
   });
 
-  it("stops as exhausted at the cycle cap", () => {
+  it("stops as exhausted at the cycle cap or a closed budget and says which", () => {
     expect(decide(3, true)).toBe("exhausted");
+    const input = {
+      cycle: 3,
+      researchCycles: 3,
+      budgetClosed: true,
+      hypotheses: [hypothesis],
+      tests: [proposed],
+      progressed: true,
+    };
+    expect(cycleDecisionReason("exhausted", input)).toBe(
+      "All 3 planned cycles ran; 1 hypotheses stay open.",
+    );
+    expect(cycleDecisionReason("exhausted", { ...input, cycle: 2 })).toBe(
+      "The research budget closed; 1 hypotheses stay open.",
+    );
   });
 
   it("never waits for a user observation once the user skipped observations", () => {
