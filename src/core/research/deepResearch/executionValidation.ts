@@ -17,6 +17,7 @@ import type {
   ResearchBudgetState,
   ResearchPlan,
   ResearchReport,
+  ResearchReportScale,
   ResearchReportSummary,
   ReportVerificationCounts,
 } from "./types";
@@ -209,8 +210,13 @@ export function readReportSummary(value: unknown): ResearchReportSummary | null 
     !Array.isArray(value.missingBranches) ||
     value.missingBranches.length > MAX_RESEARCH_BRANCHES ||
     !value.missingBranches.every(
-      (entry) => isRecord(entry) && isResearchId(entry.branchId) && isText(entry.reason),
+      (entry) =>
+        isRecord(entry) &&
+        isResearchId(entry.branchId) &&
+        isText(entry.reason) &&
+        (entry.title === undefined || isText(entry.title)),
     ) ||
+    readScale(value.scale) === null ||
     !isText(value.stopReason) ||
     !isTimestamp(value.createdAt)
   ) {
@@ -220,13 +226,33 @@ export function readReportSummary(value: unknown): ResearchReportSummary | null 
     reportId: value.reportId,
     quality: value.quality,
     completedBranches: [...value.completedBranches],
-    missingBranches: value.missingBranches.map((entry) => ({
-      branchId: (entry as Record<string, string>).branchId!,
-      reason: (entry as Record<string, string>).reason!,
-    })),
+    missingBranches: value.missingBranches.map((entry) => {
+      const { branchId, reason, title } = entry as Record<string, string>;
+      return { branchId: branchId!, reason: reason!, ...(title !== undefined ? { title } : {}) };
+    }),
     stopReason: value.stopReason,
     createdAt: value.createdAt,
     verification,
+    ...(value.scale !== undefined ? { scale: readScale(value.scale)! } : {}),
+  };
+}
+
+/** Reads the optional scale of a report summary: undefined when absent, null when malformed. */
+function readScale(value: unknown): ResearchReportScale | null | undefined {
+  if (value === undefined) return undefined;
+  if (
+    !isRecord(value) ||
+    !isRevision(value.objectives) ||
+    value.objectives > MAX_PLAN_LIST_ITEMS ||
+    !isRevision(value.activeMs) ||
+    !isRevision(value.activeLimitMs)
+  ) {
+    return null;
+  }
+  return {
+    objectives: value.objectives,
+    activeMs: value.activeMs,
+    activeLimitMs: value.activeLimitMs,
   };
 }
 

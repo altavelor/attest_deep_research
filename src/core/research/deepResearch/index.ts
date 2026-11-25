@@ -51,6 +51,7 @@ export {
   isPlanStale,
   parseStalePlanPayload,
   reportDecision,
+  reportScale,
   stopReasonOf,
   type ReportDecision,
 } from "./report";

@@ -78,6 +78,10 @@ describe("deep research scheduling rules", () => {
       kind: "report",
       quality: "partial",
       completedBranches: ["branch-1", "branch-3"],
+      missingBranches: [
+        { branchId: "branch-2", title: "Branch 2" },
+        { branchId: "branch-4", title: "Branch 4" },
+      ],
     });
     expect(
       reportDecision(

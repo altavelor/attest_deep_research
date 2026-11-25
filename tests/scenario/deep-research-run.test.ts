@@ -115,6 +115,7 @@ describe("deep research run", () => {
     expect(final.report).toMatchObject({
       quality: "complete",
       completedBranches: ["branch-1", "branch-2", "branch-3"],
+      scale: { objectives: final.plan!.objectives.length },
     });
     const report = completeAnswer(events)!;
     expect(report.answer).toBe(final.report!.markdown);

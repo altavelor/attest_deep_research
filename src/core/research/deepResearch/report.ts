@@ -5,8 +5,11 @@ import {
   verificationSections,
 } from "./reportSections";
 import { label, type ResearchLabels } from "./reportLabels";
+import { budgetLimits } from "./budgetLimits";
 import type {
   BranchExecution,
+  ResearchMissingBranch,
+  ResearchReportScale,
   ResearchVerification,
   ResearchBudgetState,
   ResearchPlan,
@@ -15,6 +18,7 @@ import type {
 } from "./types";
 
 const HOUR_MS = 3_600_000;
+const MAX_MISSING_TITLE_CHARS = 200;
 const WEB_STALE_MS = 24 * HOUR_MS;
 const INDEX_STALE_MS = 7 * 24 * HOUR_MS;
 
@@ -24,7 +28,7 @@ export type ReportDecision =
       kind: "report";
       quality: ResearchReport["quality"];
       completedBranches: string[];
-      missingBranches: { branchId: string; reason: string }[];
+      missingBranches: ResearchMissingBranch[];
     };
 
 /**
@@ -60,10 +64,23 @@ export function reportDecision(
         ? "complete"
         : "partial",
     completedBranches: completed.map((execution) => execution.branchId),
-    missingBranches: missing.map((execution) => ({
-      branchId: execution.branchId,
-      reason: execution.terminalReason ?? stopReason,
-    })),
+    missingBranches: missing.map((execution) => {
+      const title = plan.branches.find((branch) => branch.branchId === execution.branchId)?.title;
+      return {
+        branchId: execution.branchId,
+        reason: execution.terminalReason ?? stopReason,
+        ...(title ? { title: title.slice(0, MAX_MISSING_TITLE_CHARS) } : {}),
+      };
+    }),
+  };
+}
+
+/** Records the scale a report is read against: the plan's objectives and the research time. */
+export function reportScale(plan: ResearchPlan, activeMs: number): ResearchReportScale {
+  return {
+    objectives: plan.objectives.length,
+    activeMs: Math.max(0, Math.floor(activeMs)),
+    activeLimitMs: budgetLimits(plan).activeExecutionMs,
   };
 }
 

@@ -598,6 +598,27 @@ describe("deep research section validation", () => {
       ["bad timestamp in history", section(null, [{ ...ended, updatedAt: "yesterday" }])],
       ["over-long history reason", section(null, [{ ...ended, terminalReason: "r".repeat(4001) }])],
       [
+        "over-long missing branch title",
+        section(null, [
+          {
+            ...ended,
+            report: {
+              ...ended.report,
+              missingBranches: [{ branchId: "branch-2", reason: "Time", title: "t".repeat(4001) }],
+            },
+          },
+        ]),
+      ],
+      [
+        "report scale above the objective bound",
+        section(null, [
+          {
+            ...ended,
+            report: { ...ended.report, scale: { objectives: 13, activeMs: 0, activeLimitMs: 0 } },
+          },
+        ]),
+      ],
+      [
         "too many objectives",
         section({
           ...pending,
@@ -690,8 +711,16 @@ describe("deep research section validation", () => {
   });
 
   it("accepts consistent sections and drops unknown keys", () => {
-    const rebuilt = validateResearchSection(section(approved, [ended]));
-    expect(rebuilt.ok && rebuilt.value).toEqual(section(approved, [ended]));
+    const scaled = {
+      ...ended,
+      report: {
+        ...ended.report,
+        missingBranches: [{ branchId: "branch-2", reason: "Time", title: "Tides" }],
+        scale: { objectives: 12, activeMs: 1_000, activeLimitMs: 2_000 },
+      },
+    };
+    const rebuilt = validateResearchSection(section(approved, [scaled]));
+    expect(rebuilt.ok && rebuilt.value).toEqual(section(approved, [scaled]));
     const wave = {
       ...approved,
       sessionByBranch: { "branch-1": "session-1" },

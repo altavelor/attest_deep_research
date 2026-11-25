@@ -8,6 +8,7 @@ import {
   isPlanStale,
   openWorks,
   reportDecision,
+  reportScale,
   resumeExecutions,
   researchLanguageOf,
   stopReasonOf,
@@ -365,6 +366,7 @@ async function writeReport(
       verification && verification.assessments.length > 0
         ? verificationCounts(plan, verification)
         : null,
+    scale: reportScale(plan, owner.snapshot().activeMs),
   };
   const state = await commit({ phase: "completed", report });
   return { state, report };

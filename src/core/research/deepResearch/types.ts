@@ -223,15 +223,28 @@ export interface BranchFinding {
   partial: boolean;
 }
 
+export interface ResearchReportScale {
+  objectives: number;
+  activeMs: number;
+  activeLimitMs: number;
+}
+
+export interface ResearchMissingBranch {
+  branchId: string;
+  reason: string;
+  title?: string;
+}
+
 export interface ResearchReport {
   reportId: string;
   quality: "complete" | "partial";
   markdown: string;
   completedBranches: readonly string[];
-  missingBranches: readonly { branchId: string; reason: string }[];
+  missingBranches: readonly ResearchMissingBranch[];
   stopReason: string;
   createdAt: string;
   verification: ReportVerificationCounts | null;
+  scale?: ResearchReportScale;
 }
 
 export type ResearchReportSummary = Omit<ResearchReport, "markdown">;
