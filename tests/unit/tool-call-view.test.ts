@@ -218,14 +218,18 @@ describe("describeToolCall calculation", () => {
       args: { code: "while (true) {}" },
       resultJson: JSON.stringify({
         ok: false,
-        error: { code: "timeout", message: "The script exceeded its time limit." },
+        error: {
+          code: "timeout",
+          message: "The script exceeded its time limit.",
+          details: { logs: ["start"] },
+        },
       }),
     });
 
     expect(view.inCell).toEqual({ kind: "code", text: "while (true) {}" });
     expect(view.outCell).toEqual({
       kind: "code",
-      text: "timeout: The script exceeded its time limit.",
+      text: "timeout: The script exceeded its time limit.\n// start",
     });
   });
 

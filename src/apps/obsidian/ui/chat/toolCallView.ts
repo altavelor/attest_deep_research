@@ -120,22 +120,26 @@ function calculationOutcome(resultJson: string): string {
       ok?: unknown;
       result?: unknown;
       logs?: unknown;
-      error?: { code?: unknown; message?: unknown };
+      error?: { code?: unknown; message?: unknown; details?: { logs?: unknown } };
     };
-    const logs = Array.isArray(parsed.logs)
-      ? parsed.logs.filter((line): line is string => typeof line === "string")
-      : [];
     if (parsed.ok === true && "result" in parsed) {
-      return [prettyJson(parsed.result), ...logs.map((line) => `// ${line}`)].join("\n");
+      return [prettyJson(parsed.result), ...logComments(parsed.logs)].join("\n");
     }
     const error = parsed.error;
     if (error && typeof error.code === "string") {
-      return typeof error.message === "string" ? `${error.code}: ${error.message}` : error.code;
+      const summary =
+        typeof error.message === "string" ? `${error.code}: ${error.message}` : error.code;
+      return [summary, ...logComments(error.details?.logs)].join("\n");
     }
     return compactJson(resultJson);
   } catch {
     return compactJson(resultJson);
   }
+}
+
+function logComments(logs: unknown): string[] {
+  if (!Array.isArray(logs)) return [];
+  return logs.filter((line): line is string => typeof line === "string").map((l) => `// ${l}`);
 }
 
 function prettyJson(value: unknown): string {
