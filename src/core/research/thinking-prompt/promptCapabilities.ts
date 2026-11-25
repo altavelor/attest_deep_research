@@ -11,6 +11,7 @@ import {
   PRESENT_CHART_TOOL,
   PROBE_DOCUMENT_URL_TOOL,
   READ_NOTE_TOOL,
+  RUN_JS_TOOL,
   SUB_AGENT_TOOL,
   WEB_FETCH_TOOL,
   WEB_SEARCH_TOOL,
@@ -33,6 +34,7 @@ export interface PromptCapabilities {
   findClaims: boolean;
   richMedia: boolean;
   imageSearch: boolean;
+  calculations: boolean;
 
   parallelToolCalls: boolean;
 }
@@ -61,6 +63,7 @@ export function resolvePromptCapabilities(input: PromptCapabilityInput): PromptC
     findClaims: tools.has(FIND_CLAIMS_TOOL),
     richMedia: tools.has(PRESENT_CHART_TOOL),
     imageSearch: tools.has(IMAGE_SEARCH_TOOL),
+    calculations: tools.has(RUN_JS_TOOL),
     parallelToolCalls: input.parallelToolCalls === true,
   };
 }

@@ -13,6 +13,7 @@ import {
   PRESENT_IMAGE_GALLERY_TOOL,
   READ_INDEX_CHUNK_TOOL,
   READ_NOTE_TOOL,
+  RUN_JS_TOOL,
   SEARCH_NOTES_TOOL,
   SUB_AGENT_RESULT_TOOL,
   SUB_AGENT_TOOL,
@@ -214,4 +215,17 @@ export function buildRichMediaSection(capabilities: PromptCapabilities, wanted: 
     );
   }
   return lines.join("\n");
+}
+
+/** Level five: derived figures are computed in the sandbox from the source figures, never mentally. */
+export function buildCalculationsSection(): string {
+  return [
+    `## Calculations (${RUN_JS_TOOL})`,
+    `- Compute every non-trivial derived figure (percent change, conversion, sum, average, ratio) ` +
+      `with ${RUN_JS_TOOL}, never in your head.`,
+    "- Put source figures in `inputs` exactly as tool results state them and read " +
+      "`inputs.<name>`; never retype them in the code.",
+    "- Cite the evidence of the inputs next to the figure; a computationId is not a citation. " +
+      "After a failure, fix the code and retry once, else call the figure unverified.",
+  ].join("\n");
 }
