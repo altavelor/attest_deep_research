@@ -59,6 +59,22 @@ describe("research budget owner", () => {
     expect(budget.spendFinalization(1)).toBe(true);
   });
 
+  it("keeps reserved attempts for later works without closing the budget", () => {
+    const budget = new ResearchBudgetOwner(
+      { ...limits, attemptsTotal: 3, modelRoundsTotal: 200 },
+      () => 0,
+    );
+    budget.open(null);
+    expect(budget.allocate("w-1", "branch-1", 1).ok).toBe(true);
+    expect(budget.allocate("w-2", "branch-2", 1).ok).toBe(true);
+    expect(budget.allocate("w-3", "branch-3", 1)).toEqual({
+      ok: false,
+      dimension: "branch-attempts",
+    });
+    expect(budget.snapshot().closed).toBeNull();
+    expect(budget.allocate("w-3", "branch-3").ok).toBe(true);
+  });
+
   it("consumes in full an allocation a dead turn left open", () => {
     const budget = new ResearchBudgetOwner(limits, () => 0);
     const allocation = {
@@ -93,16 +109,24 @@ describe("research budget owner", () => {
 });
 
 describe("research budget limits", () => {
-  it("grows the shared totals by a preset branch share for each enabled branch above the preset", () => {
+  it("grows the shared totals per added branch and the attempts of plans that test hypotheses", () => {
     const branches = Array.from({ length: 11 }, (_, index) =>
       researchBranch(index + 1, { enabled: index !== 0 }),
     );
     const preset = presetLimits("balanced");
-    expect(budgetLimits(researchPlan(branches.slice(0, 7), "balanced"))).toEqual(preset);
+    expect(budgetLimits(researchPlan(branches.slice(0, 4), "conservative"))).toEqual(
+      presetLimits("conservative"),
+    );
+    expect(budgetLimits(researchPlan(branches.slice(0, 7), "balanced"))).toEqual({
+      ...preset,
+      attemptsPerBranch: 3,
+      attemptsTotal: 11,
+    });
     expect(budgetLimits(researchPlan(branches.slice(0, 11), "balanced"))).toEqual({
       ...preset,
       childSessions: 7,
-      attemptsTotal: 17,
+      attemptsPerBranch: 3,
+      attemptsTotal: 18,
       modelRoundsTotal: 267,
       searchesTotal: 100,
       evidenceItemsTotal: 200,

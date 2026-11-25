@@ -1,4 +1,8 @@
-import { ENGLISH_RESEARCH_LABELS } from "@core/research/deepResearch";
+import {
+  ENGLISH_RESEARCH_LABELS,
+  MAX_TEST_FINDING_CHARS,
+  MAX_TEST_FINDING_TOKENS,
+} from "@core/research/deepResearch";
 import type { ResearchRequest } from "@application/contracts/research";
 import {
   nextResearchSection,
@@ -335,8 +339,11 @@ describe("deep research discovery", () => {
   });
 
   it("stores a long sub-agent test finding within the discovery bounds so it reloads", async () => {
-    const tokens = Array.from({ length: 6 }, (_, index) => `source-${index}:revision-1`);
-    const long = `${tokens.map((token) => `The moon pulls the oceans [${token}].`).join(" ")} ${"x".repeat(2000)}`;
+    const tokens = Array.from(
+      { length: MAX_TEST_FINDING_TOKENS + 2 },
+      (_, index) => `source-${index}:revision-1`,
+    );
+    const long = `${tokens.map((token) => `The moon pulls the oceans [${token}].`).join(" ")} ${"x".repeat(MAX_TEST_FINDING_CHARS)}`;
     const child: BranchRunner = {
       path: "sub-agent",
       run: async () => ({ text: long, citationTokens: tokens, partial: false }),
@@ -383,8 +390,8 @@ describe("deep research discovery", () => {
 
     const test = port.commits.at(-1)!.discovery!.executions[0]!;
     expect(test).toMatchObject({ path: "sub-agent", runRef: { sessionId: "session-1" } });
-    expect(test.finding!.text.length).toBeLessThanOrEqual(600);
-    expect(test.finding!.citationTokens).toEqual(tokens.slice(0, 4));
+    expect(test.finding!.text.length).toBe(MAX_TEST_FINDING_CHARS);
+    expect(test.finding!.citationTokens).toEqual(tokens.slice(0, MAX_TEST_FINDING_TOKENS));
     for (const state of port.commits.slice(0, -1)) {
       expect(
         validateResearchSection(

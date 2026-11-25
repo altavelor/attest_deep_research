@@ -432,8 +432,8 @@ function budgetRows(): [string, unknown][] {
       attemptsByBranch: { "branch-1": 0, "branch-2": 2 },
     }),
     withBudget("branch count over its cap", {
-      consumed: { ...budget.consumed, branchAttempts: 5 },
-      attemptsByBranch: { "branch-1": 4, "branch-2": 1 },
+      consumed: { ...budget.consumed, branchAttempts: 6 },
+      attemptsByBranch: { "branch-1": 5, "branch-2": 1 },
     }),
     withBudget("rounds over the limit with the open allocation", {
       consumed: { ...budget.consumed, modelRounds: 270 },

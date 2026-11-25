@@ -409,7 +409,7 @@ describe("deep research plan card", () => {
         "Up to 2 extra searches for items with disputed or uncovered claims",
       ],
       ["Supported: 1", "Conflicting: 1", "Unverified: 0", "Left: 2"],
-      ["Rounds 7 of 280 · attempts 2 of 16 · 5 of 60 min"],
+      ["Rounds 7 of 280 · attempts 2 of 18 · 5 of 60 min"],
       true,
     ]);
     tickStageClocks(host, 200_000);

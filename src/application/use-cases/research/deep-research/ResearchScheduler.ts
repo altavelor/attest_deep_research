@@ -142,7 +142,11 @@ export class ResearchScheduler {
       const runner = this.runnerFor(next.branchId);
       if (!runner) return;
       const work = byId.get(next.workId)!;
-      const admitted = owner.allocate(work.workId, work.branchId);
+      const admitted = owner.allocate(
+        work.workId,
+        work.branchId,
+        work.kind === "test" ? plan.limits.verificationFollowUps : 0,
+      );
       if (!admitted.ok) {
         if (admitted.dimension !== "branch-attempts") return;
         await this.update(
