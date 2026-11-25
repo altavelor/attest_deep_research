@@ -176,6 +176,51 @@ describe("deep research main-path fallback", () => {
     );
   });
 
+  it("opens child sessions for branches added beyond the preset before using the main path", async () => {
+    const grown = researchPlan(
+      Array.from({ length: 5 }, (_, index) => researchBranch(index + 1)),
+      "conservative",
+      { approvedAt: "2026-01-01T00:00:00.000Z" },
+    );
+    const owner = new ResearchBudgetOwner(grown.limits, () => 0, 5);
+    owner.open(null);
+    const finding = { text: "F", citationTokens: [], partial: false };
+    const runner = (path: "main" | "sub-agent"): BranchRunner => ({
+      path,
+      run: () => Promise.resolve(finding),
+    });
+    const executions = await new ResearchScheduler({
+      plan: grown,
+      executions: initialExecutions(grown),
+      owner,
+      runners: {
+        main: runner("main"),
+        subAgent: runner("sub-agent"),
+        sessionByBranch: () => ({}),
+      },
+      waveSize: 5,
+      signal: new AbortController().signal,
+      setTimer: () => () => undefined,
+      barrier: async () => undefined,
+    }).run(
+      grown.branches.map((branch) => ({
+        workId: `${branch.branchId}-gather-1`,
+        branchId: branch.branchId,
+        cycle: 1,
+        kind: "gather" as const,
+        task: "T",
+      })),
+    );
+
+    expect(executions.map((entry) => entry.path)).toEqual([
+      "sub-agent",
+      "sub-agent",
+      "sub-agent",
+      "sub-agent",
+      "main",
+    ]);
+  });
+
   it("leaves a queued fallback's allocation open exactly once when the user stops", async () => {
     const fallbackPlan = researchPlan([researchBranch(1), researchBranch(2)], "balanced", {
       approvedAt: "2026-01-01T00:00:00.000Z",

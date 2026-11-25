@@ -108,8 +108,9 @@ export async function runResearch(
   deps: ResearchRunDeps,
 ): Promise<ResearchRunResult> {
   const plan = start.plan!;
+  const limits = budgetLimits(plan);
   const owner = new ResearchBudgetOwner(
-    budgetLimits(plan),
+    limits,
     () => deps.now().getTime(),
     plan.branches.filter((branch) => branch.enabled).length,
   );
@@ -118,7 +119,7 @@ export async function runResearch(
   const permits = new ResearchBudgetPermits({
     researchId: start.researchId,
     owner,
-    sessionCeiling: plan.limits.childSessions,
+    sessionCeiling: limits.childSessions,
     sessionByBranch: start.sessionByBranch,
     now: deps.now,
   });

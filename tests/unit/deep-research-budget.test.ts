@@ -101,6 +101,7 @@ describe("research budget limits", () => {
     expect(budgetLimits(researchPlan(branches.slice(0, 7), "balanced"))).toEqual(preset);
     expect(budgetLimits(researchPlan(branches.slice(0, 11), "balanced"))).toEqual({
       ...preset,
+      childSessions: 7,
       attemptsTotal: 17,
       modelRoundsTotal: 267,
       searchesTotal: 100,

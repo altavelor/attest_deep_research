@@ -713,6 +713,9 @@ describe("deep research section validation", () => {
         { approvedAt: approved.plan.approvedAt },
       ),
       budget: { ...approved.budget, consumed: { ...approved.budget.consumed, modelRounds: 300 } },
+      sessionByBranch: Object.fromEntries(
+        Array.from({ length: 7 }, (_, index) => [`branch-${index + 1}`, `session-${index + 1}`]),
+      ),
     };
     expect(validateResearchSection(section(grown)).ok).toBe(true);
     const midWave = validateResearchSection(section(wave));

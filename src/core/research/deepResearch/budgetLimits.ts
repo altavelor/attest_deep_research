@@ -1,6 +1,7 @@
 import type { ResearchLimits, ResearchPlan } from "./types";
 
 const SCALED_LIMITS = [
+  "childSessions",
   "attemptsTotal",
   "modelRoundsTotal",
   "searchesTotal",
@@ -9,9 +10,10 @@ const SCALED_LIMITS = [
 ] as const satisfies readonly (keyof ResearchLimits)[];
 
 /**
- * Returns the limits a plan runs under: its preset row, with every shared total grown by one
- * preset branch's share for each enabled branch above the preset's branch count. Per-attempt,
- * per-branch, concurrency, cycle and finalization limits never grow.
+ * Returns the limits a plan runs under: its preset row, with every shared total and the child
+ * session ceiling grown by one preset branch's share for each enabled branch above the preset's
+ * branch count, so added branches keep the preset's share of the main path. Per-attempt,
+ * per-branch, cycle and finalization limits never grow, and the wave size stays the preset's.
  */
 export function budgetLimits(plan: ResearchPlan): ResearchLimits {
   const { limits } = plan;

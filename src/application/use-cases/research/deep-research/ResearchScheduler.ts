@@ -2,6 +2,7 @@ import {
   blockDependants,
   boundedReason,
   branchPath,
+  budgetLimits,
   DEFAULT_RESEARCH_LANGUAGE,
   ENGLISH_RESEARCH_LABELS,
   label,
@@ -217,7 +218,7 @@ export class ResearchScheduler {
             runners.sessionByBranch(),
             branchId,
             inFlight.filter((flight) => flight.newSession).length,
-            this.deps.plan.limits.childSessions,
+            budgetLimits(this.deps.plan).childSessions,
           );
     if (path === "sub-agent") return runners.subAgent!;
     return this.mainBusy() || this.fallbacks.length > 0 ? null : runners.main;

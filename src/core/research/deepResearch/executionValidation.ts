@@ -121,7 +121,7 @@ export function executionConsistent(
   const branchIds = new Set(plan?.branches.map((branch) => branch.branchId) ?? []);
   const sessions = Object.entries(sessionByBranch);
   if (
-    sessions.length > (plan?.approvedAt ? plan.limits.childSessions : 0) ||
+    sessions.length > (plan?.approvedAt ? budgetLimits(plan).childSessions : 0) ||
     !sessions.every(([branchId]) => branchIds.has(branchId)) ||
     new Set(sessions.map(([, sessionId]) => sessionId)).size !== sessions.length
   ) {
