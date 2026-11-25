@@ -13,6 +13,7 @@ export const researchAnswer = researchAnswerMessages({
   weakClaims: "Nicht gestützte oder ungeklärte Aussagen",
   verdictUnsupported: "nicht gestützt",
   verdictUnresolved: "ungeklärt",
+  moreWeakClaims: "{count} weitere nicht belegte oder ungeklärte Aussage(n) sind ausgelassen.",
   unverifiedFindings: "Ungeprüfte Ergebnisse",
   uncoveredObjectives: "Nicht abgedeckte Ziele",
   stopReasonLine: "Abbruchgrund: {reason}",

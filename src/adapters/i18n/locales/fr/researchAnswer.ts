@@ -13,6 +13,7 @@ export const researchAnswer = researchAnswerMessages({
   weakClaims: "Affirmations non étayées ou non résolues",
   verdictUnsupported: "non étayée",
   verdictUnresolved: "non résolue",
+  moreWeakClaims: "{count} autre(s) affirmation(s) non étayée(s) ou non résolue(s) sont omises.",
   unverifiedFindings: "Résultats non vérifiés",
   uncoveredObjectives: "Objectifs non couverts",
   stopReasonLine: "Raison de l'arrêt : {reason}",

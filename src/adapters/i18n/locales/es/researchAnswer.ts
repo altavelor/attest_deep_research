@@ -13,6 +13,7 @@ export const researchAnswer = researchAnswerMessages({
   weakClaims: "Afirmaciones sin respaldo o sin resolver",
   verdictUnsupported: "sin respaldo",
   verdictUnresolved: "sin resolver",
+  moreWeakClaims: "Se omiten {count} afirmación(es) más sin respaldo o sin resolver.",
   unverifiedFindings: "Hallazgos no verificados",
   uncoveredObjectives: "Objetivos no cubiertos",
   stopReasonLine: "Motivo de parada: {reason}",

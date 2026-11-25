@@ -12,6 +12,7 @@ export const researchAnswer = researchAnswerMessages({
   weakClaims: "无依据或未决的论断",
   verdictUnsupported: "无依据",
   verdictUnresolved: "未决",
+  moreWeakClaims: "另有 {count} 条无依据或未决的论断未列出。",
   unverifiedFindings: "未验证的发现",
   uncoveredObjectives: "未覆盖的目标",
   stopReasonLine: "停止原因：{reason}",

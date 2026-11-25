@@ -12,6 +12,7 @@ export const researchAnswer = researchAnswerMessages({
   weakClaims: "ادعاءات غير مدعومة أو غير محسومة",
   verdictUnsupported: "غير مدعوم",
   verdictUnresolved: "غير محسوم",
+  moreWeakClaims: "تم إغفال {count} ادعاءات أخرى غير مدعومة أو غير محسومة.",
   unverifiedFindings: "نتائج غير متحقق منها",
   uncoveredObjectives: "أهداف غير مغطاة",
   stopReasonLine: "سبب التوقف: {reason}",

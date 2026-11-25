@@ -13,6 +13,7 @@ export const researchAnswer = researchAnswerMessages({
   weakClaims: "Неподтверждённые или нерешённые утверждения",
   verdictUnsupported: "не подтверждено",
   verdictUnresolved: "не решено",
+  moreWeakClaims: "Ещё неподтверждённых или нерешённых утверждений: {count}.",
   unverifiedFindings: "Непроверенные результаты",
   uncoveredObjectives: "Непокрытые цели",
   stopReasonLine: "Причина остановки: {reason}",

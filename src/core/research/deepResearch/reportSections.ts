@@ -68,11 +68,13 @@ export function supportedClaimsSection(verification: ResearchVerification): stri
     .join("\n");
 }
 
+export const MAX_LISTED_WEAK_CLAIMS = 10;
+
 /**
  * Builds the honest sections every verified report ends with: conflicts with both sides, claims
- * that are unsupported or unresolved except hypotheses, which have their own section, findings of
- * every work whose claims were not extracted, uncovered objectives and the stop reason. Empty
- * sections are left out.
+ * that are unsupported or unresolved except hypotheses, at most `MAX_LISTED_WEAK_CLAIMS` and those
+ * serving an objective first, findings of every work whose claims were not extracted, uncovered
+ * objectives and the stop reason. Empty sections are left out.
  */
 export function verificationSections(
   plan: ResearchPlan,
@@ -94,12 +96,18 @@ export function verificationSections(
             .join(" "),
         })}`,
     );
-  const weak = entries
+  const allWeak = entries
     .filter(
       (entry) =>
         entry.claim.kind !== "hypothesis" &&
         (entry.assessment.verdict === "unsupported" || entry.assessment.verdict === "unresolved"),
     )
+    .sort(
+      (left, right) =>
+        Number(left.claim.objective === null) - Number(right.claim.objective === null),
+    );
+  const weak = allWeak
+    .slice(0, MAX_LISTED_WEAK_CLAIMS)
     .map(
       (entry) =>
         `- (${entry.assessment.verdict === "unsupported" ? labels.verdictUnsupported : labels.verdictUnresolved}) ${inline(entry.claim.text)}`,
@@ -124,6 +132,9 @@ export function verificationSections(
   return [
     ...(conflicts.length > 0 ? [`## ${labels.conflictingEvidence}`, conflicts.join("\n")] : []),
     ...(weak.length > 0 ? [`## ${labels.weakClaims}`, weak.join("\n")] : []),
+    ...(allWeak.length > weak.length
+      ? [label(labels, "moreWeakClaims", { count: allWeak.length - weak.length })]
+      : []),
     ...(unverified.length > 0 ? [`## ${labels.unverifiedFindings}`, ...unverified] : []),
     ...(uncovered.length > 0 ? [`## ${labels.uncoveredObjectives}`, uncovered.join("\n")] : []),
     label(labels, "stopReasonLine", { reason: stopReason }),

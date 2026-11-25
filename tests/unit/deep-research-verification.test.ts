@@ -10,6 +10,7 @@ import {
   reportDecision,
   independenceGroups,
   objectiveCoverage,
+  verificationSections,
   type ResearchClaim,
 } from "@core/research/deepResearch";
 import type { RetrievedChunk } from "@core/model";
@@ -250,6 +251,40 @@ describe("deep research claim verification", () => {
       '<claim verdict="supported by a hypothesis test">\nWind lifts waves. [t1]',
     );
     expect(written.markdown).not.toContain("Wind lifts waves");
+  });
+
+  it("lists ten weak claims, those serving an objective first, and counts the rest", () => {
+    const plan = researchPlan([researchBranch(1)], "balanced");
+    const claims = [
+      { ...claim, claimId: "c-0", objective: null, text: "Loose claim." },
+      ...Array.from({ length: 10 }, (_, index) => ({
+        ...claim,
+        claimId: `c-${index + 1}`,
+        text: `Claim ${index + 1}.`,
+      })),
+    ];
+    const markdown = verificationSections(
+      plan,
+      [],
+      {
+        claims,
+        assessments: claims.map((entry) => ({
+          ...supported,
+          claimId: entry.claimId,
+          verdict: "unresolved" as const,
+        })),
+        coverage: [],
+        verifiedWorks: [],
+        followUps: [],
+        followUpsUsed: 0,
+      },
+      "Stop.",
+      ENGLISH_RESEARCH_LABELS,
+    );
+
+    expect(markdown).toContain("- (unresolved) Claim 10.");
+    expect(markdown).not.toContain("Loose claim.");
+    expect(markdown).toContain("1 more unsupported or unresolved claim(s) are left out.");
   });
 
   it("attributes each claim of one batch to the work that produced it", async () => {

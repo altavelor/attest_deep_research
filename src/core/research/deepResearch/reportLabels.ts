@@ -13,6 +13,7 @@ export const ENGLISH_RESEARCH_LABELS = {
   weakClaims: "Unsupported or unresolved claims",
   verdictUnsupported: "unsupported",
   verdictUnresolved: "unresolved",
+  moreWeakClaims: "{count} more unsupported or unresolved claim(s) are left out.",
   unverifiedFindings: "Unverified findings",
   uncoveredObjectives: "Uncovered objectives",
   stopReasonLine: "Stop reason: {reason}",
