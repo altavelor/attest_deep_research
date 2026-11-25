@@ -195,6 +195,7 @@ describe("ResearchQuestionController submission", () => {
       reason: "The current chat is too long for the selected model context window.",
     });
     expect(harness.requests).toEqual([]);
+    expect(takeNotices()).toEqual([]);
 
     limit = 100_000;
     await expect(harness.controller.submitClarificationReply("Answers", reply)).resolves.toEqual({

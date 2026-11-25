@@ -122,7 +122,9 @@ export class ResearchQuestionController {
       );
     }
 
-    if (this.rejectIfContextWindowExceeded(sessionId, question, chatHistory)) {
+    if (
+      this.rejectIfContextWindowExceeded(sessionId, question, chatHistory, !turn.clarificationReply)
+    ) {
       return { started: false, reason: this.options.t("chat.research.contextTooLong") };
     }
 
@@ -211,7 +213,7 @@ export class ResearchQuestionController {
 
   /**
    * Sends a reply to clarifying questions as an ordinary user message of a Thinking turn through the
-   * same compaction and context-window checks as a typed question. Reports a refusal with its reason.
+   * same compaction and context-window checks as a typed question. Reports a refusal with its reason to the card instead of a notice.
    */
   async submitClarificationReply(
     text: string,
@@ -272,7 +274,7 @@ export class ResearchQuestionController {
       if (result.error === undefined) return { started: false, reason: null };
       const message = this.options.t("chat.session.startFailed");
       this.setProgressStatus(sessionId, message);
-      new Notice(message);
+      if (!options.clarificationReply) new Notice(message);
       return { started: false, reason: message };
     }
 
@@ -287,6 +289,7 @@ export class ResearchQuestionController {
     sessionId: string,
     question: string,
     chatHistory: ChatDisplayMessage[],
+    notify = true,
   ): boolean {
     const limit = this.options.getContextLimitTokens(sessionId);
 
@@ -308,7 +311,7 @@ export class ResearchQuestionController {
 
     const message = this.options.t("chat.research.contextTooLong");
     this.setProgressStatus(sessionId, message);
-    new Notice(message);
+    if (notify) new Notice(message);
     return true;
   }
 
