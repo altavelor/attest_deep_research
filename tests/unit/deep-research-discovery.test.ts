@@ -337,7 +337,7 @@ describe("deep research discovery rules", () => {
     const plan = researchPlan([researchBranch(1)], "balanced");
     const reply = JSON.stringify({
       hypotheses: [
-        { ...hypothesis, branch: 1, claim: "c".repeat(280), test: { kind: "literature" } },
+        { ...hypothesis, branch: 1, claim: "c".repeat(700), test: { kind: "literature" } },
       ],
     });
     const parsed = parseHypothesisProposals(reply, plan, [], 8);
@@ -363,6 +363,7 @@ describe("deep research discovery rules", () => {
       },
     };
     expect(validateResearchSection({ schema: 1, active: state, history: [] }).ok).toBe(true);
+    expect(planned.hypotheses[0]!.claim).toHaveLength(600);
   });
 
   it("never cites or quotes registry sources a user report names", async () => {

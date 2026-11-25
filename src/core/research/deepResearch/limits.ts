@@ -16,7 +16,7 @@ export const MAX_HISTORY_QUESTION_CHARS = 1000;
 export const MAX_PLAN_LIST_ITEMS = 12;
 export const MAX_RESEARCH_QUESTION_CHARS = 20_000;
 export const MAX_RESEARCH_TEXT_CHARS = 4000;
-export const MAX_DISCOVERY_TEXT_CHARS = 200;
+export const MAX_DISCOVERY_TEXT_CHARS = 600;
 export const DEFAULT_RESEARCH_PRESET: ResearchPreset = "balanced";
 
 const MINUTE_MS = 60_000;
