@@ -60,6 +60,8 @@ export function renderDeepResearch(research: DeepResearchDiagnostics | null): st
       ["Conflicted", text(v.conflicted)],
       ["Unresolved", text(v.unresolved)],
       ["Follow-ups used", text(v.followUpsUsed)],
+      ["Claims without a citation", text(v.withoutCitation ?? null)],
+      ["Claims not assessed", text(v.unassessed ?? null)],
     ])}`;
   }
   if (research.hypotheses.length > 0) {

@@ -91,6 +91,9 @@ export function deepResearchTurnDiagnostics(
       conflicted: count("conflicted"),
       unresolved: count("unresolved"),
       followUpsUsed: verification.followUpsUsed,
+      withoutCitation: verification.claims.filter((claim) => claim.citationTokens.length === 0)
+        .length,
+      unassessed: verification.claims.length - verification.assessments.length,
     },
     hypotheses: (state?.discovery?.hypotheses ?? [])
       .slice(0, MAX_DIAGNOSTIC_ENTRIES)

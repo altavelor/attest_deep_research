@@ -71,7 +71,7 @@ describe("deep research claim verification", () => {
     }
   });
 
-  it("reports each extraction and assessment batch with the tally of settled claims", async () => {
+  it("reads bracketed claim tokens and reports each batch with the tally of settled claims", async () => {
     const plan = researchPlan([researchBranch(1)], "balanced");
     const model = new FakeChatModel([
       [
@@ -79,7 +79,7 @@ describe("deep research claim verification", () => {
           content: JSON.stringify({
             claims: [
               { finding: 1, text: "Unsourced", tokens: ["t9"], objective: 1 },
-              { finding: 1, text: "Moon", tokens: ["t1"], objective: 1 },
+              { finding: 1, text: "Moon", tokens: [" [t1] "], objective: 1 },
             ],
           }),
           isComplete: true,
@@ -242,7 +242,7 @@ describe("deep research claim verification", () => {
     ]);
   });
 
-  it("accepts a contradicting token only from the assessment request of the claim", async () => {
+  it("accepts a bracketed contradicting token only from the assessment request of the claim", async () => {
     const plan = researchPlan([researchBranch(1)], "balanced");
     const claims = Array.from({ length: 11 }, (_, index) => ({
       finding: 1,
@@ -254,7 +254,7 @@ describe("deep research claim verification", () => {
       assessments: Array.from({ length: 10 }, (_, index) => ({
         claim: index + 1,
         verdict: "conflicted",
-        contradicting: ["t2"],
+        contradicting: ["[t2]"],
       })),
     });
     const model = new FakeChatModel([

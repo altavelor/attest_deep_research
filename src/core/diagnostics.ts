@@ -226,6 +226,8 @@ export interface DeepResearchDiagnostics {
     conflicted: number;
     unresolved: number;
     followUpsUsed: number;
+    withoutCitation?: number;
+    unassessed?: number;
   } | null;
   hypotheses: Array<{ hypothesisId: string; status: string }>;
   cycleDecisions: Array<{ ordinal: number; decision: string; reason: string }>;
