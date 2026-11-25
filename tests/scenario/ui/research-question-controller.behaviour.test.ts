@@ -11,6 +11,7 @@ import { createTranslator } from "@adapters/i18n";
 import { chatHistoryForPrompt } from "@application/use-cases/chat";
 import { clarificationAllowed } from "@application/use-cases/research/clarificationTool";
 import { renderClarificationCard } from "@apps/obsidian/ui/chat/clarificationCard";
+import { ClarificationDrafts } from "@apps/obsidian/ui/chat/clarificationDrafts";
 import { takeNotices } from "../../support/obsidian";
 import {
   installObsidianDomHelpers,
@@ -304,7 +305,13 @@ describe("ResearchQuestionController compaction", () => {
       host,
       stored,
       [...messages, { role: "user", content: "Answers", createdAt: at, clarificationReply: reply }],
-      { t, running: false, onReply: async () => ({ started: true }) },
+      {
+        t,
+        running: false,
+        onReply: async () => ({ started: true }),
+        drafts: new ClarificationDrafts(),
+        requestRedisplay: () => {},
+      },
     );
     expect(host.textContent).toContain("Postgres");
   });

@@ -40,6 +40,7 @@ import {
   renderFollowUps as renderChatFollowUps,
 } from "./ChatTranscript";
 import type { ChatTranscriptOptions } from "./ChatTranscript";
+import { ClarificationDrafts } from "./clarificationDrafts";
 import { CitationPopoverController } from "./citations/CitationPopover";
 import { ChatModelSelectOption } from "./ChatComposer";
 import { formatCitationForChunk } from "./citations/citationFormatting";
@@ -146,6 +147,7 @@ export class AttestChatView extends ItemView {
   private toolbarEl: HTMLElement | null = null;
   private readonly sentResearchTurns = new Set<string>();
   private readonly researchExports: ResearchExportController | null;
+  private readonly clarificationDrafts = new ClarificationDrafts();
 
   private transcriptEl: HTMLElement | null = null;
   private followUpsEl: HTMLElement | null = null;
@@ -713,6 +715,8 @@ export class AttestChatView extends ItemView {
       clarification: {
         t: this.t,
         running: this.isRunning,
+        drafts: this.clarificationDrafts,
+        requestRedisplay: () => this.renderMessages(),
         onReply: (text, reply) => this.researchController.submitClarificationReply(text, reply),
       },
       onHighlightCitation: (key, highlighted) =>

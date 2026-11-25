@@ -7,6 +7,7 @@ import {
   renderClarificationCard,
   type ClarificationReplyOutcome,
 } from "@apps/obsidian/ui/chat/clarificationCard";
+import { ClarificationDrafts } from "@apps/obsidian/ui/chat/clarificationDrafts";
 import type { ChatDisplayMessage } from "@core/conversation";
 import { settle } from "../../support/async";
 import { installObsidianDomHelpers, resetDom } from "../../support/domHarness";
@@ -43,7 +44,13 @@ function render(
 ) {
   const onReply = vi.fn(async () => outcome);
   const host = document.createElement("div");
-  renderClarificationCard(host, asked, messages, { t: translate, running, onReply });
+  renderClarificationCard(host, asked, messages, {
+    t: translate,
+    running,
+    onReply,
+    drafts: new ClarificationDrafts(),
+    requestRedisplay: () => {},
+  });
   const button = (label: string) =>
     [...host.querySelectorAll("button")].find((el) => el.textContent === label);
   return { host, onReply, button };
