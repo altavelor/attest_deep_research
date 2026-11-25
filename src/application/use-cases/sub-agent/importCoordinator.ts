@@ -8,6 +8,7 @@ import type {
   SubAgentPreparedImportRequest,
 } from "@application/ports/subAgent";
 import {
+  MAX_IMPORTED_EVIDENCE_ITEMS,
   isDocumentReadTool,
   readSubAgentImportItems,
   subAgentAliasPrefix,
@@ -80,6 +81,9 @@ export class SubAgentImportCoordinator implements SubAgentEvidenceImportPort, Su
       policy: run.effectiveSourcePolicy,
       resources: this.parts.sessionOptions.get(sessionId)?.resources ?? [],
       webCapacity: this.webCapacity(sessionId),
+      ...(record.session.budgetPolicy.type === "required-scope"
+        ? { webSourceCap: MAX_IMPORTED_EVIDENCE_ITEMS }
+        : {}),
       incomplete: run.continuedFromRunId !== null || result.incomplete,
       result,
       now: timestamp(this.parts),
