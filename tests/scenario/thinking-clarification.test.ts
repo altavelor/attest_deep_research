@@ -66,11 +66,15 @@ function run(
 }
 
 describe("Thinking clarification tool", () => {
-  it("ends the turn with the stored questions before the parallel call runs", async () => {
+  it("ends the turn at the first valid clarification before ordinary calls run", async () => {
     const { modelRound, events } = run(() => {
       const round = clarifyingCall([
         { prompt: " Which database now? ", suggestions: ["Postgres", "Files"] },
       ]);
+      round.items.unshift({
+        type: "toolCall",
+        call: { id: "c0", name: ASK, arguments: { questions: [{ prompt: " " }] } },
+      });
       round.items.push({
         type: "toolCall",
         call: { id: "s1", name: "search_index", arguments: { query: "sqlite" } },
@@ -85,8 +89,10 @@ describe("Thinking clarification tool", () => {
     expect(modelRound.requests[0]!.messages[0]!.content).toContain(`(${ASK})`);
     expect(modelRound.requests[0]!.messages[0]!.content).toContain(`only in the ${ASK} arguments`);
     const ended = all.filter((event) => event.type === "tool-call-end");
-    expect(ended).toHaveLength(1);
-    expect(ended[0]).toMatchObject({ id: "c1" });
+    expect(ended.map((event) => event.type === "tool-call-end" && [event.id, event.ok])).toEqual([
+      ["c0", false],
+      ["c1", true],
+    ]);
     expect(complete).toMatchObject({
       answer: {
         answer: "",
