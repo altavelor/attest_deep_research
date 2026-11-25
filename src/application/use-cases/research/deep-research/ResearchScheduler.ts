@@ -146,12 +146,19 @@ export class ResearchScheduler {
         work.workId,
         work.branchId,
         work.kind === "test" ? plan.limits.verificationFollowUps : 0,
+        work.kind === "test" ? work.workId : work.branchId,
       );
       if (!admitted.ok) {
         if (admitted.dimension !== "branch-attempts") return;
         await this.update(
           next.workId,
-          exhausted(plan, next, "No attempts remain for this branch."),
+          exhausted(
+            plan,
+            next,
+            work.kind === "test"
+              ? "No attempts remain for this test."
+              : "No attempts remain for this branch.",
+          ),
         );
         continue;
       }

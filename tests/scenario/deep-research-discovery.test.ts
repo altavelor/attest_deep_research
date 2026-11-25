@@ -128,7 +128,11 @@ describe("deep research discovery", () => {
     ]);
     const final = port.commits.at(-1)!;
     expect(final.phase).toBe("completed");
-    expect(final.budget!.attemptsByBranch).toEqual({ "branch-1": 3 });
+    const tested = discovery.tests.map((test) => test.testId);
+    expect(final.budget!.attemptsByBranch).toEqual({
+      "branch-1": 1,
+      ...Object.fromEntries(tested.map((testId) => [testId, 1])),
+    });
     expect(final.report!.markdown).toContain("(supported by literature) The moon causes tides");
     expect(final.report!.markdown).toContain("Alternative: Wind causes tides.");
     const verification = [...port.commits].reverse().find((state) => state.verification)!;

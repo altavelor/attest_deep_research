@@ -62,14 +62,19 @@ export class ResearchBudgetOwner {
   /**
    * Grants one attempt of a branch work or names the dimension that denies it. Reserved attempts
    * stay free for later works, and rounds or searches held only by open allocations are waited
-   * for: either denial leaves the budget open.
+   * for: either denial leaves the budget open. Attempts are capped per key, the branch by default.
    */
-  allocate(workId: string, branchId: string, reservedAttempts = 0): AllocationResult {
+  allocate(
+    workId: string,
+    branchId: string,
+    reservedAttempts = 0,
+    attemptKey = branchId,
+  ): AllocationResult {
     const { consumed, attemptsByBranch, openAllocations } = this.state;
     if (!this.state.closed && this.remainingMs() <= 0) this.close("time");
     if (this.state.closed) return { ok: false, dimension: "closed" };
     if (
-      (attemptsByBranch[branchId] ?? 0) >= this.limits.attemptsPerBranch ||
+      (attemptsByBranch[attemptKey] ?? 0) >= this.limits.attemptsPerBranch ||
       (reservedAttempts > 0 &&
         consumed.branchAttempts + reservedAttempts >= this.limits.attemptsTotal)
     ) {
@@ -102,7 +107,7 @@ export class ResearchBudgetOwner {
       this.close("exhausted", denied);
       return { ok: false, dimension: denied };
     }
-    const attempt = (attemptsByBranch[branchId] ?? 0) + 1;
+    const attempt = (attemptsByBranch[attemptKey] ?? 0) + 1;
     const allocation: BranchAllocation = {
       workId,
       branchId,
@@ -116,7 +121,7 @@ export class ResearchBudgetOwner {
     this.state = {
       ...this.state,
       consumed: { ...consumed, branchAttempts: consumed.branchAttempts + 1 },
-      attemptsByBranch: { ...attemptsByBranch, [branchId]: attempt },
+      attemptsByBranch: { ...attemptsByBranch, [attemptKey]: attempt },
       openAllocations: [...openAllocations, allocation],
     };
     return { ok: true, allocation };

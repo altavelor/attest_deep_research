@@ -265,7 +265,7 @@ describe("deep research main-path fallback", () => {
 
     expect(executions.map((entry) => [entry.state, entry.terminalReason])).toEqual([
       ["completed", null],
-      ["failed", "No attempts remain for this branch."],
+      ["failed", "No attempts remain for this test."],
     ]);
     expect(owner.snapshot().closed).toBeNull();
   });
