@@ -18,7 +18,9 @@ import {
   launchChild,
   managerHarness,
   managerParts,
+  readySubAgentRecord,
 } from "../support/subAgentSessions";
+import { hasStoppableWork } from "@application/use-cases/sub-agent/inspectionView";
 
 type Harness = ReturnType<typeof managerHarness>;
 
@@ -472,6 +474,15 @@ describe("sub-agent user stop", () => {
       ),
     ).rejects.toBeDefined();
   });
+  it("offers no stop for a failed session that still holds its pending import", () => {
+    const session = { ...readySubAgentRecord().session, pendingImportRunId: "run-1" };
+    const live = () => false;
+    expect([
+      hasStoppableWork({ ...session, status: "importing" }, live),
+      hasStoppableWork({ ...session, status: "failed" }, live),
+    ]).toEqual([true, false]);
+  });
+
   it("keeps a session importing, stoppable and closable until its import-committed write is durable", async () => {
     const harness = managerHarness();
     const delegator = harness.delegator();
