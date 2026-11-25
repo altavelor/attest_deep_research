@@ -51,7 +51,7 @@
   height: 10px;
   border-radius: 50%;
 
-  box-shadow: 0 0 0 3px var(--background-primary);
+  box-shadow: 0 0 0 3px var(--background-secondary);
 }
 
 .attest-chat__workflow-dot--thinking {

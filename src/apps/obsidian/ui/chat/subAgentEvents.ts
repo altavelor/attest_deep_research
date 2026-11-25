@@ -2,7 +2,7 @@ import { setIcon } from "obsidian";
 
 import type { Translate } from "@adapters/i18n";
 import { cleanDisplayText } from "@core/chat/safeInlineMarkup";
-import type { ParentTimelineEvent } from "@core/chat/subAgentPlacement";
+import type { ParentTimelineEvent, SubAgentRunStatus } from "@core/chat/subAgentPlacement";
 import type { SubAgentNoticeEntry } from "@core/research";
 import { renderFoldedMarkup, renderToggle } from "./safeMarkupView";
 import { compactCount, formatElapsed, knownTokenTotal } from "./sub-agents/format";
@@ -26,6 +26,17 @@ const ICONS: Record<SubAgentNoticeEntry["kind"], string> = {
   closed: "x",
   batch: "layers",
 };
+const RUN_ICONS: Record<SubAgentRunStatus, string> = {
+  running: "loader",
+  queued: "clock",
+  finished: "check-circle",
+  partial: "alert-circle",
+  failed: "x-circle",
+  stopped: "x-circle",
+  interrupted: "alert-circle",
+  "import-failed": "alert-circle",
+  "not-started": "alert-circle",
+};
 const TONES: Readonly<Record<string, string>> = {
   finished: "success",
   partial: "partial",
@@ -47,8 +58,7 @@ export function subAgentEventOptions(
 /** Returns the icon that marks a dispatch or notice event on the timeline rail. */
 export function subAgentEventIcon(event: ParentTimelineEvent): string {
   if (event.kind === "agent-notice") return ICONS[event.notice.kind];
-  if (event.status !== "running" && event.status !== "queued") return ICONS[event.status];
-  return event.created ? ICONS.created : "send";
+  return ICONS.created;
 }
 
 /** Returns the event's kind class suffix: the run status for a dispatch, else the notice kind. */
@@ -90,10 +100,10 @@ export function renderSubAgentEventContent(
 }
 
 /**
- * Renders one run of a child agent as a single card that updates in place: the agent title,
- * the command kind when it is not the first, the run status and one opener in the head; the
- * run's usage, outcome reason and folded reply below; and the command, folded behind a toggle
- * once a reply exists.
+ * Renders one run of a child agent as a single card that updates in place. The head holds the
+ * status icon, the agent title over the run's usage, the command kind when it is not the first,
+ * the status chip and one opener; the body holds the outcome reason, the folded reply and the
+ * command, which folds behind a toggle once a reply exists.
  */
 function renderDispatchContent(
   nodeEl: HTMLElement,
@@ -103,15 +113,26 @@ function renderDispatchContent(
   const { t } = options;
   const entry = event.dispatch;
   const outcome = event.outcome;
-  const cardEl = nodeEl.createDiv({ cls: "attest-chat__agent-card attest-chat__agent-run" });
-  const tone = TONES[event.status];
-  if (tone) cardEl.addClass(`is-${tone}`);
+  const cardEl = nodeEl.createDiv({
+    cls: `attest-chat__agent-card attest-chat__agent-run is-${event.status}`,
+  });
   const title =
     cleanDisplayText(event.title) ||
     t(event.created ? "chat.agent.notice.created" : "chat.agent.dispatch.title");
   cardEl.setAttribute("aria-label", title);
   const headEl = cardEl.createDiv({ cls: "attest-chat__agent-card-head" });
-  headEl.createSpan({ cls: "attest-chat__agent-run-title", text: title, attr: { title } });
+  const icon = RUN_ICONS[event.status];
+  setIcon(
+    headEl.createSpan({
+      cls: "attest-chat__agent-run-icon",
+      attr: { "aria-hidden": "true", "data-icon": icon },
+    }),
+    icon,
+  );
+  const headingEl = headEl.createDiv({ cls: "attest-chat__agent-run-heading" });
+  headingEl.createDiv({ cls: "attest-chat__agent-run-title", text: title, attr: { title } });
+  const meta = outcome ? replyMeta(outcome, t) : "";
+  if (meta) headingEl.createDiv({ cls: "attest-chat__agent-reply-meta", text: meta });
   if (entry.commandKind !== "initial") {
     headEl.createSpan({
       cls: "attest-chat__agent-badge",
@@ -124,44 +145,39 @@ function renderDispatchContent(
       text: t("chat.agent.attempt", { attempt: String(entry.attempt) }),
     });
   }
-  const statusEl = headEl.createSpan({
+  headEl.createSpan({
     cls: `attest-chat__agent-status is-${event.status}`,
+    text: t(`chat.agent.status.${event.status}`),
     attr: { "data-status": event.status },
   });
-  statusEl.createSpan({ cls: "attest-chat__agent-status-dot", attr: { "aria-hidden": "true" } });
-  statusEl.createSpan({ text: t(`chat.agent.status.${event.status}`) });
   actions(headEl, entry.sessionId, options, true);
-  const meta = outcome ? replyMeta(outcome, t) : "";
-  if (meta) cardEl.createDiv({ cls: "attest-chat__agent-reply-meta", text: meta });
-  const body = outcome
+  const reason = outcome
     ? noticeBody(outcome, t)
     : event.status === "queued"
       ? t("chat.agent.notice.queued.body")
       : null;
-  if (body) cardEl.createDiv({ cls: "attest-chat__agent-event-body", text: body });
-  if (outcome?.replyExcerpt) {
-    renderFoldedMarkup(
-      cardEl,
-      outcome.replyExcerpt,
-      PREVIEW_CHARS,
-      t("chat.agent.showFullReply"),
+  const bodyEl = cardEl.createDiv({ cls: "attest-chat__agent-run-body" });
+  if (reason) bodyEl.createDiv({ cls: "attest-chat__agent-event-body", text: reason });
+  if (!outcome?.replyExcerpt) {
+    if (event.status === "queued") return;
+    foldedText(
+      bodyEl.createDiv({ cls: "attest-chat__agent-command" }),
+      entry.body,
+      t("chat.agent.showFullCommand"),
       t,
     );
-    const commandEl = cardEl.createDiv({ cls: "attest-chat__agent-command" });
-    commandEl.hidden = true;
-    commandEl.createDiv({ cls: "attest-chat__agent-text", text: entry.body });
-    renderToggle(cardEl, t("chat.agent.showTask"), t, (expanded) => {
-      commandEl.hidden = !expanded;
-    });
-    cardEl.appendChild(commandEl);
     return;
   }
-  foldedText(
-    cardEl.createDiv({ cls: "attest-chat__agent-command" }),
-    entry.body,
-    t("chat.agent.showFullCommand"),
-    t,
-  );
+  renderFoldedMarkup(bodyEl, outcome.replyExcerpt, PREVIEW_CHARS, t("chat.agent.showFullReply"), t);
+  const linksEl = bodyEl.createDiv({ cls: "attest-chat__agent-run-links" });
+  const replyToggle = bodyEl.querySelector(":scope > .attest-chat__agent-toggle");
+  if (replyToggle) linksEl.appendChild(replyToggle);
+  const commandEl = bodyEl.createDiv({ cls: "attest-chat__agent-command" });
+  commandEl.hidden = true;
+  commandEl.createDiv({ cls: "attest-chat__agent-text", text: entry.body });
+  renderToggle(linksEl, t("chat.agent.showTask"), t, (expanded) => {
+    commandEl.hidden = !expanded;
+  });
 }
 
 function isCount(value: number | undefined): value is number {

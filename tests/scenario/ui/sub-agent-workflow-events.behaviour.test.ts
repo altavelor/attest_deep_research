@@ -177,9 +177,10 @@ describe("sub-agent events inside the parent workflow timeline", () => {
       card.querySelectorAll(".attest-chat__agent-open").length,
       card.querySelector(".attest-chat__agent-card-head .attest-chat__agent-open") !== null,
       card.querySelector(".attest-chat__workflow-dot--agent")?.getAttribute("data-icon"),
+      card.querySelector(".attest-chat__agent-run-icon")?.getAttribute("data-icon"),
       transcript.querySelector('[data-event-key="dispatch:s2"] .attest-chat__agent-run-title')
         ?.textContent,
-    ]).toEqual(["Agent s1", "Agent s1", 1, 1, true, "check", "Agent s2"]);
+    ]).toEqual(["Agent s1", "Agent s1", 1, 1, true, "bot", "check-circle", "Agent s2"]);
     card.querySelector<HTMLButtonElement>(".attest-chat__agent-open")!.click();
     expect(opened).toEqual(["s1"]);
     expect(card.querySelectorAll("a, b, img, script, .markdown-rendered")).toHaveLength(0);

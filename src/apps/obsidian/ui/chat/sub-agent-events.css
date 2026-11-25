@@ -9,22 +9,20 @@
 
 .attest-chat__agent-event-mark {
   position: absolute;
-  left: -1.6rem;
-  top: 0.1em;
+  left: calc(-1.6rem + 2px);
+  top: 0.15em;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 20px;
-  height: 20px;
-  border: 1px solid var(--color-cyan, #22b8cf);
-  border-radius: 50%;
-  color: var(--color-cyan, #22b8cf);
+  width: 16px;
+  height: 16px;
+  color: var(--text-faint);
   background: var(--background-primary);
 }
 
 .attest-chat__agent-event-mark svg {
-  width: 12px;
-  height: 12px;
+  width: 14px;
+  height: 14px;
 }
 
 .attest-chat__agent-event-label {
@@ -76,22 +74,6 @@
   border: 1px solid var(--background-modifier-border);
   border-radius: var(--radius-m, 8px);
   background: var(--background-secondary);
-}
-
-.attest-chat__agent-card.is-success {
-  border-color: var(--color-green, #2ea043);
-}
-
-.attest-chat__agent-card.is-partial {
-  border-color: var(--color-yellow, #d4a72c);
-}
-
-.attest-chat__agent-card.is-error {
-  border-color: var(--text-error);
-}
-
-.attest-chat__agent-card.is-warning {
-  border-color: var(--color-orange, #e8743b);
 }
 
 .attest-chat__agent-card-head {
@@ -224,26 +206,27 @@ body.is-mobile .attest-chat__agent-open {
 }
 
 .attest-chat__workflow-dot--agent {
-  left: calc(-1.3rem - 5px);
-  top: 0;
+  left: calc(-1.3rem - 3px);
+  top: 0.1em;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 20px;
-  height: 20px;
-  border: 1px solid var(--color-cyan, #22b8cf);
-  color: var(--color-cyan, #22b8cf);
-  background: var(--background-primary);
+  width: 16px;
+  height: 16px;
+  border-radius: 0;
+  color: var(--text-faint);
+  background: var(--background-secondary);
+  box-shadow: none;
 }
 
 .attest-chat__workflow-dot--agent svg {
-  width: 12px;
-  height: 12px;
+  width: 14px;
+  height: 14px;
 }
 
-.attest-chat__workflow-agent--finished .attest-chat__workflow-dot--agent {
-  border-color: var(--color-green, #2ea043);
-  color: var(--color-green, #2ea043);
+.attest-chat__workflow-agent--dispatch .attest-chat__workflow-dot--agent,
+.attest-chat__agent-event--dispatch .attest-chat__agent-event-mark {
+  top: 0.95rem;
 }
 
 .attest-chat__workflow-agent {
@@ -296,46 +279,74 @@ body.is-mobile .attest-chat__agent-open {
   color: var(--text-muted);
 }
 
-.attest-chat__agent-status-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: var(--text-faint);
+.attest-chat__agent-run {
+  gap: 0;
+  padding: 0;
+  border-radius: var(--radius-l, 10px);
 }
 
-.attest-chat__agent-status.is-running .attest-chat__agent-status-dot,
-.attest-chat__agent-status.is-finished .attest-chat__agent-status-dot {
-  background: var(--color-green, #2ea043);
-}
-
-.attest-chat__agent-status.is-partial .attest-chat__agent-status-dot,
-.attest-chat__agent-status.is-import-failed .attest-chat__agent-status-dot {
-  background: var(--color-yellow, #d4a72c);
-}
-
-.attest-chat__agent-status.is-failed .attest-chat__agent-status-dot {
-  background: var(--text-error);
-}
-
-.attest-chat__agent-status.is-stopped .attest-chat__agent-status-dot,
-.attest-chat__agent-status.is-interrupted .attest-chat__agent-status-dot,
-.attest-chat__agent-status.is-not-started .attest-chat__agent-status-dot {
-  background: var(--color-orange, #e8743b);
+.attest-chat__agent-run.is-queued {
+  border-style: dashed;
+  background: transparent;
 }
 
 .attest-chat__agent-run .attest-chat__agent-card-head {
   flex-wrap: nowrap;
   justify-content: flex-start;
+  gap: 0.6rem;
+  padding: 0.65rem 0.75rem;
   font-weight: 400;
 }
 
-.attest-chat__agent-run-title {
+.attest-chat__agent-run-icon {
+  display: inline-flex;
+  flex: none;
+  color: var(--text-muted);
+}
+
+.attest-chat__agent-run-icon svg {
+  width: 18px;
+  height: 18px;
+}
+
+.attest-chat__agent-run.is-running .attest-chat__agent-run-icon {
+  color: var(--interactive-accent);
+}
+
+.attest-chat__agent-run.is-finished .attest-chat__agent-run-icon {
+  color: var(--color-green, #2ea043);
+}
+
+.attest-chat__agent-run.is-partial .attest-chat__agent-run-icon,
+.attest-chat__agent-run.is-import-failed .attest-chat__agent-run-icon,
+.attest-chat__agent-run.is-interrupted .attest-chat__agent-run-icon,
+.attest-chat__agent-run.is-not-started .attest-chat__agent-run-icon {
+  color: var(--color-yellow, #d4a72c);
+}
+
+.attest-chat__agent-run.is-failed .attest-chat__agent-run-icon,
+.attest-chat__agent-run.is-stopped .attest-chat__agent-run-icon {
+  color: var(--text-error);
+}
+
+.attest-chat__agent-run-heading {
+  display: flex;
   flex: 1 1 auto;
+  flex-direction: column;
+  gap: 0.1rem;
   min-width: 0;
+}
+
+.attest-chat__agent-run-title {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
   font-weight: 600;
+}
+
+.attest-chat__agent-run.is-queued .attest-chat__agent-run-title {
+  color: var(--text-muted);
+  font-weight: 400;
 }
 
 .attest-chat__agent-run .attest-chat__agent-badge,
@@ -345,10 +356,36 @@ body.is-mobile .attest-chat__agent-open {
 
 .attest-chat__agent-run .attest-chat__agent-status {
   flex: none;
-  padding: 0.05rem 0.5rem;
+  padding: 0.1rem 0.55rem;
   border-radius: 999px;
   background: var(--background-modifier-hover);
+  color: var(--text-muted);
   font-size: var(--font-ui-smaller);
+  font-weight: 600;
+}
+
+.attest-chat__agent-run .attest-chat__agent-status.is-running {
+  background: rgba(var(--interactive-accent-rgb, 127, 109, 242), 0.18);
+  color: var(--text-accent);
+}
+
+.attest-chat__agent-run .attest-chat__agent-status.is-finished {
+  background: rgba(var(--color-green-rgb, 68, 207, 110), 0.15);
+  color: var(--color-green, #2ea043);
+}
+
+.attest-chat__agent-run .attest-chat__agent-status.is-partial,
+.attest-chat__agent-run .attest-chat__agent-status.is-import-failed,
+.attest-chat__agent-run .attest-chat__agent-status.is-interrupted,
+.attest-chat__agent-run .attest-chat__agent-status.is-not-started {
+  background: rgba(var(--color-yellow-rgb, 229, 164, 66), 0.15);
+  color: var(--color-yellow, #d4a72c);
+}
+
+.attest-chat__agent-run .attest-chat__agent-status.is-failed,
+.attest-chat__agent-run .attest-chat__agent-status.is-stopped {
+  background: rgba(var(--color-red-rgb, 251, 70, 76), 0.15);
+  color: var(--text-error);
 }
 
 .attest-chat__agent-run .attest-chat__agent-open.clickable-icon {
@@ -358,36 +395,47 @@ body.is-mobile .attest-chat__agent-open {
   margin-left: 0;
 }
 
+.attest-chat__agent-run-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  padding: 0.6rem 0.75rem 0.7rem;
+  border-top: 1px solid var(--background-modifier-border);
+}
+
+.attest-chat__agent-run-body:empty {
+  display: none;
+}
+
+.attest-chat__agent-run.is-partial .attest-chat__agent-event-body,
+.attest-chat__agent-run.is-import-failed .attest-chat__agent-event-body {
+  color: var(--color-yellow, #d4a72c);
+}
+
+.attest-chat__agent-run.is-failed .attest-chat__agent-event-body {
+  color: var(--text-error);
+}
+
+.attest-chat__agent-run .attest-chat__agent-command {
+  padding: 0;
+  background: none;
+}
+
+.attest-chat__agent-run-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 1rem;
+}
+
+.attest-chat__agent-run-links:empty {
+  display: none;
+}
+
 .attest-chat__agent-command[hidden] {
   display: none;
 }
 
-.attest-chat__agent-status.is-running .attest-chat__agent-status-dot {
-  background: var(--interactive-accent);
-}
-
-.attest-chat__workflow-agent--dispatch.is-finished .attest-chat__workflow-dot--agent,
-.attest-chat__agent-event--dispatch.is-finished .attest-chat__agent-event-mark {
-  border-color: var(--color-green, #2ea043);
-  color: var(--color-green, #2ea043);
-}
-
-.attest-chat__workflow-agent--dispatch.is-partial .attest-chat__workflow-dot--agent,
-.attest-chat__workflow-agent--dispatch.is-import-failed .attest-chat__workflow-dot--agent,
-.attest-chat__agent-event--dispatch.is-partial .attest-chat__agent-event-mark,
-.attest-chat__agent-event--dispatch.is-import-failed .attest-chat__agent-event-mark {
-  border-color: var(--color-yellow, #d4a72c);
-  color: var(--color-yellow, #d4a72c);
-}
-
-.attest-chat__workflow-agent--dispatch.is-failed .attest-chat__workflow-dot--agent,
-.attest-chat__agent-event--dispatch.is-failed .attest-chat__agent-event-mark {
-  border-color: var(--text-error);
-  color: var(--text-error);
-}
-
 body.is-mobile .attest-chat__agent-run .attest-chat__agent-open.clickable-icon {
-  align-self: center;
   min-width: 44px;
   min-height: 44px;
 }

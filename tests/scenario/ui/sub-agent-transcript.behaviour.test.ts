@@ -177,9 +177,9 @@ describe("sub-agent events in a reloaded parent transcript", () => {
       ...standalone.map(([kind]) => `notice:chat-legacy:p1:s1:r1:${kind}`),
     ]);
     expect(events[0]!.textContent).toContain("Find primary sources for the IPO date");
-    expect(events[0]!.querySelector("[data-icon]")?.getAttribute("data-icon")).toBe(
-      "alert-triangle",
-    );
+    expect(
+      events[0]!.querySelector(".attest-chat__agent-run-icon")?.getAttribute("data-icon"),
+    ).toBe("alert-circle");
     for (const [kind, title, icon, action] of standalone) {
       const el = transcript.querySelector<HTMLElement>(`.attest-chat__agent-event--${kind}`)!;
       expect([
