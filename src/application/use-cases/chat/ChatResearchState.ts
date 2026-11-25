@@ -5,6 +5,7 @@ import {
   fitResearchSection,
   nextResearchSection,
   validateResearchSection,
+  type PlanBranchAddition,
   type PlanBranchEdit,
   type ResearchSectionView,
   type ResearchState,
@@ -24,6 +25,7 @@ export interface ResearchPlanEditRequest {
   decisionId: string;
   expectedRevision: number;
   branches: readonly PlanBranchEdit[];
+  added?: readonly PlanBranchAddition[];
 }
 
 /**
@@ -61,7 +63,10 @@ export class ChatResearchState implements ResearchStatePort {
             researchId: request.researchId,
             decisionId: request.decisionId,
             expectedRevision: request.expectedRevision,
-            payload: { action: "edit", edit: { branches: request.branches } },
+            payload: {
+              action: "edit",
+              edit: { branches: request.branches, added: request.added ?? [] },
+            },
           },
           context,
         )

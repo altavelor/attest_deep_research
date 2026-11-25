@@ -57,6 +57,13 @@
   min-width: 0;
 }
 
+.attest-research-card__editor-title {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  margin-bottom: var(--size-4-1);
+}
+
 .attest-research-card__editor-task {
   flex: 1;
   box-sizing: border-box;

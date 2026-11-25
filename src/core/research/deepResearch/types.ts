@@ -269,8 +269,14 @@ export interface PlanBranchEdit {
   enabled?: boolean;
 }
 
+export interface PlanBranchAddition {
+  title: string;
+  task: string;
+}
+
 export interface PlanEdit {
   branches?: readonly PlanBranchEdit[];
+  added?: readonly PlanBranchAddition[];
   knownOmissions?: readonly string[];
 }
 

@@ -85,6 +85,27 @@ describe("deep research decisions", () => {
     expect(restored.ok && restored.plan.knownOmissions).toEqual([]);
   });
 
+  it("adds optional independent branches after the existing identifiers", () => {
+    const plan = researchPlan([researchBranch(1), researchBranch(3, { sourceScope: "webOnly" })]);
+    const edited = applyPlanEdit(plan, { added: [{ title: " Costs ", task: "Compare costs" }] });
+    if (!edited.ok) throw new Error(edited.message);
+    expect(edited.plan.branches[2]).toEqual({
+      branchId: "branch-4",
+      title: "Costs",
+      task: "Compare costs",
+      expectedOutput: "",
+      priority: "optional",
+      enabled: true,
+      objectives: [],
+      sourceScope: "indexAndWeb",
+      dependsOn: [],
+    });
+    expect(applyPlanEdit(plan, { added: [{ title: "Costs", task: " " }] })).toMatchObject({
+      ok: false,
+      message: "Every branch needs a title and a task.",
+    });
+  });
+
   it("allows the third generation and consumes it even when it failed", () => {
     const result = regenerate(2);
     expect(result.ok && result.state.plan?.generationsUsed).toBe(3);
@@ -145,6 +166,7 @@ describe("deep research untrusted plan input", () => {
     for (const payload of [
       { action: "launch" },
       { action: "edit", edit: { branches: [{ branchId: "branch-1", enabled: "yes" }] } },
+      { action: "edit", edit: { added: [{ title: 1, task: "Do" }] } },
       { action: "regenerate", instruction: "x".repeat(4001) },
     ]) {
       expect(parsePlanDecisionPayload(payload), JSON.stringify(payload).slice(0, 40)).toBeNull();

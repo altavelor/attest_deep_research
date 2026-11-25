@@ -1,8 +1,14 @@
-import { DEEP_RESEARCH_SCHEMA, MAX_PLAN_GENERATIONS, MAX_RESEARCH_TEXT_CHARS } from "./limits";
+import {
+  DEEP_RESEARCH_SCHEMA,
+  MAX_PLAN_GENERATIONS,
+  MAX_RESEARCH_BRANCHES,
+  MAX_RESEARCH_TEXT_CHARS,
+} from "./limits";
 import { boundedReason } from "./rejection";
 import { validatePlan } from "./planValidation";
 import { initialExecutions } from "./schedule";
 import type {
+  PlanBranchAddition,
   PlanBranchEdit,
   PlanDecisionPayload,
   PlanEdit,
@@ -195,7 +201,10 @@ export function applyPlanEdit(
         }
       : branch;
   });
-  const branches = withoutDisabledDependencies(edited);
+  const branches = withoutDisabledDependencies([
+    ...edited,
+    ...addedBranches(edited, edit.added ?? []),
+  ]);
   const next: ResearchPlan = {
     ...plan,
     revision: plan.revision + 1,
@@ -206,6 +215,38 @@ export function applyPlanEdit(
   return problem
     ? { ok: false, code: "research-invalid-plan", message: problem }
     : { ok: true, plan: next };
+}
+
+/**
+ * Builds the branches a user added in an edit: optional, independent, tied to no objective, with
+ * host identifiers after the existing ones and the widest source scope the plan already uses.
+ */
+function addedBranches(
+  existing: readonly ResearchBranch[],
+  additions: readonly PlanBranchAddition[],
+): ResearchBranch[] {
+  const used = new Set(existing.map((branch) => branch.branchId));
+  const scopes = new Set(existing.map((branch) => branch.sourceScope));
+  const index = scopes.has("indexAndWeb") || scopes.has("indexOnly");
+  const web = scopes.has("indexAndWeb") || scopes.has("webOnly");
+  const sourceScope = index && web ? "indexAndWeb" : web ? "webOnly" : "indexOnly";
+  let next = existing.length + 1;
+  return additions.map((addition) => {
+    while (used.has(`branch-${next}`)) next += 1;
+    const branchId = `branch-${next}`;
+    next += 1;
+    return {
+      branchId,
+      title: addition.title.trim(),
+      task: addition.task.trim(),
+      expectedOutput: "",
+      priority: "optional",
+      enabled: true,
+      objectives: [],
+      sourceScope,
+      dependsOn: [],
+    };
+  });
 }
 
 /** Drops the dependencies of enabled branches on disabled ones, so removing a branch frees its dependents. */
@@ -252,16 +293,18 @@ export function parsePlanDecisionPayload(value: unknown): PlanDecisionPayload | 
     return boundedText(instruction) ? { action: "regenerate", instruction } : null;
   }
   if (value.action !== "edit" || !isRecord(value.edit)) return null;
-  const { branches, knownOmissions } = value.edit;
+  const { branches, added, knownOmissions } = value.edit;
   const parsedBranches = branches === undefined ? [] : parseBranchEdits(branches);
+  const parsedAdded = added === undefined ? [] : parseBranchAdditions(added);
   const omissionsValid =
     knownOmissions === undefined ||
     (Array.isArray(knownOmissions) && knownOmissions.every(boundedText));
-  if (!parsedBranches || !omissionsValid) return null;
+  if (!parsedBranches || !parsedAdded || !omissionsValid) return null;
   return {
     action: "edit",
     edit: {
       branches: parsedBranches,
+      ...(parsedAdded.length > 0 ? { added: parsedAdded } : {}),
       ...(knownOmissions !== undefined ? { knownOmissions: knownOmissions as string[] } : {}),
     },
   };
@@ -284,6 +327,16 @@ function parseBranchEdits(value: unknown): PlanBranchEdit[] | null {
     });
   }
   return edits;
+}
+
+function parseBranchAdditions(value: unknown): PlanBranchAddition[] | null {
+  if (!Array.isArray(value) || value.length > MAX_RESEARCH_BRANCHES) return null;
+  const additions: PlanBranchAddition[] = [];
+  for (const entry of value) {
+    if (!isRecord(entry) || !boundedText(entry.title) || !boundedText(entry.task)) return null;
+    additions.push({ title: entry.title, task: entry.task });
+  }
+  return additions;
 }
 
 function boundedText(value: unknown): value is string {

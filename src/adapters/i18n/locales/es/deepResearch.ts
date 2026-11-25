@@ -12,6 +12,10 @@ export const deepResearch: EnDeepResearchMessages = {
   "chat.deepResearch.action.save": "Guardar cambios",
   "chat.deepResearch.action.cancelEdit": "Cancelar la edición",
   "chat.deepResearch.editFailed": "El plan no se guardó: {reason}",
+  "chat.deepResearch.action.addBranch": "Añadir rama",
+  "chat.deepResearch.action.removeBranch": "Quitar",
+  "chat.deepResearch.editor.titlePlaceholder": "Título de la rama",
+  "chat.deepResearch.editor.taskPlaceholder": "Qué debe investigar esta rama",
   "chat.deepResearch.action.regenerate": "Regenerar",
   "chat.deepResearch.action.cancel": "Cancelar investigación",
   "chat.deepResearch.superseded":

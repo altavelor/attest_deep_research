@@ -86,7 +86,29 @@ describe("deep research plan card", () => {
     expect(host.querySelector("textarea")).toBeNull();
     click("Edit");
     host.querySelector("textarea")!.value = "Measure tides";
-    host.querySelector<HTMLInputElement>("input[type=checkbox]")!.checked = false;
+    const toggle = (checked: boolean): void => {
+      const box = host.querySelector<HTMLInputElement>("input[type=checkbox]")!;
+      box.checked = checked;
+      box.dispatchEvent(new Event("change"));
+    };
+    const struck = (): boolean =>
+      host.querySelector("li")!.classList.contains("attest-research-card__branch--disabled");
+    toggle(false);
+    expect(struck()).toBe(true);
+    toggle(true);
+    expect(struck()).toBe(false);
+    toggle(false);
+    click("Add branch");
+    click("Add branch");
+    expect(host.querySelectorAll("li")).toHaveLength(4);
+    const dropped = host.querySelectorAll("li")[2]!;
+    dropped.querySelector("input")!.value = "Dropped";
+    dropped.querySelector("button")!.click();
+    click("Add branch");
+    const [, , kept, blank] = [...host.querySelectorAll("li")];
+    kept!.querySelector("input")!.value = "Costs";
+    kept!.querySelector("textarea")!.value = "Compare costs";
+    expect(blank!.querySelector("input")!.value).toBe("");
     click("Save changes");
     click("Save changes");
     await settle();
@@ -104,6 +126,7 @@ describe("deep research plan card", () => {
         { branchId: "branch-1", enabled: false, task: "Measure tides" },
         { branchId: "branch-2", enabled: true, task: "Investigate aspect 2" },
       ],
+      added: [{ title: "Costs", task: "Compare costs" }],
     });
   });
 
