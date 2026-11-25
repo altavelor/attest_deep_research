@@ -1,6 +1,7 @@
 import type { ResearchStreamEvent } from "@application/contracts/research";
 import {
   ResearchBudgetOwner,
+  budgetLimits,
   currentHypotheses,
   deepResearchRejected,
   type ResearchDecision,
@@ -29,7 +30,7 @@ export function isExecuting(state: ResearchState): boolean {
 /** Returns the stored budget with the allocations of a dead turn consumed, keeping its active time. */
 export function reopenedBudget(state: ResearchState, now: () => Date): ResearchState["budget"] {
   if (!state.budget) return null;
-  const owner = new ResearchBudgetOwner(state.plan!.limits, () => now().getTime());
+  const owner = new ResearchBudgetOwner(budgetLimits(state.plan!), () => now().getTime());
   owner.open(state.budget);
   return { ...owner.snapshot(), activeMs: state.budget.activeMs };
 }

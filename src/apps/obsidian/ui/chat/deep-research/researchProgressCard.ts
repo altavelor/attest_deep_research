@@ -1,10 +1,11 @@
 import type { Translate } from "@adapters/i18n";
-import type {
-  BranchExecution,
-  ReportVerificationCounts,
-  ResearchHistoryEntry,
-  ResearchPlan,
-  ResearchState,
+import {
+  budgetLimits,
+  type BranchExecution,
+  type ReportVerificationCounts,
+  type ResearchHistoryEntry,
+  type ResearchPlan,
+  type ResearchState,
 } from "@core/research/deepResearch";
 import type { ResearchCardContext } from "./researchCardContext";
 import type { ResearchExportController } from "./researchExportController";
@@ -44,15 +45,16 @@ export function renderProgress(
   }
   const budget = state.budget;
   if (budget) {
+    const limits = budgetLimits(plan);
     cardEl.createDiv({
       cls: "attest-research-card__meta",
       text: t("chat.deepResearch.progress.budget", {
         rounds: budget.consumed.modelRounds,
-        maxRounds: plan.limits.modelRoundsTotal,
+        maxRounds: limits.modelRoundsTotal,
         attempts: budget.consumed.branchAttempts,
-        maxAttempts: plan.limits.attemptsTotal,
+        maxAttempts: limits.attemptsTotal,
         minutes: Math.floor(budget.activeMs / 60_000),
-        maxMinutes: Math.floor(plan.limits.activeExecutionMs / 60_000),
+        maxMinutes: Math.floor(limits.activeExecutionMs / 60_000),
       }),
     });
   }

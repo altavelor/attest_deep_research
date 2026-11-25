@@ -1,9 +1,11 @@
 import {
   ResearchBudgetOwner,
+  budgetLimits,
   emptyBudgetState,
   presetLimits,
   type ResearchLimits,
 } from "@core/research/deepResearch";
+import { researchBranch, researchPlan } from "../support/deepResearch";
 
 const limits: ResearchLimits = {
   ...presetLimits("balanced"),
@@ -87,5 +89,23 @@ describe("research budget owner", () => {
     now = limits.activeExecutionMs;
     expect(budget.allocate("w-1", "branch-1")).toEqual({ ok: false, dimension: "closed" });
     expect(budget.snapshot().closed).toEqual({ reason: "time", dimension: null });
+  });
+});
+
+describe("research budget limits", () => {
+  it("grows the shared totals by a preset branch share for each enabled branch above the preset", () => {
+    const branches = Array.from({ length: 11 }, (_, index) =>
+      researchBranch(index + 1, { enabled: index !== 0 }),
+    );
+    const preset = presetLimits("balanced");
+    expect(budgetLimits(researchPlan(branches.slice(0, 7), "balanced"))).toEqual(preset);
+    expect(budgetLimits(researchPlan(branches.slice(0, 11), "balanced"))).toEqual({
+      ...preset,
+      attemptsTotal: 17,
+      modelRoundsTotal: 267,
+      searchesTotal: 100,
+      evidenceItemsTotal: 200,
+      activeExecutionMs: 50 * 60_000,
+    });
   });
 });

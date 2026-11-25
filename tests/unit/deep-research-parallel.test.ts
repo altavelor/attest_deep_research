@@ -157,6 +157,30 @@ describe("deep research waves", () => {
     expect(signals).toHaveLength(2);
   });
 
+  it("times a run with branches added above the preset under the grown budget", async () => {
+    const branches = Array.from({ length: 7 }, (_, index) => researchBranch(index + 1));
+    const port = new MemoryResearchState();
+    port.commit = () => Promise.reject(new Error("stop"));
+    const delays: number[] = [];
+    const run = runResearch(gatheringResearch(researchPlan(branches, "conservative")), {
+      port,
+      runner: { path: "main", run: () => Promise.reject(new Error("unused")) },
+      synthesis: {} as ReportSynthesisService,
+      labels: ENGLISH_RESEARCH_LABELS,
+      now: () => new Date("2026-01-01T01:00:00.000Z"),
+      setTimer: (delayMs) => {
+        delays.push(delayMs);
+        return () => undefined;
+      },
+      createId: (prefix) => `${prefix}-1`,
+      onState: () => undefined,
+      onStatus: () => undefined,
+    });
+
+    await expect(run).rejects.toThrow("stop");
+    expect(delays).toEqual([35 * 60_000]);
+  });
+
   it("fails a branch without a source in the chat once, without a retry", async () => {
     const plan = researchPlan([researchBranch(1)], "balanced", {
       approvedAt: "2026-01-01T00:00:00.000Z",

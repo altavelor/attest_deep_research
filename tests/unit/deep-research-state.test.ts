@@ -3,7 +3,7 @@ import {
   presetLimits,
   validateResearchSection,
 } from "@core/research/deepResearch";
-import { pendingResearch, researchPlan } from "../support/deepResearch";
+import { pendingResearch, researchBranch, researchPlan } from "../support/deepResearch";
 
 const pending = pendingResearch();
 const approved = {
@@ -705,6 +705,16 @@ describe("deep research section validation", () => {
       ],
       budget: { ...approved.budget, closed: { reason: "time", dimension: null } },
     };
+    const grown = {
+      ...approved,
+      plan: researchPlan(
+        Array.from({ length: 10 }, (_, index) => researchBranch(index + 1)),
+        "thorough",
+        { approvedAt: approved.plan.approvedAt },
+      ),
+      budget: { ...approved.budget, consumed: { ...approved.budget.consumed, modelRounds: 300 } },
+    };
+    expect(validateResearchSection(section(grown)).ok).toBe(true);
     const midWave = validateResearchSection(section(wave));
     expect(midWave.ok && midWave.value).toEqual(section(wave));
     const legacy = { ...approved } as Partial<typeof approved>;

@@ -5,6 +5,7 @@ import type {
   DeepResearchWorkDiagnostic,
 } from "@core/diagnostics";
 import type { BranchExecution, BudgetDimension, ResearchLimits, ResearchState } from "./types";
+import { budgetLimits } from "./budgetLimits";
 import { stopReasonOf } from "./report";
 import { ENGLISH_RESEARCH_LABELS } from "./reportLabels";
 
@@ -58,7 +59,7 @@ export function deepResearchTurnDiagnostics(
     plan: plan && {
       revision: plan.revision,
       preset: plan.preset,
-      limits: { ...plan.limits },
+      limits: { ...budgetLimits(plan) },
       branches: plan.branches.slice(0, MAX_DIAGNOSTIC_ENTRIES).map((branch) => ({
         branchId: boundDiagnosticText(branch.branchId),
         title: boundDiagnosticText(branch.title),
@@ -72,10 +73,10 @@ export function deepResearchTurnDiagnostics(
           consumed: (Object.keys(LIMIT_OF) as BudgetDimension[]).map((dimension) => ({
             dimension,
             used: state.budget!.consumed[dimension],
-            limit: plan ? plan.limits[LIMIT_OF[dimension]] : 0,
+            limit: plan ? budgetLimits(plan)[LIMIT_OF[dimension]] : 0,
           })),
           activeMs: state.budget.activeMs,
-          activeLimitMs: plan?.limits.activeExecutionMs ?? null,
+          activeLimitMs: plan ? budgetLimits(plan).activeExecutionMs : null,
           closedReason: state.budget.closed?.reason ?? null,
           closedDimension: optionalText(state.budget.closed?.dimension ?? null),
           openAllocations: state.budget.openAllocations.length,

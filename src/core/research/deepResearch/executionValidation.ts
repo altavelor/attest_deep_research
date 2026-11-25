@@ -4,6 +4,7 @@ import {
   MAX_RESEARCH_BRANCHES,
   MAX_RESEARCH_TEXT_CHARS,
 } from "./limits";
+import { budgetLimits } from "./budgetLimits";
 import { isFindingText } from "./findingBounds";
 import { MAX_RESEARCH_CLAIMS } from "./verification";
 import { isResearchId, isRevision } from "./planValidation";
@@ -179,7 +180,7 @@ function budgetConsistent(
   executions: readonly BranchExecution[],
   budget: ResearchBudgetState,
 ): boolean {
-  const { limits } = plan;
+  const limits = budgetLimits(plan);
   const counts = Object.values(budget.attemptsByBranch);
   const open = (key: "modelRounds" | "searches"): number =>
     budget.openAllocations.reduce((total, allocation) => total + allocation[key], 0);

@@ -1,6 +1,7 @@
 import type { RetrievedChunk } from "@core/model";
 import {
   ResearchBudgetOwner,
+  budgetLimits,
   boundTestExecution,
   boundedReason,
   hypothesesSection,
@@ -108,7 +109,7 @@ export async function runResearch(
 ): Promise<ResearchRunResult> {
   const plan = start.plan!;
   const owner = new ResearchBudgetOwner(
-    plan.limits,
+    budgetLimits(plan),
     () => deps.now().getTime(),
     plan.branches.filter((branch) => branch.enabled).length,
   );
