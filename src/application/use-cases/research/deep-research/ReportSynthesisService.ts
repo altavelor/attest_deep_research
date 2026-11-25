@@ -46,8 +46,9 @@ const SYSTEM_PROMPT = [
 /**
  * Synthesizes the report summary with one model call in a fresh context that sees only the
  * question, the objectives, the outline and the verified claims, with no tools and a bounded
- * output, reporting the streamed text and the count of streamed reasoning words as they grow. Citation normalization and verification run on the reply, and tokens
- * of no listed claim are removed.
+ * output, reporting the streamed text and the count of streamed reasoning words as they grow.
+ * Tokens of no listed claim are removed, and each citation of the reply is checked against the
+ * claims citing its source.
  */
 export class ReportSynthesisService {
   constructor(private readonly options: ReportSynthesisOptions) {}
@@ -105,11 +106,28 @@ export class ReportSynthesisService {
     }
     const removedTokens =
       normalized.rejectedTokens.length + [...normalized.ids].filter((id) => !known.has(id)).length;
-    const unverifiedTokens = verifyCitations(markdown, input.evidence, {
+    const unverifiedTokens = verifyCitations(markdown, claimEvidence(input), {
       urlToEvidenceId: new Map(),
     }).length;
     return { markdown, removedTokens, unverifiedTokens };
   }
+}
+
+/**
+ * Stands each cited source in for the verified claims that cite it, so the summary is checked
+ * against text in its own language that was already checked against the source.
+ */
+function claimEvidence(input: ReportSynthesisInput): RetrievedChunk[] {
+  const claimsByToken = new Map<string, string[]>();
+  for (const entry of input.claims) {
+    for (const token of [...entry.claim.citationTokens, ...entry.assessment.contradictingTokens]) {
+      claimsByToken.set(token, [...(claimsByToken.get(token) ?? []), entry.claim.text]);
+    }
+  }
+  return input.evidence.flatMap((chunk) => {
+    const claims = claimsByToken.get(chunk.id);
+    return claims ? [{ ...chunk, text: claims.join("\n") }] : [];
+  });
 }
 
 function synthesisRequest(input: ReportSynthesisInput): string {

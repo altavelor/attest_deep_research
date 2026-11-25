@@ -1,5 +1,8 @@
 import { ENGLISH_RESEARCH_LABELS } from "@core/research/deepResearch";
-import { EvidenceVerificationService } from "@application/use-cases/research/deep-research";
+import {
+  EvidenceVerificationService,
+  ReportSynthesisService,
+} from "@application/use-cases/research/deep-research";
 import {
   acceptedAssessment,
   claimPassage,
@@ -385,6 +388,26 @@ describe("deep research claim verification", () => {
       "Article 9(6) testing",
     ]);
     expect(claimPassage("Short source.", ["Anything"], 4500)).toBe("Short source.");
+  });
+
+  it("checks the citations of a summary against the claims citing the source, not its language", async () => {
+    const claimText = "Луна вызывает приливы в океанах дважды в сутки.";
+    const synthesize = (reply: string) =>
+      new ReportSynthesisService({
+        chatModel: new FakeChatModel([[{ content: reply, isComplete: true }]]),
+        model: "model",
+        chatOptions: {},
+      }).synthesize({
+        question: "Приливы?",
+        plan: researchPlan([researchBranch(1)], "balanced"),
+        claims: [{ claim: { ...claim, text: claimText }, assessment: supported }],
+        evidence: [retrieved("t1", markdownSource("Notes/a.md"), "The moon pulls the oceans.")],
+      });
+
+    expect((await synthesize(`${claimText} [t1]`)).unverifiedTokens).toBe(0);
+    expect(
+      (await synthesize("Солнце определяет погоду на всей планете. [t1]")).unverifiedTokens,
+    ).toBe(1);
   });
 
   it("downgrades verdicts the cited passages of the request do not bear out", () => {
