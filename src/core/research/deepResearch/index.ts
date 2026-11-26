@@ -140,7 +140,12 @@ export {
   type HypothesisProposal,
   type ParsedProposals,
 } from "./discoveryDraft";
-export { hypothesesSection, hypothesisClaims } from "./discoveryReport";
+export {
+  contestedPoints,
+  hypothesesSection,
+  hypothesisClaims,
+  type ContestedPoint,
+} from "./discoveryReport";
 export {
   DEFAULT_RESEARCH_EXPORT_FOLDER,
   MAX_EXPORT_NAME_ATTEMPTS,

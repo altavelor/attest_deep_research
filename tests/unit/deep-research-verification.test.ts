@@ -207,7 +207,7 @@ describe("deep research claim verification", () => {
     expect(markdown).toContain("Stop reason: Stop.");
   });
 
-  it("writes a supported hypothesis the checker left unresolved as tested, not as unresolved", async () => {
+  it("writes the report from every finding and the contested points of the discovery", async () => {
     const plan = researchPlan([researchBranch(1)], "balanced");
     const execution = {
       ...gatheringResearch(plan).executions[0]!,
@@ -215,29 +215,46 @@ describe("deep research claim verification", () => {
       state: "completed" as const,
       finding: { text: "The moon causes tides [t1].", citationTokens: ["t1"], partial: false },
     };
-    const hypothesis = {
-      ...claim,
-      claimId: "c-h",
-      kind: "hypothesis" as const,
-      text: "Wind lifts waves.",
-    };
     const model = new FakeChatModel([
-      [{ content: "Tides follow the moon [t1].", isComplete: true }],
+      [{ content: "Tides follow the moon [t1] and wind lifts waves [t2].", isComplete: true }],
     ]);
     const written = await writeReportMarkdown({
       question: "Tides?",
       plan,
       executions: [execution],
-      verification: {
-        claims: [claim, hypothesis],
-        assessments: [
-          supported,
-          { ...supported, claimId: "c-h", verdict: "unresolved", quote: null },
+      discovery: {
+        hypotheses: [
+          {
+            hypothesisId: "h-1",
+            revision: 1,
+            previousRevision: null,
+            branchId: execution.branchId,
+            claim: "Wind lifts waves.",
+            alternative: "Only the moon lifts waves.",
+            prediction: "p",
+            disconfirmation: "d",
+            status: "supported",
+            observationIds: ["o-1"],
+          },
         ],
-        coverage: [],
-        verifiedWorks: ["w-1"],
-        followUps: [],
-        followUpsUsed: 0,
+        tests: [],
+        observations: [
+          {
+            observationId: "o-1",
+            testId: "t-1",
+            producer: "source",
+            citationTokens: ["t2"],
+            verdict: "supports",
+            quote: "Wind builds waves.",
+            limitations: [],
+            observedAt: null,
+            receivedAt: "2026-11-25T00:00:00.000Z",
+          },
+        ],
+        cycles: [],
+        notes: [],
+        executions: [],
+        omissions: [],
       },
       stopReason: "Stop.",
       labels: ENGLISH_RESEARCH_LABELS,
@@ -247,10 +264,14 @@ describe("deep research claim verification", () => {
       resolveEvidence: () => [retrieved("t1", markdownSource("Notes/a.md"), "The moon pulls.")],
     });
 
-    expect(String(model.requests[0]!.messages.at(-1)!.content)).toContain(
-      '<claim verdict="supported by a hypothesis test">\nWind lifts waves. [t1]',
+    const request = String(model.requests[0]!.messages.at(-1)!.content);
+    expect(request).toContain("The moon causes tides [t1].");
+    expect(request).toContain(
+      '<contested outcome="the first position held in the source check">\n<position>Wind lifts waves.</position>\n<other-position>Only the moon lifts waves.</other-position>\n<quote>Wind builds waves.</quote>\n[t2]',
     );
-    expect(written.markdown).not.toContain("Wind lifts waves");
+    expect(written.synthesized).toBe(true);
+    expect(written.markdown).toContain("wind lifts waves [t2].");
+    expect(written.markdown).toContain("Stop reason: Stop.");
   });
 
   it("lists ten weak claims, those serving an objective first, and counts the rest", () => {
@@ -470,27 +491,6 @@ describe("deep research claim verification", () => {
       "Article 9(6) testing",
     ]);
     expect(claimPassage("Short source.", ["Anything"], 4500)).toBe("Short source.");
-  });
-
-  it("checks the citations of a summary against the claims citing the source, not its language", async () => {
-    const claimText = "Луна вызывает приливы в океанах дважды в сутки.";
-    const synthesize = (reply: string) =>
-      new ReportSynthesisService({
-        chatModel: new FakeChatModel([[{ content: reply, isComplete: true }]]),
-        model: "model",
-        chatOptions: {},
-      }).synthesize({
-        question: "Приливы?",
-        now: new Date("2026-11-25T00:00:00.000Z"),
-        plan: researchPlan([researchBranch(1)], "balanced"),
-        claims: [{ claim: { ...claim, text: claimText }, assessment: supported }],
-        evidence: [retrieved("t1", markdownSource("Notes/a.md"), "The moon pulls the oceans.")],
-      });
-
-    expect((await synthesize(`${claimText} [t1]`)).unverifiedTokens).toBe(0);
-    expect(
-      (await synthesize("Солнце определяет погоду на всей планете. [t1]")).unverifiedTokens,
-    ).toBe(1);
   });
 
   it("downgrades verdicts the cited passages of the request do not bear out", () => {

@@ -256,7 +256,7 @@ export class BranchModelRounds implements ModelRoundProvider {
  * first objective, and each claim with a passage is supported by a quote copied from it. Returns
  * null for any other call.
  */
-export function cooperativeResearchReply(request: ChatRequest): string | null {
+function cooperativeResearchReply(request: ChatRequest): string | null {
   const system = String(request.messages[0]?.content);
   const user = String(request.messages.at(-1)?.content);
   if (system.startsWith("You decide whether")) {
@@ -319,7 +319,7 @@ export class PlanAndReportModel implements ChatModelProvider {
     }
     this.onReport();
     const claims = String(request.messages.at(-1)?.content);
-    const token = /\[([^\]\s]+)\]/u.exec(claims.slice(claims.indexOf("Verified claims:")))?.[1];
+    const token = /\[([^\]\s]+)\]/u.exec(claims.slice(claims.indexOf("Findings:")))?.[1];
     for (const text of ["Weigh the mo", "on pull"]) {
       yield {
         content: "",

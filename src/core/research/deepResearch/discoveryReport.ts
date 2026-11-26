@@ -4,6 +4,44 @@ import { USER_OBSERVATION_LIMITATION, currentHypotheses } from "./discovery";
 import { label, type ResearchLabels } from "./reportLabels";
 import { MAX_CLAIM_TOKENS } from "./verification";
 
+export interface ContestedPoint {
+  claim: string;
+  alternative: string;
+  status: ResearchHypothesis["status"];
+  quotes: string[];
+  citationTokens: string[];
+}
+
+const MAX_CONTESTED_POINTS = 12;
+const MAX_CONTESTED_QUOTES = 2;
+const MAX_CONTESTED_QUOTE_CHARS = 400;
+
+/**
+ * Lists the points the sources disagree on: each current hypothesis with its alternative, its
+ * status after the source checks, and the quotes and citation tokens of its source observations.
+ */
+export function contestedPoints(discovery: ResearchDiscovery | null): ContestedPoint[] {
+  if (!discovery) return [];
+  return currentHypotheses(discovery.hypotheses)
+    .slice(0, MAX_CONTESTED_POINTS)
+    .map((hypothesis) => {
+      const sources = sourceObservations(discovery, hypothesis);
+      return {
+        claim: hypothesis.claim,
+        alternative: hypothesis.alternative,
+        status: hypothesis.status,
+        quotes: sources
+          .flatMap((entry) => (entry.quote === null ? [] : [entry.quote]))
+          .slice(0, MAX_CONTESTED_QUOTES)
+          .map((quote) => quote.slice(0, MAX_CONTESTED_QUOTE_CHARS)),
+        citationTokens: [...new Set(sources.flatMap((entry) => entry.citationTokens))].slice(
+          0,
+          MAX_CLAIM_TOKENS,
+        ),
+      };
+    });
+}
+
 /**
  * Returns the claims of kind hypothesis that enter verification: one per current supported
  * hypothesis revision with source observations, citing their tokens, at most `max` of them.

@@ -270,7 +270,7 @@ describe("main branch runner findings", () => {
 });
 
 describe("research report citations", () => {
-  it("lists findings unverified without a model and removes tokens no registry lookup resolves", async () => {
+  it("gives the model the findings without the tokens no registry lookup resolves", async () => {
     const plan = researchPlan([researchBranch(1)], "balanced", {
       approvedAt: "2026-01-01T00:00:00.000Z",
     });
@@ -280,11 +280,11 @@ describe("research report citations", () => {
       pending: null,
       executions: initialExecutions(plan),
     };
-    let synthesized = false;
+    const findings: unknown[] = [];
     const synthesis = {
-      synthesize: async () => {
-        synthesized = true;
-        return { markdown: "Report", removedTokens: 0, unverifiedTokens: 0 };
+      synthesize: async (input: { findings: unknown[] }) => {
+        findings.push(...input.findings);
+        return { markdown: "Report", removedTokens: 0 };
       },
     } as unknown as ReportSynthesisService;
     const result = await runResearch(start, {
@@ -305,10 +305,11 @@ describe("research report citations", () => {
       onState: () => undefined,
       onStatus: () => undefined,
     });
-    expect(synthesized).toBe(false);
+    expect(findings).toEqual([
+      { title: expect.any(String), text: "Tides  and waves .", tokens: [] },
+    ]);
     expect(result.report).toMatchObject({ quality: "partial", verification: null });
-    expect(result.report!.markdown).toContain("Tides  and waves .");
-    expect(result.report!.markdown).toContain("their claims were not checked against the sources");
+    expect(result.report!.markdown).toContain("Report");
     expect(result.report!.markdown).toContain(
       "2 citation(s) without a source in the findings were removed.",
     );

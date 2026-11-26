@@ -133,12 +133,11 @@ describe("deep research discovery", () => {
       "branch-1": 1,
       ...Object.fromEntries(tested.map((testId) => [testId, 1])),
     });
-    expect(final.report!.markdown).toContain("(supported by literature) The moon causes tides");
-    expect(final.report!.markdown).toContain("Alternative: Wind causes tides.");
-    const verification = [...port.commits].reverse().find((state) => state.verification)!;
-    expect(
-      verification.verification!.claims.filter((claim) => claim.kind === "hypothesis"),
-    ).toHaveLength(1);
+    const request = String(model.requests.at(-1)!.messages.at(-1)!.content);
+    expect(request).toContain(
+      '<contested outcome="the first position held in the source check">\n<position>The moon causes tides',
+    );
+    expect(request).toContain("<other-position>Wind causes tides");
     const spent = port.commits.map((state) => state.budget?.consumed.modelRounds ?? 0);
     expect(spent.every((value, index) => index === 0 || value >= spent[index - 1]!)).toBe(true);
     expect(final.budget!.consumed.modelRounds).toBeGreaterThanOrEqual(3 * 2 + 4);
@@ -242,7 +241,9 @@ describe("deep research discovery", () => {
     expect(final.discovery!.notes.map((note) => note.outcome)).toContain(
       "Observation skipped by the user",
     );
-    expect(final.report!.markdown).toContain("(untested — the user skipped the observation)");
+    expect(String(model.requests.at(-1)!.messages.at(-1)!.content)).toContain(
+      '<contested outcome="not checked against sources">',
+    );
   });
 
   it("stops a turn while its supplied observation is assessed without recording it", async () => {

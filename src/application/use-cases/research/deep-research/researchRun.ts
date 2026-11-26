@@ -337,11 +337,11 @@ async function writeReport(
   }
   deps.onStatus("Writing the research report…");
   activity.step("writing", { kind: "writing", words: 0, headings: [] });
-  const { markdown, summaryFailure } = await writeReportMarkdown({
+  const { markdown, synthesized, summaryFailure } = await writeReportMarkdown({
     question: start.question,
     plan,
     executions,
-    verification,
+    discovery: current.discovery ?? null,
     stopReason,
     labels: deps.labels,
     synthesis: deps.synthesis,
@@ -352,12 +352,14 @@ async function writeReport(
     onText: (text, thinking) => activity.writing(text, thinking),
   });
   const resolve = deps.resolveEvidence ?? (() => []);
-  const hypotheses = hypothesesSection(current.discovery, deps.labels, (text, allowed) =>
-    removeUnknownCitationTokens(
-      text,
-      new Set([...allowed].filter((token) => resolve([token]).length > 0)),
-    ),
-  );
+  const hypotheses = synthesized
+    ? ""
+    : hypothesesSection(current.discovery, deps.labels, (text, allowed) =>
+        removeUnknownCitationTokens(
+          text,
+          new Set([...allowed].filter((token) => resolve([token]).length > 0)),
+        ),
+      );
   const finalMarkdown = withMissingNote(
     hypotheses === "" ? markdown : `${markdown}\n\n${hypotheses}`,
     decision.missingBranches,

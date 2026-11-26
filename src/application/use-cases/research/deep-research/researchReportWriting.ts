@@ -1,14 +1,13 @@
 import type { RetrievedChunk } from "@core/model";
 import {
   boundedReason,
+  contestedPoints,
   formatWithoutModel,
   label,
-  verificationSections,
-  verifiedClaims,
   type BranchExecution,
+  type ResearchDiscovery,
   type ResearchLabels,
   type ResearchPlan,
-  type ResearchVerification,
 } from "@core/research/deepResearch";
 import type { ReportSynthesisService } from "./ReportSynthesisService";
 import { removeUnknownCitationTokens } from "../strategies/citations";
@@ -17,7 +16,7 @@ export interface ReportWritingInput {
   question: string;
   plan: ResearchPlan;
   executions: readonly BranchExecution[];
-  verification: ResearchVerification | null;
+  discovery: ResearchDiscovery | null;
   stopReason: string;
   labels: ResearchLabels;
   synthesis: ReportSynthesisService;
@@ -30,86 +29,67 @@ export interface ReportWritingInput {
 
 export interface WrittenReport {
   markdown: string;
+  synthesized: boolean;
   summaryFailure?: string;
 }
 
 /**
- * Writes the report markdown. Supported and conflicted claims, with supported hypotheses the
- * checker left unresolved, are synthesized by the model when a round remains and one claim is
- * supported, followed by the verification sections; otherwise the assessments, or without them
- * the findings, are formatted without a model, and a failed synthesis returns its cause.
+ * Writes the report markdown. The model synthesizes it from the findings of every completed
+ * branch and the contested points when a round remains; otherwise the findings are listed without
+ * a model, and a failed synthesis returns its cause.
  */
 export async function writeReportMarkdown(input: ReportWritingInput): Promise<WrittenReport> {
-  const written = await writeMarkdown(input);
-  return typeof written === "string" ? { markdown: written } : written;
-}
-
-async function writeMarkdown(input: ReportWritingInput): Promise<string | WrittenReport> {
-  const { plan, verification, stopReason, labels } = input;
-  if (!verification || verification.assessments.length === 0) {
-    const cited = registryCitedFindings(input.executions, input.resolveEvidence);
-    return withCitationNotes(
-      formatWithoutModel(plan, cited.executions, stopReason, null, labels),
-      {
-        removedTokens: cited.removedTokens,
-        unverifiedTokens: 0,
-      },
-      labels,
-    );
-  }
+  const { plan, stopReason, labels } = input;
   const cited = registryCitedFindings(input.executions, input.resolveEvidence);
-  const removedTokens = cited.removedTokens;
-  const claims = verifiedClaims(verification).filter(
-    (entry) =>
-      entry.assessment.verdict === "supported" ||
-      entry.assessment.verdict === "conflicted" ||
-      (entry.claim.kind === "hypothesis" && entry.assessment.verdict === "unresolved"),
-  );
-  if (!claims.some((entry) => entry.assessment.verdict === "supported")) {
-    return withCitationNotes(
-      formatWithoutModel(plan, cited.executions, stopReason, verification, labels),
-      {
-        removedTokens,
-        unverifiedTokens: 0,
-      },
-      labels,
-    );
-  }
   const fallback = withCitationNotes(
-    formatWithoutModel(plan, input.executions, stopReason, verification, labels),
-    { removedTokens, unverifiedTokens: 0 },
+    formatWithoutModel(plan, cited.executions, stopReason, null, labels),
+    cited.removedTokens,
     labels,
   );
+  const findings = cited.executions.flatMap((execution) =>
+    execution.finding
+      ? [
+          {
+            title:
+              plan.branches.find((branch) => branch.branchId === execution.branchId)?.title ??
+              execution.branchId,
+            text: execution.finding.text.trim(),
+            tokens: execution.finding.citationTokens,
+          },
+        ]
+      : [],
+  );
+  if (findings.length === 0) return { markdown: fallback, synthesized: false };
   if (!input.spendRound()) {
-    return { markdown: fallback, summaryFailure: "No finalization round remained." };
+    return {
+      markdown: fallback,
+      synthesized: false,
+      summaryFailure: "No finalization round remained.",
+    };
   }
-  const tokens = claims.flatMap((entry) => [
-    ...entry.claim.citationTokens,
-    ...entry.assessment.contradictingTokens,
-  ]);
   try {
     const synthesized = await input.synthesis.synthesize({
       question: input.question,
       now: input.now,
       plan,
-      claims,
-      evidence: input.resolveEvidence?.([...new Set(tokens)]) ?? [],
+      findings,
+      contested: contestedPoints(input.discovery),
       ...(input.signal ? { signal: input.signal } : {}),
       ...(input.onText ? { onText: input.onText } : {}),
     });
-    const sections = verificationSections(plan, input.executions, verification, stopReason, labels);
-    return withCitationNotes(
-      `${synthesized.markdown}\n\n${sections}`,
-      {
-        removedTokens: synthesized.removedTokens + removedTokens,
-        unverifiedTokens: synthesized.unverifiedTokens,
-      },
-      labels,
-    );
+    return {
+      markdown: withCitationNotes(
+        `${synthesized.markdown}\n\n${label(labels, "stopReasonLine", { reason: stopReason })}`,
+        synthesized.removedTokens + cited.removedTokens,
+        labels,
+      ),
+      synthesized: true,
+    };
   } catch (error) {
     if (input.signal?.aborted) throw error;
     return {
       markdown: fallback,
+      synthesized: false,
       summaryFailure: boundedReason(error instanceof Error ? error.message : "model error"),
     };
   }
@@ -163,16 +143,10 @@ function registryCitedFindings(
 
 function withCitationNotes(
   markdown: string,
-  counts: { removedTokens: number; unverifiedTokens: number },
+  removedTokens: number,
   labels: ResearchLabels,
 ): string {
-  const notes = [
-    counts.removedTokens > 0
-      ? label(labels, "removedCitations", { count: counts.removedTokens })
-      : "",
-    counts.unverifiedTokens > 0
-      ? label(labels, "unverifiedCitations", { count: counts.unverifiedTokens })
-      : "",
-  ].filter((note) => note !== "");
-  return notes.length > 0 ? `${markdown}\n\n> ${notes.join(" ")}` : markdown;
+  return removedTokens > 0
+    ? `${markdown}\n\n> ${label(labels, "removedCitations", { count: removedTokens })}`
+    : markdown;
 }

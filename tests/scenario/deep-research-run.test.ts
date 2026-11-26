@@ -186,9 +186,7 @@ describe("deep research run", () => {
     const synthesis = String(run.model.requests.at(-1)?.messages.at(-1)?.content);
     expect(synthesis).toContain(first!.finding!.citationTokens[0]);
     expect(synthesis).not.toContain("source-7:revision-7");
-    expect(completeAnswer(events)?.answer).toContain(
-      "Verified claims are listed without a synthesized summary.",
-    );
+    expect(completeAnswer(events)?.answer).toContain("Unverified findings are listed per branch");
     expect(final.report!.summaryFailure).toBe(
       "The output limit was reached after 4 words of reasoning, before the report.",
     );
