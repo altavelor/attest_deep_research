@@ -19,6 +19,7 @@ import {
   branchLanguageInstruction,
 } from "@core/research/deepResearch";
 import { researchBranch, researchPlan } from "../support/deepResearch";
+import { markdownSource, retrieved } from "../support/factories";
 import { runSummary } from "../support/subAgentInspection";
 import { settle } from "../support/async";
 import { runPastDeadline } from "../support/timers";
@@ -363,6 +364,71 @@ describe("deep research main-path fallback", () => {
       UnusableBranchSessionError,
     );
     expect(calls).toEqual([]);
+  });
+
+  it("reports the documents the child opened as the fetches of its attempt", async () => {
+    const run = runSummary("r-1", "s-1", {
+      usage: { requestCount: 1, modelRounds: 2, toolCalls: 3, durationMs: 1, source: "provider" },
+    });
+    const delegator = {
+      create: async () => ({ subAgentSessionId: "s-1" }),
+      run: async () => ({ sessionId: "s-1", runId: "r-1" }),
+      getResult: async () => ({
+        state: "completed",
+        resultRevision: 1,
+        outcome: {
+          run,
+          answerText: "Opened [chunk-1] and heard [chunk-2].",
+          importId: "import-1",
+          evidence: ["chunk-1", "chunk-2"].map((id) => ({
+            conversationEvidenceId: id,
+            conversationRevisionId: `${id}:revision-1`,
+          })),
+        },
+      }),
+    } as unknown as SubAgentDelegator;
+    const call = (tool: "fetch_web_page" | "search_web") => ({ callId: "c", tool });
+    const runner = new SubAgentBranchRunner({
+      branches: [researchBranch(1)],
+      delegator: () => delegator,
+      resolver: {
+        resolve: async () => ({
+          evidence: [
+            retrieved("chunk-1", markdownSource("a.md"), "A"),
+            retrieved("chunk-2", markdownSource("b.md"), "B"),
+          ],
+          citations: [],
+          provenance: [
+            { evidenceId: "chunk-1", calls: [call("fetch_web_page")] },
+            { evidenceId: "chunk-2", calls: [call("search_web")] },
+          ],
+        }),
+      },
+      sessionOf: () => null,
+    });
+    const work = {
+      workId: "w-1",
+      branchId: "branch-1",
+      cycle: 1,
+      kind: "gather" as const,
+      task: "T",
+    };
+    const allocation = {
+      workId: "w-1",
+      branchId: "branch-1",
+      attempt: 1,
+      modelRounds: 3,
+      searches: 3,
+    };
+
+    await runner.run(work, allocation, new AbortController().signal);
+
+    expect(runner.usage("w-1")).toEqual({
+      modelRounds: 2,
+      searches: 3,
+      evidenceItems: 0,
+      fetches: 1,
+    });
   });
 
   it("reports the child's import outcome and evidence count after a failed import", async () => {

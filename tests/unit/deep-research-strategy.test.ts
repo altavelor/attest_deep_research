@@ -259,7 +259,7 @@ describe("main branch runner findings", () => {
     const finding = await runner.run(work, allocation, new AbortController().signal);
     expect(finding.text).toHaveLength(30_000);
     expect(finding.citationTokens).toEqual([kept.id]);
-    expect(runner.usage("w-1")?.evidenceItems).toBe(1);
+    expect(runner.usage("w-1")).toMatchObject({ evidenceItems: 1, fetches: 1 });
   });
 
   it("cuts a finding whose stored encoding would exceed the byte bound", () => {

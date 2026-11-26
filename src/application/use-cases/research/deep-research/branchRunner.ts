@@ -1,3 +1,4 @@
+import { isDocumentReadTool } from "@core/research";
 import type {
   BranchAllocation,
   BranchFinding,
@@ -5,6 +6,7 @@ import type {
   BranchUsage,
   ResearchWork,
 } from "@core/research/deepResearch";
+import type { ResearchEvidenceSnapshot } from "@application/sources";
 
 /**
  * Runs one attempt of a research work within its allocation. Implementations differ only in where
@@ -50,4 +52,11 @@ export class UnusableBranchSessionError extends Error {
     super("The branch session can no longer be continued.");
     this.name = "UnusableBranchSessionError";
   }
+}
+
+/** Counts the evidence items of a snapshot whose content a branch opened rather than found in a search hit. */
+export function openedDocuments(snapshot: ResearchEvidenceSnapshot): number {
+  return snapshot.provenance.filter((entry) =>
+    entry.calls.some((call) => isDocumentReadTool(call.tool)),
+  ).length;
 }

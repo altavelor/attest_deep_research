@@ -28,6 +28,7 @@ import { MAX_WAIT_MS } from "@application/use-cases/sub-agent";
 import {
   BranchNoFindingsError,
   UnusableBranchSessionError,
+  openedDocuments,
   type BranchChildRun,
   type BranchRunner,
 } from "./branchRunner";
@@ -82,7 +83,7 @@ export class SubAgentBranchRunner implements BranchRunner {
     if (result.state !== "completed") {
       throw new Error(boundedReason(`The child session ${result.state}: ${result.error.message}`));
     }
-    return this.finding(result.outcome);
+    return this.finding(work.workId, result.outcome);
   }
 
   usage(workId: string): BranchUsage | null {
@@ -176,8 +177,13 @@ export class SubAgentBranchRunner implements BranchRunner {
     }
   }
 
-  private async finding(outcome: ImportedSubAgentRunOutcome): Promise<BranchFinding> {
+  private async finding(
+    workId: string,
+    outcome: ImportedSubAgentRunOutcome,
+  ): Promise<BranchFinding> {
     const snapshot = await this.deps.resolver.resolve(outcome);
+    const usage = this.usages.get(workId);
+    if (usage) this.usages.set(workId, { ...usage, fetches: openedDocuments(snapshot) });
     const present = new Set(snapshot.evidence.map((chunk) => chunk.id));
     const revisionOf = new Map(
       outcome.evidence

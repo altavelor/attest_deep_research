@@ -1,5 +1,5 @@
 import type { ResearchAnswer } from "@core/answer";
-import { isDocumentReadTool, type ResearchModeWebParameters } from "@core/research";
+import type { ResearchModeWebParameters } from "@core/research";
 import {
   MAX_FINDING_CITATION_TOKENS,
   boundFindingText,
@@ -19,7 +19,12 @@ import {
   removeUnknownCitationTokens,
   webUrlEvidenceIndex,
 } from "../strategies/citations";
-import { BranchNoFindingsError, BranchUnavailableError, type BranchRunner } from "./branchRunner";
+import {
+  BranchNoFindingsError,
+  BranchUnavailableError,
+  openedDocuments,
+  type BranchRunner,
+} from "./branchRunner";
 import { subAgentToolContext, type SubAgentToolSources } from "../sub-agent/subAgentToolContext";
 
 export interface MainBranchRunnerDeps {
@@ -78,12 +83,12 @@ export class MainBranchRunner implements BranchRunner {
     });
     const evidence = [...result.snapshot.evidence];
     const telemetry = result.telemetry;
+    const opened = openedDocuments(result.snapshot);
     this.usages.set(work.workId, {
       modelRounds: telemetry?.rounds ?? allocation.modelRounds,
       searches: telemetry?.searchCalls ?? allocation.searches,
-      evidenceItems: result.snapshot.provenance.filter((entry) =>
-        entry.calls.some((call) => isDocumentReadTool(call.tool)),
-      ).length,
+      evidenceItems: opened,
+      fetches: opened,
       ...(telemetry
         ? { inputTokens: telemetry.usage.inputTokens, outputTokens: telemetry.usage.outputTokens }
         : {}),
