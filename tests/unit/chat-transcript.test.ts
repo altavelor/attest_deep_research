@@ -306,7 +306,7 @@ describe("ChatTranscript", () => {
     expect(onOpenDiagnosticReport).toHaveBeenCalledWith(diagnostics);
   });
 
-  it("adds the sources block and answer actions to the header when a streamed answer completes", () => {
+  it("adds the sources block and puts the answer actions in the final answer block when a streamed answer completes", () => {
     const transcript = document.createElement("div");
     const streaming = {
       role: "assistant" as const,
@@ -325,6 +325,14 @@ describe("ChatTranscript", () => {
       content: "Final answer",
       evidence: [chunk],
       usage: { inputTokens: 1, outputTokens: 2 },
+      researchProgress: {
+        phase: "complete",
+        reasoning: {
+          phase: "complete",
+          segments: [{ id: "summary-1", kind: "summary", content: "Weighing the plan." }],
+        },
+        chain: [],
+      },
       answer: {
         question: "Question",
         answer: "Final answer",
@@ -340,11 +348,14 @@ describe("ChatTranscript", () => {
 
     expect(patchActiveAssistantMessage(transcript, options({ messages: [completed] }))).toBe(true);
 
-    const header = transcript.querySelector(".attest-chat__message-header");
+    const answer = transcript.querySelector(".attest-chat__answer-content");
     expect(transcript.querySelector(".attest-chat__citation-blocks")).not.toBeNull();
-    expect(header?.querySelector(".attest-chat__message-copy")).not.toBeNull();
-    expect(header?.querySelector(".attest-chat__message-save-answer")).not.toBeNull();
-    expect(header?.querySelector(".attest-chat__message-append-answer")).not.toBeNull();
+    expect(answer?.querySelector(".attest-chat__message-copy")).not.toBeNull();
+    expect(answer?.querySelector(".attest-chat__message-save-answer")).not.toBeNull();
+    expect(answer?.querySelector(".attest-chat__message-append-answer")).not.toBeNull();
+    expect(
+      transcript.querySelector(".attest-chat__message-header .attest-chat__message-actions"),
+    ).toBeNull();
     expect(transcript.querySelectorAll(".attest-chat__message-actions")).toHaveLength(1);
     expect(transcript.querySelector(".attest-chat__message")?.lastElementChild?.className).toBe(
       "attest-chat__message-usage",

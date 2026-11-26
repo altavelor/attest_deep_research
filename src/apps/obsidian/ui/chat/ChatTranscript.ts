@@ -117,7 +117,7 @@ function renderMessage(
     cls: `attest-chat__message attest-chat__message--${message.role}`,
     attr: { "data-message-id": message.id ?? message.createdAt },
   });
-  renderMessageHeader(messageEl, message, index, options);
+  renderMessageHeader(messageEl, message, options);
   const contentEl = messageEl.createDiv({
     cls: `attest-chat__message-content attest-chat__message-content--${message.role}`,
   });
@@ -128,6 +128,7 @@ function renderMessage(
   } else {
     renderUserMessageContent(contentEl, message, options.t);
   }
+  renderMessageActions(messageEl, message, index, options);
   renderMessageCitationBlocks(messageEl, message, options);
   renderMessageUsage(messageEl, message, options);
 }
@@ -163,7 +164,6 @@ function isTokenCount(value: unknown): value is number {
 function renderMessageHeader(
   messageEl: HTMLElement,
   message: ChatDisplayMessage,
-  index: number,
   options: ChatTranscriptOptions,
 ): void {
   const header = messageEl.createDiv({ cls: "attest-chat__message-header" });
@@ -178,7 +178,6 @@ function renderMessageHeader(
     cls: "attest-chat__message-time",
     text: formatMessageTime(message.createdAt, options.locale ?? DEFAULT_LOCALE),
   });
-  renderHeaderActions(header, message, index, options);
 }
 
 /**
@@ -251,19 +250,30 @@ function attachmentDisplayName(path: string): string {
 }
 
 /**
- * Every per-message action shares the header row: editing and copying for a
- * question, and copying, note actions, and the diagnostic report for an answer.
+ * Renders the per-message actions: editing and copying for a question, and copying, note actions,
+ * and the diagnostic report for an answer. An answer that follows a workflow timeline carries them
+ * at the top of its final answer block; every other message carries them in its header row.
  */
-function renderHeaderActions(
-  header: HTMLElement,
+function renderMessageActions(
+  messageEl: HTMLElement,
   message: ChatDisplayMessage,
   index: number,
   options: ChatTranscriptOptions,
 ): void {
+  messageEl.querySelector(".attest-chat__message-actions")?.remove();
   if (isIntermediateResearchMessage(message, options.research)) return;
+  const answerHeader = messageEl.querySelector<HTMLElement>(".attest-chat__answer-header");
+  const host =
+    answerHeader?.parentElement ??
+    messageEl.querySelector<HTMLElement>(".attest-chat__message-header");
+  if (!host) return;
   let actions: HTMLElement | null = null;
-  const ensureActions = (): HTMLElement =>
-    (actions ??= header.createDiv({ cls: "attest-chat__message-actions" }));
+  const ensureActions = (): HTMLElement => {
+    if (actions) return actions;
+    actions = host.createDiv({ cls: "attest-chat__message-actions" });
+    answerHeader?.after(actions);
+    return actions;
+  };
   const createCopyButton = (): void => {
     createMessageIconButton(
       ensureActions(),
@@ -345,7 +355,7 @@ export function patchActiveAssistantMessage(
   const messageEl = messageElements.item(messageElements.length - 1);
   if (!messageEl?.classList.contains("attest-chat__message--assistant")) return false;
   if (!patchAssistantMessageContent(messageEl, message, options)) return false;
-  patchMessageHeaderActions(messageEl, message, index, options);
+  renderMessageActions(messageEl, message, index, options);
   renderMessageCitationBlocks(messageEl, message, options);
   renderMessageUsage(messageEl, message, options);
   applyScrollAnchor(transcriptEl, scroll);
@@ -357,18 +367,6 @@ function lastVisibleMessageIndex(messages: ChatDisplayMessage[]): number {
     if (messages[index].kind !== "compact-summary") return index;
   }
   return -1;
-}
-
-function patchMessageHeaderActions(
-  messageEl: HTMLElement,
-  message: ChatDisplayMessage,
-  index: number,
-  options: ChatTranscriptOptions,
-): void {
-  const header = messageEl.querySelector<HTMLElement>(".attest-chat__message-header");
-  if (!header) return;
-  header.querySelector<HTMLElement>(".attest-chat__message-actions")?.remove();
-  renderHeaderActions(header, message, index, options);
 }
 
 /** Releases everything the transcript owns before its DOM is emptied or replaced. */
