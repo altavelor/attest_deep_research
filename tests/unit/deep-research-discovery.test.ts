@@ -187,6 +187,30 @@ describe("deep research discovery rules", () => {
     );
   });
 
+  it("asks for the contradictions between the whole findings within a bounded output", async () => {
+    const model = new FakeChatModel([[{ content: '{"hypotheses": []}', isComplete: true }]]);
+    const plan = researchPlan([researchBranch(1)], "balanced");
+    const findings = [
+      {
+        ...gatheringResearch(plan).executions[0]!,
+        finding: { text: `${"a".repeat(11_000)}END`, citationTokens: [], partial: false },
+      },
+    ];
+    await new ResearchDiscoveryService({
+      chatModel: model,
+      model: "model",
+      chatOptions: { maxTokens: 131_072 },
+      resolveEvidence: () => [],
+      spendRound: () => true,
+      createId: (prefix) => `${prefix}-1`,
+      now: () => "2026-01-01T00:00:00.000Z",
+    }).propose("Tides?", plan, findings, [], 3);
+
+    expect(String(model.requests[0]!.messages[0]!.content)).toContain("contradictions");
+    expect(String(model.requests[0]!.messages.at(-1)!.content)).toContain("END");
+    expect(model.requests[0]!.maxTokens).toBe(24_000);
+  });
+
   it("keeps a late user report as inconclusive text when no discovery round remains", async () => {
     const model = new FakeChatModel([]);
     const observation = await new ResearchDiscoveryService({

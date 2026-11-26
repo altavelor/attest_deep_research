@@ -189,7 +189,7 @@ describe("deep research discovery", () => {
     ]);
     expect(
       model.requests.filter((request) =>
-        String(request.messages[0]?.content).startsWith("You turn research findings"),
+        String(request.messages[0]?.content).startsWith("You find contradictions"),
       ),
     ).toHaveLength(1);
   });

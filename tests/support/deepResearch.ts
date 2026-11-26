@@ -457,7 +457,7 @@ export class DiscoveryModel implements ChatModelProvider {
     this.requests.push(request);
     const system = String(request.messages[0]?.content);
     const user = String(request.messages.at(-1)?.content);
-    if (system.startsWith("You turn research findings")) {
+    if (system.startsWith("You find contradictions")) {
       const kind = this.proposals.shift();
       const revises = /<hypothesis id="([^"]+)"/u.exec(user)?.[1] ?? null;
       const hypotheses = kind
