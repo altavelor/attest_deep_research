@@ -1,4 +1,9 @@
-import { humanizeToolName, TOOL_UNAVAILABLE_CODE, toolIntent } from "@core/agent";
+import {
+  ASK_CLARIFICATION_TOOL,
+  humanizeToolName,
+  TOOL_UNAVAILABLE_CODE,
+  toolIntent,
+} from "@core/agent";
 import type { MessageKey, Translate } from "@adapters/i18n";
 import { computeLineDiff, DiffHunk, diffHasChanges } from "@apps/obsidian/ui/shared/lineDiff";
 
@@ -56,6 +61,7 @@ export function describeToolCall(input: ToolCallViewInput): ToolCallView {
     case "read_note":
     case "get_active_note":
     case "delete_note":
+    case ASK_CLARIFICATION_TOOL:
       return { intent, fetchTargets };
 
     case "create_note": {

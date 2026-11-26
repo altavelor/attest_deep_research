@@ -98,6 +98,7 @@ export {
   MAX_IMPORTED_EVIDENCE_ITEMS,
   MAX_IMPORTED_WEB_SOURCES,
   MAX_REGISTERED_SNIPPET_CHARS,
+  isDocumentReadTool,
   parseSubAgentChildEvidence,
   readSubAgentImportItems,
   rewriteSubAgentCitations,

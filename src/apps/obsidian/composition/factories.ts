@@ -1,4 +1,4 @@
-import type { MessageKey } from "@adapters/i18n";
+import { createResearchLabelCatalogue, type MessageKey } from "@adapters/i18n";
 import { ChatCompletionsRoundAdapter } from "@adapters/model-provider";
 import {
   LlmClaimExtractor,
@@ -51,6 +51,7 @@ import {
 } from "./indexingFactory";
 
 export type { CompositionContext } from "./CompositionContext";
+export { createResearchExportService } from "./researchExportFactory";
 export {
   createChatModelClient,
   createQueryExpansionService,
@@ -132,6 +133,7 @@ export function createResearchService(
     modelRoundFactory: (model) => new ChatCompletionsRoundAdapter(model),
     runToolLoop,
     translate: (key, params) => ctx.translator.t(key as MessageKey, params),
+    researchLabels: createResearchLabelCatalogue(),
     chatModel: createChatModelClient(ctx, chatServer, chatProfile),
     ...(modelRound ? { modelRound } : {}),
     reasoning,

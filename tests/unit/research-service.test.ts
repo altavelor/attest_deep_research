@@ -206,8 +206,10 @@ describe("extractFollowUpQuestions", () => {
 });
 
 describe("ResearchService", () => {
-  it("records Instant diagnostics without a thinking section", async () => {
-    const chatModel = new FakeChatModel([{ content: "Answer.", isComplete: true }]);
+  it("records Instant diagnostics without a thinking section and reports each answer's tokens", async () => {
+    const chatModel = new FakeChatModel([
+      { content: "Answer.", isComplete: true, events: [usageEvent(12, 0)] },
+    ]);
     const service = new ResearchService({
       toolsetFactory: createResearchToolRegistry,
       runToolLoop,
@@ -230,13 +232,17 @@ describe("ResearchService", () => {
 
     const completion = events.at(-1);
     if (completion?.type !== "complete") throw new Error("The Instant run did not complete.");
+    const again = await collectAsync(service.answer({ question: "Again", mode: "instant" }));
+    expect([events.at(-2), again.at(-2)]).toEqual([
+      { type: "usage", inputTokens: 12, outputTokens: 1 },
+      { type: "usage", inputTokens: 12, outputTokens: 1 },
+    ]);
     expect(completion.answer.contextDiagnostics?.executionStrategy).toBe("instant");
     expect(completion.answer.contextDiagnostics?.thinking).toBeUndefined();
     expect(completion.answer.contextDiagnostics?.answer).toMatchObject({
       citations: { verificationRan: true, occurrences: 0 },
     });
     expect(completion.answer.contextDiagnostics?.capabilityProvenance).toEqual({ calls: "probe" });
-    expect(chatModel.requests).toHaveLength(1);
     expect(chatModel.requests[0].tools).toBeUndefined();
     expect(chatModel.requests[0]).not.toHaveProperty("toolChoice");
   });
@@ -275,6 +281,7 @@ describe("ResearchService", () => {
     );
     const completion = events.at(-1);
     if (completion?.type !== "complete") throw new Error("The Instant run did not complete.");
+    expect(events.some((event) => event.type === "usage")).toBe(false);
 
     expect(completion.answer).toMatchObject({
       answer: "Evidence [local-source-1], unknown , web .",
@@ -375,7 +382,7 @@ describe("ResearchService", () => {
     expect(chatModel.requests[0]).not.toHaveProperty("toolChoice");
   });
 
-  it("disables extended thinking during Instant synthesis", async () => {
+  it("disables extended thinking during Instant synthesis and counts the round's tokens", async () => {
     let receivedReasoning: unknown;
     const modelRound = {
       listModels: async () => ["gpt-5"],
@@ -392,6 +399,7 @@ describe("ResearchService", () => {
             { type: "text" as const, text: "Answer." },
           ],
           stopReason: "complete" as const,
+          usage: { inputTokens: 9, outputTokens: 4, reasoningTokens: 0, cachedInputTokens: 0 },
         };
       },
     };
@@ -416,6 +424,7 @@ describe("ResearchService", () => {
     );
     expect(events).toContainEqual({ type: "delta", content: "Answer." });
     expect(receivedReasoning).toEqual({ enabled: false, summary: "off" });
+    expect(events).toContainEqual({ type: "usage", inputTokens: 9, outputTokens: 4 });
   });
 
   it("notifies the user when Thinking falls back to Instant", async () => {
@@ -723,6 +732,7 @@ describe("ResearchService", () => {
       thinking: { fallbackReason: "provider-error" },
       reasoning: { inputTokens: 600, cachedInputTokens: 360 },
     });
+    expect(events.at(-2)).toEqual({ type: "usage", inputTokens: 600, outputTokens: 2 });
   });
 
   it("synthesizes from partial evidence when an thinking attempt fails after gathering evidence", async () => {

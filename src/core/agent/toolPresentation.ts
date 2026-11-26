@@ -1,4 +1,5 @@
 import {
+  ASK_CLARIFICATION_TOOL,
   CHECK_URLS_TOOL,
   CREATE_NOTE_TOOL,
   DELETE_NOTE_TOOL,
@@ -367,6 +368,15 @@ export const TOOL_PRESENTATIONS: Readonly<Record<string, ToolPresentation>> = {
       const kind = str(args, "chartType");
       const shape = kind ? `${kind} chart` : "chart";
       return title ? `Drawing the ${shape} ${quoted(title)}` : `Drawing a ${shape}`;
+    },
+  },
+  [ASK_CLARIFICATION_TOOL]: {
+    title: "Ask clarifying questions",
+    intent: ({ args }) => {
+      const questions = count(args, "questions");
+      return questions > 0
+        ? `Asking ${questions} clarifying ${questions === 1 ? "question" : "questions"}`
+        : "Asking clarifying questions";
     },
   },
 };

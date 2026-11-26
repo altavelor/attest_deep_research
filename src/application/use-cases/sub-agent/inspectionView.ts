@@ -48,13 +48,23 @@ export function controlRunIdOf(record: SubAgentSessionRecord): string | null {
   );
 }
 
-/** True when the session has an active run or pending import whose owning parent run is live. */
+const WORKING_STATUSES: ReadonlySet<SubAgentSessionSummary["status"]> = new Set([
+  "queued",
+  "running",
+  "importing",
+  "stopping",
+]);
+
+/**
+ * True when a working session has an active run or pending import whose owning parent run is
+ * live. A failed session keeps its pending import for a late commit, but has nothing to stop.
+ */
 export function hasStoppableWork(
   session: SubAgentSessionSummary,
   isRevoked: (parentRunId: string) => boolean,
 ): boolean {
   return (
-    session.status !== "archived" &&
+    WORKING_STATUSES.has(session.status) &&
     (session.activeSubAgentRunId !== null || session.pendingImportRunId !== null) &&
     !isRevoked(session.parentRunId)
   );

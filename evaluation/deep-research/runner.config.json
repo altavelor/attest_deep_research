@@ -1,0 +1,19 @@
+{
+  "cases": "cases.json",
+  "modes": ["thinking"],
+  "profiles": [
+    {
+      "id": "local",
+      "provider": "ollama",
+      "baseUrl": "http://localhost:11434/v1",
+      "model": "granite4.1:8b"
+    },
+    {
+      "id": "remote",
+      "provider": "openai-compatible",
+      "baseUrl": "https://openrouter.ai/api/v1",
+      "model": "deepseek/deepseek-v4-flash-0731",
+      "apiKeyEnv": "ATTEST_EVAL_API_KEY"
+    }
+  ]
+}

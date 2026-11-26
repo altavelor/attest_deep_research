@@ -27,6 +27,10 @@ export interface ResearchEvidenceRegistryOptions {
 
 const DEFAULT_MAX_WEB_RESULTS = 25;
 
+/**
+ * Registers the evidence of one answer under stable IDs and bounded web handles. A fifth of the
+ * web handles is kept for pages fetched by URL, so search results cannot use up every handle.
+ */
 export class ResearchEvidenceRegistry implements EvidenceRegistry {
   private readonly createHandle: () => string;
   private readonly now: () => Date;
@@ -91,7 +95,7 @@ export class ResearchEvidenceRegistry implements EvidenceRegistry {
 
   registerWebResult(
     result: { url: string; title: string; snippet: string; rank: number },
-    provenance: { callId: string; query: string },
+    provenance: { callId: string; query: string; fetch?: boolean },
   ): RegisteredWebResult {
     const canonicalUrl = canonicalizeWebUrl(result.url);
     const existingHandle = this.handlesByUrl.get(canonicalUrl);
@@ -109,7 +113,10 @@ export class ResearchEvidenceRegistry implements EvidenceRegistry {
       return publicWebResult(existingHandle);
     }
 
-    if (this.handles.size >= this.maxWebResults) {
+    const limit = provenance.fetch
+      ? this.maxWebResults
+      : this.maxWebResults - Math.floor(this.maxWebResults / 5);
+    if (this.handles.size >= limit) {
       throw new WebResultCapacityError(this.maxWebResults);
     }
 

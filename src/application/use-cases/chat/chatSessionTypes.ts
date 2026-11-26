@@ -1,10 +1,11 @@
 import type { ChatDisplayMessage } from "@core/conversation";
-import type { ResearchAnswer } from "@core/answer";
+import type { ClarificationReply, ResearchAnswer } from "@core/answer";
 import type {
   ConversationSourceRegistry,
   ConversationRegistryPromptView,
 } from "@core/chat/sourceRegistry";
-import type { SavedChatSettings } from "@core/chat/savedChat";
+import type { SavedChatDeepResearch, SavedChatSettings } from "@core/chat/savedChat";
+import type { ResearchActivity, ResearchTurnInput } from "@core/research/deepResearch";
 import type { ChatSessionStatus, InterruptionReason } from "@core/chat/chatSession";
 import type { ResearchService } from "@application/use-cases/research";
 import type { SubAgentDispatchEntry, SubAgentNoticeEntry } from "@core/research";
@@ -25,6 +26,7 @@ export interface ChatSessionState {
   chatSettings: SavedChatSettings;
   draft: string;
   progressLabel: string | null;
+  researchActivity: ResearchActivity | null;
   startedAt: string | null;
   completedAt: string | null;
   unreadCompletion: boolean;
@@ -33,6 +35,7 @@ export interface ChatSessionState {
   subAgentNotices: readonly SubAgentNoticeEntry[];
   timelineSequence: number;
   recoveredFromPrevious: boolean;
+  deepResearch?: SavedChatDeepResearch;
 }
 
 export type ChatSessionChangeKind =
@@ -58,6 +61,9 @@ export interface ChatRunRequest {
   includeActiveFile: boolean;
   includeContextDiagnostics: boolean;
   modelLabel: string;
+  research?: ResearchTurnInput;
+  thinking?: true;
+  clarificationReply?: ClarificationReply;
 }
 
 export interface ChatSubAgentServices {

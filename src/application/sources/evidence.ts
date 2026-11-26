@@ -49,7 +49,7 @@ export interface EvidenceRegistry {
   ): string;
   registerWebResult(
     result: { url: string; title: string; snippet: string; rank: number },
-    provenance: { callId: string; query: string },
+    provenance: { callId: string; query: string; fetch?: boolean },
   ): RegisteredWebResult;
   resolveWebResult(resultId: string): Readonly<WebHandleEntry> | undefined;
   upgradeWebPage(

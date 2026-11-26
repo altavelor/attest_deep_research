@@ -117,6 +117,19 @@ describe("Attest settings", () => {
     expect(readSettings(withoutFlag).expandSearchQuery).toBe(true);
   });
 
+  it("keeps a valid research export folder and defaults a missing or escaping one", () => {
+    const { researchExportFolder: _omitted, ...withoutFolder } = currentSettings();
+
+    expect(readSettings(withoutFolder).researchExportFolder).toBe("Attest/Research");
+    expect(
+      readSettings(currentSettings({ researchExportFolder: "../Outside" })).researchExportFolder,
+    ).toBe("Attest/Research");
+    expect(
+      readSettings(currentSettings({ researchExportFolder: "Notes/Reports/" }))
+        .researchExportFolder,
+    ).toBe("Notes/Reports");
+  });
+
   it("preserves an explicit query expansion opt-out", () => {
     const settings = readSettings(currentSettings({ expandSearchQuery: false }));
 

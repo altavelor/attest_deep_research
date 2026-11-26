@@ -2,6 +2,7 @@ import { ApiFormat } from "@core/agent";
 import { ChatToolChoice } from "@core/agent";
 import {
   ContextDiagnostics,
+  DeepResearchDiagnostics,
   RoundPromptDeltaDiagnostic,
   SubAgentGroupSummary,
   SubAgentRunSummary,
@@ -19,6 +20,7 @@ export interface DiagnosticReportV3 {
   reasoning: ReasoningSection;
   answer: AnswerSection;
   stats: StatsSection;
+  deepResearch: DeepResearchDiagnostics | null;
 }
 
 export interface FindingsSection {

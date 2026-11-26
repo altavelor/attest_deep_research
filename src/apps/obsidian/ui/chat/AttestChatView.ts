@@ -1,8 +1,18 @@
 import { ItemView, Notice, WorkspaceLeaf } from "obsidian";
 
-import { SavedChat, SavedChatSettings, SavedChatSummary } from "@core/chat/savedChat";
+import {
+  SavedChat,
+  SavedChatSettings,
+  SavedChatSummary,
+  researchSectionView,
+} from "@core/chat/savedChat";
 import type { ResearchMode } from "@core/research";
 import { ResearchService } from "@application/use-cases/research";
+import {
+  finishedResearchReport,
+  type ResearchExportContext,
+} from "@application/use-cases/research/deep-research";
+import type { ResearchReport } from "@core/research/deepResearch";
 import type {
   ChatRunRequest,
   ChatRunStartResult,
@@ -30,6 +40,7 @@ import {
   renderFollowUps as renderChatFollowUps,
 } from "./ChatTranscript";
 import type { ChatTranscriptOptions } from "./ChatTranscript";
+import { ClarificationDrafts } from "./clarificationDrafts";
 import { CitationPopoverController } from "./citations/CitationPopover";
 import { ChatModelSelectOption } from "./ChatComposer";
 import { formatCitationForChunk } from "./citations/citationFormatting";
@@ -45,7 +56,11 @@ import {
   IndexSearchResult,
 } from "@apps/obsidian/ui/index/IndexSearchController";
 import { ResearchQuestionController } from "./research/ResearchQuestionController";
+import { ResearchExportController } from "./deep-research/researchExportController";
+import { researchStepText } from "./deep-research/researchActivityText";
+import { tickStageClocks } from "./deep-research/researchStageProgress";
 import {
+  availableResearchMode,
   chatModelProfileLabel,
   createDefaultChatSettings,
   resolveChatSettings,
@@ -54,7 +69,7 @@ import type { DocumentImageResolver } from "@application/ports";
 import type { Translate, UiTranslator } from "@adapters/i18n";
 import { legacyIndexImageNotice, searchUnavailableMessage } from "./chatViewStatus";
 import { contextWindowUsage } from "./contextWindowUsage";
-import { ChatDisplayMessage } from "@core/conversation";
+import { ChatDisplayMessage, latestResearchRevisions } from "@core/conversation";
 import { citationTarget } from "./conversationFormatting";
 import { renderSavedChatsEmptyState } from "./history/SavedChatsPanel";
 import { SavedChatSessionController } from "./history/SavedChatSessionController";
@@ -105,6 +120,12 @@ export interface AttestChatViewServices {
   getTranslator(): UiTranslator;
   logError?(error: unknown): void;
   isDebugMode(): boolean;
+  exportResearchReport?(
+    report: ResearchReport,
+    context: ResearchExportContext,
+    folder?: string,
+  ): Promise<{ path: string }>;
+  getResearchExportFolder?(): string;
   shouldIncludeActiveFileContext(): boolean;
 }
 
@@ -126,8 +147,13 @@ export class AttestChatView extends ItemView {
   private detachSessionView: (() => void) | null = null;
   private selectedSessionId: string | null = null;
   private toolbarEl: HTMLElement | null = null;
+  private readonly sentResearchTurns = new Set<string>();
+  private readonly expandedResearchBranches = new Set<string>();
+  private readonly researchExports: ResearchExportController | null;
+  private readonly clarificationDrafts = new ClarificationDrafts();
 
   private transcriptEl: HTMLElement | null = null;
+  private stageClock: number | null = null;
   private followUpsEl: HTMLElement | null = null;
   private readonly composer: ChatComposerController;
   private readonly savedChatsPopover: SavedChatsPopoverController;
@@ -224,6 +250,13 @@ export class AttestChatView extends ItemView {
       hasSubAgentRuns: () => this.subAgents.hasAgentRuns,
       onOpenSubAgents: (sessionId) => this.subAgents.open(sessionId),
     });
+    this.researchExports = services.exportResearchReport
+      ? new ResearchExportController({
+          exportReport: (researchId, folder) => this.exportResearch(researchId, folder),
+          defaultFolder: () => services.getResearchExportFolder?.() ?? "",
+          requestRedisplay: () => this.renderMessages(),
+        })
+      : null;
     this.researchController = new ResearchQuestionController({
       getSessionId: () => this.session.sessionId,
       isSessionDisplayed: (sessionId) => this.isSessionDisplayed(sessionId),
@@ -401,6 +434,7 @@ export class AttestChatView extends ItemView {
     this.unsubscribeSessions = null;
     this.detachSessionView?.();
     this.detachSessionView = null;
+    this.syncStageClock(false);
     if (this.activeMessageRenderFrame !== null) {
       window.cancelAnimationFrame(this.activeMessageRenderFrame);
       this.activeMessageRenderFrame = null;
@@ -520,7 +554,7 @@ export class AttestChatView extends ItemView {
     }
     this.renderMessages();
     this.renderAnswerDetails();
-    this.composer.setProgressStatus(this.session.progressLabel);
+    this.composer.setProgressStatus(this.progressStatus());
   }
 
   private renderToolbarActions(): void {
@@ -628,6 +662,25 @@ export class AttestChatView extends ItemView {
     renderChatTranscript(this.transcriptEl, this.transcriptOptions());
   }
 
+  /** Ticks the clocks of running research stages once a second while research activity exists. */
+  private syncStageClock(active: boolean): void {
+    if (active && this.stageClock === null) {
+      this.stageClock = window.setInterval(() => {
+        if (this.transcriptEl) tickStageClocks(this.transcriptEl, Date.now());
+      }, 1000);
+    }
+    if (!active && this.stageClock !== null) {
+      window.clearInterval(this.stageClock);
+      this.stageClock = null;
+    }
+  }
+
+  /** Returns the composer status: the localized research step while one runs, else the run label. */
+  private progressStatus(): string | null {
+    const activity = this.session.researchActivity;
+    return activity ? researchStepText(activity.step, this.t) : this.session.progressLabel;
+  }
+
   private scheduleActiveMessageRender(): void {
     const sessionId = this.session.sessionId;
     if (this.activeMessageRenderFrame !== null) {
@@ -647,6 +700,7 @@ export class AttestChatView extends ItemView {
   }
 
   private transcriptOptions(): ChatTranscriptOptions {
+    if (!this.isRunning) this.sentResearchTurns.clear();
     return {
       app: this.app,
       markdownContext: this,
@@ -673,6 +727,26 @@ export class AttestChatView extends ItemView {
       onOpenChunk: (chunk) => void this.openRetrievedChunk(chunk),
       onOpenToolOutput: (item) => void this.openToolOutput(item),
       onOpenSubAgentSession: (sessionId) => this.subAgents.open(sessionId),
+      research: {
+        view: researchSectionView(this.session.deepResearch),
+        t: this.t,
+        sentTurns: this.sentResearchTurns,
+        expandedBranches: this.expandedResearchBranches,
+        latestRevisions: latestResearchRevisions(this.session.messages),
+        running: this.isRunning,
+        activity: this.session.researchActivity,
+        onTurn: (input, label) => void this.researchController.submitResearchTurn(input, label),
+        onEditPlan: (request) => this.sessions.editResearchPlan(this.session.sessionId, request),
+        onOpenSubAgentSession: (sessionId) => this.subAgents.open(sessionId),
+        ...(this.researchExports ? { exports: this.researchExports } : {}),
+      },
+      clarification: {
+        t: this.t,
+        running: this.isRunning,
+        drafts: this.clarificationDrafts,
+        requestRedisplay: () => this.renderMessages(),
+        onReply: (text, reply) => this.researchController.submitClarificationReply(text, reply),
+      },
       onHighlightCitation: (key, highlighted) =>
         this.citationPopover.setHighlight(key, highlighted),
       onOpenDiagnosticReport: (diagnostics) => this.diagnosticModal.open(diagnostics),
@@ -863,7 +937,9 @@ export class AttestChatView extends ItemView {
       return;
     }
     if (change.kind === "progress") {
-      this.composer.setProgressStatus(this.session.progressLabel);
+      this.composer.setProgressStatus(this.progressStatus());
+      this.syncStageClock(this.session.researchActivity !== null);
+      if (this.session.researchActivity) this.scheduleActiveMessageRender();
       return;
     }
     if (change.kind === "answer") {
@@ -876,7 +952,8 @@ export class AttestChatView extends ItemView {
       return;
     }
     this.composer.setFormRunning(this.isRunning);
-    this.composer.setProgressStatus(this.session.progressLabel);
+    this.composer.setProgressStatus(this.progressStatus());
+    this.syncStageClock(this.session.researchActivity !== null);
     void this.refreshChatActivity();
   }
 
@@ -998,7 +1075,7 @@ export class AttestChatView extends ItemView {
   }
 
   private async updateResearchMode(mode: ResearchMode): Promise<void> {
-    const researchMode = mode === "thinking" ? "thinking" : "instant";
+    const researchMode = availableResearchMode(mode);
     this.currentChatSettings = { ...this.currentChatSettings, researchMode };
     await this.saveCurrentChat();
   }
@@ -1095,6 +1172,29 @@ export class AttestChatView extends ItemView {
       args: item.args,
       resultJson: item.resultJson,
     });
+  }
+
+  private async exportResearch(researchId: string, folder?: string): Promise<{ path: string }> {
+    const view = researchSectionView(this.session.deepResearch);
+    const report = finishedResearchReport(view, this.messages, researchId);
+    const chatId = this.session.chatId;
+    if (!report || !chatId || !this.services.exportResearchReport) {
+      throw new Error(this.t("chat.deepResearch.ended"));
+    }
+    const title =
+      view.status === "ready"
+        ? (view.history.find((entry) => entry.researchId === researchId)?.question ?? "")
+        : "";
+    return this.services.exportResearchReport(
+      report,
+      {
+        chatId,
+        researchId,
+        title,
+        registry: this.sourceRegistry,
+      },
+      folder,
+    );
   }
 
   private async saveAnswerToNewNote(answer: ResearchAnswer): Promise<void> {

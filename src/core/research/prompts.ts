@@ -101,6 +101,7 @@ function sanitizeDelimitedData(value: string): string {
 export interface ResearchChatHistoryMessage {
   role: "user" | "assistant";
   content: string;
+  clarification?: true;
 }
 
 export interface BuildResearchPromptOptions {

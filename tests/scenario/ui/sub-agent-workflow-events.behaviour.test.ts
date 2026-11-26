@@ -148,10 +148,8 @@ describe("sub-agent events inside the parent workflow timeline", () => {
       "search",
       "dispatch:s1",
       "wait",
-      "notice:s2:queued",
       "dispatch:s2",
       "fetch",
-      "notice:s1:finished",
     ]);
     expect(workflowKeys(transcript, "answer-p2")).toEqual(["notice:s4:created"]);
     expect(workflowKeys(transcript, "answer-p3")).toEqual(["legacy", "dispatch:s3"]);
@@ -171,28 +169,22 @@ describe("sub-agent events inside the parent workflow timeline", () => {
       ["running", "chat.agent.status.running"],
     ]);
     const card = transcript.querySelector('[data-event-key="dispatch:s1"]')!;
-    const line = card.querySelector<HTMLElement>(".attest-chat__agent-event-description")!;
+    const title = card.querySelector<HTMLElement>(".attest-chat__agent-run-title")!;
     expect([
-      line.textContent,
-      line.title,
+      title.textContent,
+      title.title,
       card.textContent!.split("Agent s1").length - 1,
       card.querySelectorAll(".attest-chat__agent-open").length,
-      card.querySelector(".attest-chat__agent-card-foot .attest-chat__agent-open") !== null,
+      card.querySelector(".attest-chat__agent-card-head .attest-chat__agent-open") !== null,
       card.querySelector(".attest-chat__workflow-dot--agent")?.getAttribute("data-icon"),
-      transcript.querySelector('[data-event-key="dispatch:s2"] .attest-chat__agent-event-title')
+      card.querySelector(".attest-chat__agent-run-icon")?.getAttribute("data-icon"),
+      transcript.querySelector('[data-event-key="dispatch:s2"] .attest-chat__agent-run-title')
         ?.textContent,
-      transcript
-        .querySelector('[data-event-key="dispatch:s2"]')
-        ?.textContent?.includes("chat.agent.notice.created"),
-    ]).toEqual(["Agent s1", "Agent s1", 1, 1, true, "bot", "chat.agent.dispatch.title", false]);
+    ]).toEqual(["Agent s1", "Agent s1", 1, 1, true, "bot", "check-circle", "Agent s2"]);
     card.querySelector<HTMLButtonElement>(".attest-chat__agent-open")!.click();
     expect(opened).toEqual(["s1"]);
-    const reply = transcript.querySelector('[data-event-key="notice:s1:finished"]')!;
-    expect(reply.querySelectorAll("a, b, img, script, .markdown-rendered")).toHaveLength(0);
-    expect([
-      reply.textContent!.includes("javascript"),
-      reply.textContent!.includes("Agent s1"),
-    ]).toEqual([false, false]);
+    expect(card.querySelectorAll("a, b, img, script, .markdown-rendered")).toHaveLength(0);
+    expect(card.textContent!.includes("javascript")).toBe(false);
   });
 
   it("adds an event to a streaming answer when the active message is patched", () => {
@@ -289,7 +281,6 @@ describe("sub-agent events inside the parent workflow timeline", () => {
       THINKING,
       "dispatch:s1",
       THINKING,
-      "notice:s1:finished",
       THINKING,
     ]);
   });

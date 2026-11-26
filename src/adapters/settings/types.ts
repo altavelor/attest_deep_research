@@ -129,6 +129,7 @@ export interface AttestSettings {
   useWebWhenFreshnessNeeded: boolean;
   expandSearchQuery: boolean;
   downloadFolder: string;
+  researchExportFolder: string;
   debugMode: boolean;
   onboardingCompleted: boolean;
   onboardingProfileIds: OnboardingProfileIds;

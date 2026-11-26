@@ -31,6 +31,11 @@ export interface SubAgentImportCall {
   query?: string;
 }
 
+/** True for the tools that read a document's content rather than list search hits. */
+export function isDocumentReadTool(tool: string): boolean {
+  return tool === "fetch_web_page" || tool === "read_note" || tool === "get_active_note";
+}
+
 /** One child evidence element as the runner reports it, after shape and size checks. */
 export interface SubAgentChildEvidence {
   id: string;
@@ -145,28 +150,31 @@ export function parseSubAgentChildEvidence(
 
 /**
  * Applies the import policy of the former run_subagent tool: web evidence needs search or
- * fetch provenance, an allowed host and a place under the ten-source cap; index and note
- * evidence needs its own provenance and a path inside the session's granted scope. Web
- * sources beyond the parent's remaining capacity are dropped and reported as exhausted.
+ * fetch provenance, an allowed host and a place under the web-source cap; index and note
+ * evidence needs its own provenance and a path inside the session's granted scope. Evidence the
+ * answer cites is admitted before evidence it does not cite, and web sources beyond the parent's
+ * remaining capacity are dropped and reported as exhausted.
  */
 export function admitSubAgentEvidence(
   items: readonly SubAgentChildEvidence[],
   allowedHosts: readonly string[],
   policy: SubAgentSourcePolicy,
   webCapacity = Number.POSITIVE_INFINITY,
+  answerText = "",
+  webSourceCap = MAX_IMPORTED_WEB_SOURCES,
 ): SubAgentEvidenceAdmission {
   const admitted: SubAgentChildEvidence[] = [];
   const droppedTokens: string[] = [];
   let webSources = 0;
   let evidenceBudgetExhausted = false;
-  for (const item of items) {
+  for (const item of citedFirst(items, answerText)) {
     const overCapacity = item.source.kind === "web" && webSources >= webCapacity;
     evidenceBudgetExhausted ||= overCapacity;
     const allowed =
       item.source.kind === "web"
         ? !overCapacity &&
           (item.tool === "search_web" || item.tool === "fetch_web_page") &&
-          webSources < MAX_IMPORTED_WEB_SOURCES &&
+          webSources < webSourceCap &&
           subAgentHostAllowed(item.source.url, allowedHosts)
         : item.tool !== "search_web" &&
           item.tool !== "fetch_web_page" &&
@@ -182,6 +190,18 @@ export function admitSubAgentEvidence(
     admitted.push(item);
   }
   return { admitted, droppedTokens, evidenceBudgetExhausted };
+}
+
+function citedFirst(
+  items: readonly SubAgentChildEvidence[],
+  answerText: string,
+): SubAgentChildEvidence[] {
+  const labels = new Set(
+    [...answerText.matchAll(/\[([^\]\n]{1,400})\]/gu)].map((match) => match[1]!.trim()),
+  );
+  const cited = (item: SubAgentChildEvidence): boolean =>
+    labels.has(item.id) || (item.source.kind === "web" && labels.has(`url:${item.source.url}`));
+  return [...items.filter(cited), ...items.filter((item) => !cited(item))];
 }
 
 /**

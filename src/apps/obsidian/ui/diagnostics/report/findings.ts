@@ -34,6 +34,7 @@ export function computeFindings(sections: ReportSections): FindingsSection {
 
   if (
     model.executionStrategy !== "instant" &&
+    model.executionStrategy !== "deep-research" &&
     request.thinkingPolicy.policyReason !== "thinking-eligible" &&
     request.thinkingPolicy.policyReason !== "instant-selected"
   ) {

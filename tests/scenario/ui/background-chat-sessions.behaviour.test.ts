@@ -515,7 +515,7 @@ describe("background chat sessions", () => {
     await leaf.detach();
   });
 
-  it("clears the progress label once the run reaches a terminal state", async () => {
+  it("shows research steps in the interface language and clears the progress once the run ends", async () => {
     const harness = createHarness();
     const { leaf, view } = await openLeaf(harness.app);
     await ask(view, "First question");
@@ -524,6 +524,22 @@ describe("background chat sessions", () => {
     await settle();
     const progress = view.contentEl.querySelector<HTMLElement>(".attest-chat__progress-status")!;
     expect(progress.textContent).toBe("Searching the index");
+    const setInterval = vi.spyOn(window, "setInterval");
+    const clearInterval = vi.spyOn(window, "clearInterval");
+    harness.gates[0].emit({
+      type: "research-activity",
+      activity: {
+        researchId: "research-1",
+        at: 0,
+        stage: "hypotheses",
+        stages: {},
+        step: { kind: "proposing", cycle: 1 },
+        budget: { activeMs: 0, modelRounds: 0, branchAttempts: 0 },
+      },
+    });
+    await settle();
+    expect(progress.textContent).toBe("Proposing hypotheses from the findings · cycle 1");
+    expect(setInterval).toHaveBeenCalledTimes(1);
 
     harness.gates[0].emit({ type: "complete", answer: answerFor("Done") });
     harness.gates[0].end();
@@ -532,6 +548,7 @@ describe("background chat sessions", () => {
     expect(
       view.contentEl.querySelector<HTMLElement>(".attest-chat__progress-status")!.textContent,
     ).toBe("");
+    expect(clearInterval).toHaveBeenCalledWith(setInterval.mock.results[0]!.value);
 
     await leaf.detach();
   });

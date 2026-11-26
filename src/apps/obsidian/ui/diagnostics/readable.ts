@@ -28,6 +28,7 @@ export function renderReadableDiagnosticReport(
   });
 
   for (const key of SECTION_KEYS) renderGroup(root, labelFor(key), report[key], true);
+  if (report.deepResearch) renderGroup(root, "Deep research", report.deepResearch, true);
 }
 
 function renderGroup(parent: HTMLElement, label: string, value: unknown, open = false): void {

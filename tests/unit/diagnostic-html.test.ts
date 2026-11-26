@@ -1,5 +1,12 @@
 import { formatDiagnosticReportHtml } from "@apps/obsidian/ui/diagnostics/html/document";
 import { ContextDiagnostics } from "@core/diagnostics";
+import { deepResearchTurnDiagnostics, emptyBudgetState } from "@core/research/deepResearch";
+import {
+  finishedReport,
+  pendingResearch,
+  researchBranch,
+  researchPlan,
+} from "../support/deepResearch";
 
 function diagnosticFixture(): ContextDiagnostics {
   return {
@@ -131,5 +138,39 @@ describe("readable diagnostic HTML (v3)", () => {
     expect(html).toContain("<style>");
     expect(html).not.toMatch(/<link\s+rel=["']stylesheet/);
     expect(html).not.toMatch(/@import\s+url\(/);
+  });
+
+  it("renders the deep research block with its budget closure, stage tokens and escaped titles", () => {
+    const pending = pendingResearch(
+      researchPlan([researchBranch(1, { title: "<img src=x onerror=alert(1)>" })]),
+    );
+    const after = {
+      ...pending,
+      phase: "failed" as const,
+      report: { ...finishedReport("Report"), summaryFailure: "The report came back <empty>." },
+      budget: {
+        ...emptyBudgetState(),
+        closed: { reason: "exhausted" as const, dimension: "searches" },
+      },
+    };
+    const deepResearch = deepResearchTurnDiagnostics({
+      turnKind: "decision",
+      before: pending,
+      after,
+      runs: new Map(),
+    });
+    const html = formatDiagnosticReportHtml({
+      ...diagnosticFixture(),
+      deepResearch: {
+        ...deepResearch,
+        tokensByStage: [{ stage: "writing", inputTokens: 40, outputTokens: 9 }],
+      },
+    });
+    expect(html).toContain('id="deep-research"');
+    expect(html).toContain("exhausted searches");
+    expect(html).toContain("<tr><td>writing</td><td>40</td><td>9</td></tr>");
+    expect(html).toContain("<dt>Summary failure</dt><dd>The report came back &lt;empty&gt;.</dd>");
+    expect(html).toContain("&lt;img src=x onerror=alert(1)&gt;");
+    expect(html).not.toContain("<img src=x");
   });
 });

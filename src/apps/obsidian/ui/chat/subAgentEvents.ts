@@ -2,7 +2,7 @@ import { setIcon } from "obsidian";
 
 import type { Translate } from "@adapters/i18n";
 import { cleanDisplayText } from "@core/chat/safeInlineMarkup";
-import type { ParentTimelineEvent } from "@core/chat/subAgentPlacement";
+import type { ParentTimelineEvent, SubAgentRunStatus } from "@core/chat/subAgentPlacement";
 import type { SubAgentNoticeEntry } from "@core/research";
 import { renderFoldedMarkup, renderToggle } from "./safeMarkupView";
 import { compactCount, formatElapsed, knownTokenTotal } from "./sub-agents/format";
@@ -26,14 +26,16 @@ const ICONS: Record<SubAgentNoticeEntry["kind"], string> = {
   closed: "x",
   batch: "layers",
 };
-const TONES: Partial<Record<SubAgentNoticeEntry["kind"], string>> = {
-  finished: "success",
-  partial: "partial",
-  failed: "error",
-  "import-failed": "error",
-  stopped: "warning",
-  interrupted: "warning",
-  "not-started": "warning",
+const RUN_ICONS: Record<SubAgentRunStatus, string> = {
+  running: "loader",
+  queued: "clock",
+  finished: "check-circle",
+  partial: "alert-circle",
+  failed: "x-circle",
+  stopped: "x-circle",
+  interrupted: "alert-circle",
+  "import-failed": "alert-circle",
+  "not-started": "alert-circle",
 };
 
 /** Builds the event render options, adding the session opener only when the host has one. */
@@ -47,7 +49,12 @@ export function subAgentEventOptions(
 /** Returns the icon that marks a dispatch or notice event on the timeline rail. */
 export function subAgentEventIcon(event: ParentTimelineEvent): string {
   if (event.kind === "agent-notice") return ICONS[event.notice.kind];
-  return event.created ? ICONS.created : "send";
+  return ICONS.created;
+}
+
+/** Returns the event's kind class suffix: the run status for a dispatch, else the notice kind. */
+export function subAgentEventKind(event: ParentTimelineEvent): string {
+  return event.kind === "agent-dispatch" ? `dispatch is-${event.status}` : event.notice.kind;
 }
 
 /** Renders a dispatch or notice that has no parent message as a standalone transcript node. */
@@ -56,7 +63,7 @@ export function renderSubAgentTimelineItem(
   event: ParentTimelineEvent,
   options: SubAgentEventRenderOptions,
 ): void {
-  const kind = event.kind === "agent-dispatch" ? "dispatch" : event.notice.kind;
+  const kind = subAgentEventKind(event);
   const key = event.kind === "agent-dispatch" ? event.dispatch.eventKey : event.notice.eventKey;
   const nodeEl = containerEl.createDiv({
     cls: `attest-chat__agent-event attest-chat__agent-event--${kind}`,
@@ -83,10 +90,62 @@ export function renderSubAgentEventContent(
   else renderNoticeContent(nodeEl, event.notice, options);
 }
 
+interface RunCardHead {
+  status: string;
+  icon: string;
+  title: string;
+  meta: string;
+  chip: string | null;
+  badges: readonly string[];
+  sessionId: string | null;
+}
+
 /**
- * Renders one outgoing command to a child agent as safe text under a line naming the
- * agent once: a created line when the session's created notice was merged into it, else a
- * sent line. The card carries the kind, the folded body, the run status and one opener.
+ * Renders the shared agent card: a head with the status icon, the title over its usage line,
+ * badges, the status chip and one opener, and an empty body that the caller fills and that
+ * hides itself while empty.
+ */
+function renderRunCard(
+  nodeEl: HTMLElement,
+  head: RunCardHead,
+  options: SubAgentEventRenderOptions,
+): HTMLElement {
+  const cardEl = nodeEl.createDiv({
+    cls: `attest-chat__agent-card attest-chat__agent-run is-${head.status}`,
+    attr: { "aria-label": head.title },
+  });
+  const headEl = cardEl.createDiv({ cls: "attest-chat__agent-card-head" });
+  setIcon(
+    headEl.createSpan({
+      cls: "attest-chat__agent-run-icon",
+      attr: { "aria-hidden": "true", "data-icon": head.icon },
+    }),
+    head.icon,
+  );
+  const headingEl = headEl.createDiv({ cls: "attest-chat__agent-run-heading" });
+  headingEl.createDiv({
+    cls: "attest-chat__agent-run-title",
+    text: head.title,
+    attr: { title: head.title },
+  });
+  if (head.meta) headingEl.createDiv({ cls: "attest-chat__agent-reply-meta", text: head.meta });
+  for (const badge of head.badges)
+    headEl.createSpan({ cls: "attest-chat__agent-badge", text: badge });
+  if (head.chip) {
+    headEl.createSpan({
+      cls: `attest-chat__agent-status is-${head.status}`,
+      text: head.chip,
+      attr: { "data-status": head.status },
+    });
+  }
+  actions(headEl, head.sessionId, options, true);
+  return cardEl.createDiv({ cls: "attest-chat__agent-run-body" });
+}
+
+/**
+ * Renders one run of a child agent as a single card that updates in place: its title, usage,
+ * command kind and status in the head; the outcome reason, the folded reply and the command,
+ * quoted and folded behind a toggle once a reply exists, in the body.
  */
 function renderDispatchContent(
   nodeEl: HTMLElement,
@@ -95,60 +154,66 @@ function renderDispatchContent(
 ): void {
   const { t } = options;
   const entry = event.dispatch;
-  titleLine(
-    nodeEl,
-    t(event.created ? "chat.agent.notice.created" : "chat.agent.dispatch.title"),
-    event.title,
-  );
-  const cardEl = nodeEl.createDiv({ cls: "attest-chat__agent-card" });
-  const tagsEl = cardEl
-    .createDiv({ cls: "attest-chat__agent-card-head attest-chat__agent-card-head--tags" })
-    .createSpan({ cls: "attest-chat__agent-card-tags" });
-  if (event.created) {
-    tagsEl.createSpan({
-      cls: "attest-chat__agent-card-label",
-      text: t("chat.agent.dispatch.title"),
-    });
-  }
-  tagsEl.createSpan({
-    cls: "attest-chat__agent-badge",
-    text: t(`chat.agent.command.${entry.commandKind}`),
-  });
+  const outcome = event.outcome;
+  const badges =
+    entry.commandKind === "initial" ? [] : [t(`chat.agent.command.${entry.commandKind}`)];
   if (entry.commandKind === "retry") {
-    tagsEl.createSpan({
-      cls: "attest-chat__agent-attempt",
-      text: t("chat.agent.attempt", { attempt: String(entry.attempt) }),
-    });
+    badges.push(t("chat.agent.attempt", { attempt: String(entry.attempt) }));
   }
-  foldedText(
-    cardEl.createDiv({ cls: "attest-chat__agent-command" }),
-    entry.body,
-    t("chat.agent.showFullCommand"),
-    t,
+  const bodyEl = renderRunCard(
+    nodeEl,
+    {
+      status: event.status,
+      icon: RUN_ICONS[event.status],
+      title:
+        cleanDisplayText(event.title) ||
+        t(event.created ? "chat.agent.notice.created" : "chat.agent.dispatch.title"),
+      meta: outcome ? replyMeta(outcome, t) : "",
+      chip: t(`chat.agent.status.${event.status}`),
+      badges,
+      sessionId: entry.sessionId,
+    },
+    options,
   );
-  const footEl = cardEl.createDiv({ cls: "attest-chat__agent-card-foot" });
-  const statusEl = footEl.createSpan({
-    cls: `attest-chat__agent-status is-${event.status}`,
-    attr: { "data-status": event.status },
+  const reason = outcome
+    ? noticeBody(outcome, t)
+    : event.status === "queued"
+      ? t("chat.agent.notice.queued.body")
+      : null;
+  if (reason) bodyEl.createDiv({ cls: "attest-chat__agent-event-body", text: reason });
+  if (!outcome?.replyExcerpt) {
+    if (event.status === "queued") return;
+    foldedText(
+      bodyEl.createDiv({ cls: "attest-chat__agent-command" }),
+      entry.body,
+      t("chat.agent.showFullCommand"),
+      t,
+    );
+    return;
+  }
+  renderReply(bodyEl, outcome.replyExcerpt, t);
+  const linksEl = bodyEl.lastElementChild as HTMLElement;
+  const commandEl = bodyEl.createDiv({ cls: "attest-chat__agent-command" });
+  commandEl.hidden = true;
+  commandEl.createDiv({ cls: "attest-chat__agent-text", text: entry.body });
+  renderToggle(linksEl, t("chat.agent.showTask"), t, (expanded) => {
+    commandEl.hidden = !expanded;
   });
-  statusEl.createSpan({ cls: "attest-chat__agent-status-dot", attr: { "aria-hidden": "true" } });
-  statusEl.createSpan({ text: statusText(event, t) });
-  actions(footEl, entry.sessionId, options);
 }
 
-function statusText(
-  event: Extract<ParentTimelineEvent, { kind: "agent-dispatch" }>,
-  t: Translate,
-): string {
-  const label = t(`chat.agent.status.${event.status}`);
-  return !isCount(event.durationMs) ? label : `${label} · ${formatElapsed(event.durationMs, t)}`;
+/** Renders a folded reply followed by a row that holds its toggle and any further toggles. */
+function renderReply(bodyEl: HTMLElement, reply: string, t: Translate): void {
+  renderFoldedMarkup(bodyEl, reply, PREVIEW_CHARS, t("chat.agent.showFullReply"), t);
+  const replyToggle = bodyEl.querySelector(":scope > .attest-chat__agent-toggle");
+  const linksEl = bodyEl.createDiv({ cls: "attest-chat__agent-run-links" });
+  if (replyToggle) linksEl.appendChild(replyToggle);
 }
 
 function isCount(value: number | undefined): value is number {
   return Number.isSafeInteger(value) && value! >= 0;
 }
 
-function titleLine(parentEl: HTMLElement, label: string, rawTitle: string): void {
+function titleLine(parentEl: HTMLElement, label: string, rawTitle: string): HTMLElement {
   const title = cleanDisplayText(rawTitle);
   const lineEl = parentEl.createDiv({ cls: "attest-chat__agent-event-line" });
   lineEl.createSpan({ cls: "attest-chat__agent-event-title", text: label });
@@ -157,6 +222,7 @@ function titleLine(parentEl: HTMLElement, label: string, rawTitle: string): void
     text: title,
     attr: { title },
   });
+  return lineEl;
 }
 
 function renderNoticeContent(
@@ -174,31 +240,34 @@ function renderNoticeContent(
     return;
   }
   if (entry.kind === "created" || entry.kind === "queued") {
-    titleLine(nodeEl, t(`chat.agent.notice.${entry.kind}`), entry.description);
+    const lineEl = titleLine(nodeEl, t(`chat.agent.notice.${entry.kind}`), entry.description);
     if (entry.kind === "queued") {
       nodeEl.createDiv({
         cls: "attest-chat__agent-event-body",
         text: t("chat.agent.notice.queued.body"),
       });
     }
-    actions(nodeEl, entry.sessionId, options);
+    actions(lineEl, entry.sessionId, options, true);
     return;
   }
-  const cardEl = nodeEl.createDiv({ cls: "attest-chat__agent-card" });
-  const agentTitle = cleanDisplayText(entry.description);
-  if (agentTitle) cardEl.setAttribute("aria-label", agentTitle);
-  const tone = TONES[entry.kind];
-  if (tone) cardEl.addClass(`is-${tone}`);
-  cardEl.createDiv({ cls: "attest-chat__agent-card-head", text: noticeTitle(entry, t) });
-  const body = noticeBody(entry, t);
-  if (body) cardEl.createDiv({ cls: "attest-chat__agent-event-body", text: body });
-  if (entry.replyExcerpt) {
-    renderFoldedMarkup(cardEl, entry.replyExcerpt, PREVIEW_CHARS, t("chat.agent.showFullReply"), t);
-  }
-  const footEl = cardEl.createDiv({ cls: "attest-chat__agent-card-foot" });
-  const meta = replyMeta(entry, t);
-  if (meta) footEl.createSpan({ cls: "attest-chat__agent-reply-meta", text: meta });
-  actions(footEl, entry.sessionId, options);
+  const terminal = entry.kind !== "batch";
+  const bodyEl = renderRunCard(
+    nodeEl,
+    {
+      status: entry.kind,
+      icon: terminal ? RUN_ICONS[entry.kind as SubAgentRunStatus] : ICONS.batch,
+      title: (terminal && cleanDisplayText(entry.description)) || noticeTitle(entry, t),
+      meta: terminal ? replyMeta(entry, t) : (noticeBody(entry, t) ?? ""),
+      chip: terminal ? t(`chat.agent.status.${entry.kind as SubAgentRunStatus}`) : null,
+      badges: [],
+      sessionId: entry.sessionId,
+    },
+    options,
+  );
+  if (!terminal) return;
+  const reason = noticeBody(entry, t);
+  if (reason) bodyEl.createDiv({ cls: "attest-chat__agent-event-body", text: reason });
+  if (entry.replyExcerpt) renderReply(bodyEl, entry.replyExcerpt, t);
 }
 
 function replyMeta(entry: SubAgentNoticeEntry, t: Translate): string {
@@ -276,13 +345,16 @@ function actions(
   parentEl: HTMLElement,
   sessionId: string | null,
   options: SubAgentEventRenderOptions,
+  iconOnly = false,
 ): void {
   const open = options.onOpenSubAgentSession;
   if (!open || sessionId === null) return;
+  const label = options.t("chat.agent.openDetails");
   const button = parentEl.createEl("button", {
-    cls: "attest-chat__agent-open",
-    text: options.t("chat.agent.openDetails"),
-    attr: { type: "button" },
+    cls: `attest-chat__agent-open${iconOnly ? " clickable-icon" : ""}`,
+    attr: { type: "button", ...(iconOnly ? { "aria-label": label, title: label } : {}) },
   });
+  if (iconOnly) setIcon(button, "external-link");
+  else button.setText(label);
   button.addEventListener("click", () => open(sessionId));
 }

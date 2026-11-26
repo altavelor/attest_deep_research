@@ -258,12 +258,14 @@ describe("run_subagent provenance validation", () => {
     expect(admission.droppedTokens).toEqual(["w1", "url:https://example.com/w1"]);
   });
 
-  it("drops web sources over the import cap with their url tokens", () => {
+  it("drops web sources over the import cap with their url tokens unless the cap is raised", () => {
     const items = Array.from({ length: 11 }, (_, index) => parsed(`w${index}`));
 
     const admission = admitSubAgentEvidence(items, [], sourcePolicy());
+    const raised = admitSubAgentEvidence(items, [], sourcePolicy(), Infinity, "", 50);
 
     expect(admission.admitted).toHaveLength(10);
     expect(admission.droppedTokens).toEqual(["w10", "url:https://example.com/w10"]);
+    expect(raised.admitted).toHaveLength(11);
   });
 });

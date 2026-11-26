@@ -7,6 +7,7 @@ import {
   DEFAULT_PDF_CHUNK_SIZE,
   IndexProfile,
 } from "@adapters/indexing";
+import { DEFAULT_RESEARCH_EXPORT_FOLDER } from "@core/research/deepResearch";
 import { DUCKDUCKGO_DESCRIPTOR, WebSourceProfile } from "@core/web";
 import {
   DEFAULT_DOWNLOAD_FOLDER,
@@ -81,6 +82,7 @@ export const DEFAULT_SETTINGS: AttestSettings = {
   useWebWhenFreshnessNeeded: true,
   expandSearchQuery: true,
   downloadFolder: DEFAULT_DOWNLOAD_FOLDER,
+  researchExportFolder: DEFAULT_RESEARCH_EXPORT_FOLDER,
   debugMode: false,
   onboardingCompleted: false,
   onboardingProfileIds: { ...EMPTY_ONBOARDING_PROFILE_IDS },

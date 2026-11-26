@@ -21,6 +21,7 @@ export function createIdleSessionState(
     chatSettings,
     draft: "",
     progressLabel: null,
+    researchActivity: null,
     startedAt: null,
     completedAt: null,
     unreadCompletion: false,
@@ -61,6 +62,7 @@ export function sessionStateFromSavedChat(
     unreadCompletion: chat.unreadCompletion,
     interruptionReason: lastRun?.status === "interrupted" ? lastRun.interruptionReason : null,
     recoveredFromPrevious: chat.recoveredFrom === "previous",
+    ...(chat.deepResearch ? { deepResearch: chat.deepResearch } : {}),
   };
 }
 

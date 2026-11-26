@@ -4,6 +4,7 @@ import {
   isWebSourceActivation,
   WebSourceActivation,
 } from "@core/web";
+import { DEFAULT_RESEARCH_EXPORT_FOLDER, checkExportFolder } from "@core/research/deepResearch";
 import type { IndexProfile } from "@adapters/indexing";
 import {
   DEFAULT_DOWNLOAD_FOLDER,
@@ -25,11 +26,18 @@ export function normalizeSettingsState(settings: AttestSettings): void {
     typeof settings.downloadFolder === "string" && settings.downloadFolder.trim()
       ? normalizeVaultFolder(settings.downloadFolder)
       : DEFAULT_DOWNLOAD_FOLDER;
+  settings.researchExportFolder = researchExportFolder(settings.researchExportFolder);
   settings.expandSearchQuery =
     typeof settings.expandSearchQuery === "boolean" ? settings.expandSearchQuery : true;
   migrateLegacyWebSettings(settings);
   migrateWebSourceActivation(settings);
   normalizeWebSources(settings);
+}
+
+/** Keeps a stored export folder that passes the export path rules and falls back to the default. */
+function researchExportFolder(value: unknown): string {
+  const checked = typeof value === "string" ? checkExportFolder(value) : null;
+  return checked?.ok ? checked.folder : DEFAULT_RESEARCH_EXPORT_FOLDER;
 }
 
 /**

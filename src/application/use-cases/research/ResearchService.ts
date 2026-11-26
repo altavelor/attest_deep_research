@@ -1,3 +1,4 @@
+import { TokenUsageMeter, type StageTokenUsage } from "./TokenUsageMeter";
 import { summarizeCompactionWithModel } from "@application/use-cases/chat/ChatCompaction";
 import { SearchProvider } from "@application/ports/web";
 import { VaultWriter } from "@application/ports/vault";
@@ -41,6 +42,9 @@ import { ResearchExecutionContext, ResearchStrategyDeps } from "./strategies/Res
 import { ThinkingResearchStrategy } from "./strategies/ThinkingResearchStrategy";
 import type { AnswerTranslate } from "./pseudoToolCallCleanup";
 import { InstantResearchStrategy } from "./strategies/InstantResearchStrategy";
+import { DeepResearchStrategy } from "./deep-research";
+import type { ResearchLabelsPort } from "@application/ports/researchLabels";
+import { ENGLISH_RESEARCH_LABELS } from "@core/research/deepResearch";
 import { SubAgentRunner, type SubAgentRunnerDeps } from "./sub-agent/SubAgentRunner";
 import { SubAgentLogger } from "@application/research/subAgentPort";
 import type { SubAgentExecutionPort } from "@application/ports/subAgent";
@@ -92,6 +96,8 @@ export interface ResearchServiceOptions {
   reasoningDiagnostics?: AnswerSynthesisServiceOptions["reasoningDiagnostics"];
 
   subAgentLogger?: SubAgentLogger;
+  researchTimer?: (delayMs: number, callback: () => void) => () => void;
+  researchLabels?: ResearchLabelsPort;
 }
 
 const DEFAULT_EVIDENCE_LIMIT = 8;
@@ -116,6 +122,7 @@ export class ResearchService implements ConversationEngine {
 
   private readonly thinking: ThinkingResearchStrategy;
   private readonly instant: InstantResearchStrategy;
+  private readonly deep: DeepResearchStrategy;
   private readonly subAgentRunnerDeps: SubAgentRunnerDeps;
   private readonly subAgentSources: Pick<
     ResearchServiceOptions,
@@ -123,7 +130,16 @@ export class ResearchService implements ConversationEngine {
   >;
   private readonly now: () => Date;
 
-  constructor(options: ResearchServiceOptions) {
+  private readonly usage = new TokenUsageMeter();
+
+  constructor(unmetered: ResearchServiceOptions) {
+    const options: ResearchServiceOptions = {
+      ...unmetered,
+      chatModel: this.usage.chatModel(unmetered.chatModel),
+      ...(unmetered.modelRound
+        ? { modelRound: this.usage.roundProvider(unmetered.modelRound) }
+        : {}),
+    };
     const evidenceLimit = options.evidenceLimit ?? DEFAULT_EVIDENCE_LIMIT;
     const now = options.now ?? (() => new Date());
     const chatOptions = {
@@ -227,9 +243,41 @@ export class ResearchService implements ConversationEngine {
     };
     this.thinking = new ThinkingResearchStrategy(deps);
     this.instant = new InstantResearchStrategy(deps);
+    this.deep = new DeepResearchStrategy({
+      chatModel: options.chatModel,
+      chatModelName: options.chatModelName,
+      ...(options.apiFormat ? { apiFormat: options.apiFormat } : {}),
+      chatOptions,
+      toolCapabilities,
+      hasIndex: options.retriever !== undefined,
+      hasWeb: options.searchProvider !== undefined,
+      now,
+      createBranchEngine: () => new SubAgentRunner(this.subAgentRunnerDeps),
+      branchSources: this.subAgentSources,
+      ...(options.researchTimer ? { setTimer: options.researchTimer } : {}),
+      researchLabels: options.researchLabels ?? { labelsFor: () => ENGLISH_RESEARCH_LABELS },
+      onStage: (stage) => this.usage.enter(stage),
+    });
   }
 
+  /**
+   * Answers one request in its research mode and reports the tokens its model calls used, child
+   * runs included, just before the final answer, whose deep research diagnostics get them per stage.
+   */
   async *answer(request: ResearchRequest): AsyncIterable<ResearchStreamEvent> {
+    this.usage.reset();
+    for await (const event of this.route(request)) {
+      if (event.type !== "complete") {
+        yield event;
+        continue;
+      }
+      const usage = this.usage.total();
+      if (usage) yield { type: "usage", ...usage };
+      yield { ...event, answer: withStageUsage(event.answer, this.usage.byStage()) };
+    }
+  }
+
+  private async *route(request: ResearchRequest): AsyncIterable<ResearchStreamEvent> {
     const question = request.question.trim();
     const searchMode = resolveSearchMode(request);
     const mode = request.forceSubAgent === true ? "thinking" : (request.mode ?? "instant");
@@ -239,9 +287,6 @@ export class ResearchService implements ConversationEngine {
       capabilities: this.toolCapabilities,
       apiFormat: this.apiFormat,
     });
-    if (policy.strategy === "deep-research") {
-      throw new Error("Deep Research is not available yet.");
-    }
     const indexDescription =
       searchMode === "indexOnly" || searchMode === "indexAndWeb"
         ? this.indexDescription
@@ -258,6 +303,12 @@ export class ResearchService implements ConversationEngine {
       },
       indexDescription,
     };
+
+    if (policy.strategy === "deep-research") {
+      request.subAgentParent?.bindExecution(this.subAgentExecution(ctx.retrieval.web));
+      yield* this.deep.execute(ctx);
+      return;
+    }
 
     if (policy.strategy === "thinking") {
       request.subAgentParent?.bindExecution(this.subAgentExecution(ctx.retrieval.web));
@@ -338,4 +389,17 @@ export class ResearchService implements ConversationEngine {
       now: this.now,
     });
   }
+}
+
+/** Adds the token usage per stage to the deep research diagnostics of an answer that has them. */
+function withStageUsage(answer: ResearchAnswer, stages: StageTokenUsage[]): ResearchAnswer {
+  const diagnostics = answer.contextDiagnostics;
+  if (!diagnostics?.deepResearch || stages.length === 0) return answer;
+  return {
+    ...answer,
+    contextDiagnostics: {
+      ...diagnostics,
+      deepResearch: { ...diagnostics.deepResearch, tokensByStage: stages },
+    },
+  };
 }

@@ -25,6 +25,8 @@ import { toUserMessage } from "@core/errors";
 import type { SubAgentInspectionPort } from "@application/ports/subAgent";
 import { chatSaveInput } from "./chatSaveInput";
 import { ChatSessionRuntime, type ChatSessionRuntimeHost } from "./ChatSessionRuntime";
+import type { ResearchPlanEditRequest } from "./ChatResearchState";
+import { deepResearchRejected } from "@core/research/deepResearch";
 import { normalizeStaleChats } from "./staleChatRecovery";
 import { terminalBudget } from "./terminalSave";
 import {
@@ -41,6 +43,8 @@ import type {
   ChatSessionViewProbe,
 } from "./chatSessionTypes";
 
+const RUN_ACTIVE = "The plan cannot be edited while this chat is running.";
+
 export interface ChatSessionManagerOptions {
   repository: ChatRepository;
   environment: ChatSessionEnvironment;
@@ -50,6 +54,8 @@ export interface ChatSessionManagerOptions {
 export type ChatRowStatusInput = Pick<SavedChatSummary, "id" | "unreadCompletion"> & {
   lastRun?: SavedChatRunState;
 };
+
+export type ResearchPlanEditResult = { ok: true } | { ok: false; message: string };
 
 export interface ChatRunStartResult {
   started: boolean;
@@ -71,6 +77,7 @@ export class ChatSessionManager {
   private readonly startRequests = new Map<string, Promise<ChatRunStartResult>>();
   private readonly saveRequests = new Map<string, Promise<void>>();
   private readonly deleting = new Set<string>();
+  private readonly editingPlans = new Set<string>();
   private queue: string[] = [];
   private readonly views = new Set<ChatSessionViewProbe>();
   private lastDisplayedSessionId: string | null = null;
@@ -197,6 +204,46 @@ export class ChatSessionManager {
     await runtime.persist(this.saveInput(state));
   }
 
+  /**
+   * Commits a manual edit of a chat's pending research plan without a chat turn. It is refused
+   * while a run of the chat is active or starting, and no run can start until the edit is saved.
+   */
+  async editResearchPlan(
+    sessionId: string,
+    request: ResearchPlanEditRequest,
+  ): Promise<ResearchPlanEditResult> {
+    const runtime = this.sessions.get(sessionId);
+    const state = runtime?.state;
+    const refusal = !runtime || !state ? RUN_ACTIVE : this.planEditRefusal(sessionId, state);
+    if (refusal || !runtime) {
+      return {
+        ok: false,
+        message: deepResearchRejected("research-run-active", refusal ?? RUN_ACTIVE).message,
+      };
+    }
+    this.editingPlans.add(sessionId);
+    try {
+      await runtime.editResearchPlan(request);
+    } catch (error) {
+      return { ok: false, message: error instanceof Error ? error.message : String(error) };
+    } finally {
+      this.editingPlans.delete(sessionId);
+    }
+    this.emit(sessionId, "messages");
+    return { ok: true };
+  }
+
+  private planEditRefusal(sessionId: string, state: ChatSessionState): string | null {
+    if (this.editingPlans.has(sessionId)) return "The plan is already being saved.";
+    if (state.chatId !== null && this.deleting.has(state.chatId)) {
+      return "The plan cannot be edited while this chat is being deleted.";
+    }
+    if (isNonTerminalChatSessionStatus(state.status) || this.starting.has(sessionId)) {
+      return RUN_ACTIVE;
+    }
+    return null;
+  }
+
   /** Returns the read and user-stop port of one chat's child sessions, or null. */
   getSubAgentInspection(sessionId: string): SubAgentInspectionPort | null {
     return this.sessions.get(sessionId)?.subAgentInspection() ?? null;
@@ -315,7 +362,11 @@ export class ChatSessionManager {
     const runtime = this.sessions.get(sessionId);
     if (this.disposed || !runtime) return { started: false };
     const state = runtime.state;
-    if (isNonTerminalChatSessionStatus(state.status) || this.starting.has(sessionId)) {
+    if (
+      isNonTerminalChatSessionStatus(state.status) ||
+      this.starting.has(sessionId) ||
+      this.editingPlans.has(sessionId)
+    ) {
       return { started: false };
     }
     if (state.chatId !== null && this.deleting.has(state.chatId)) {
@@ -328,7 +379,13 @@ export class ChatSessionManager {
     const status = this.queue.length > 0 ? "queued" : nextRunStatus(this.slots.size);
     if (status === "running") this.slots.set(sessionId, runId);
     const withQuestion = request.appendQuestion
-      ? nextUserMessage(state.messages, request.question, request.contextPaths)
+      ? nextUserMessage(
+          state.messages,
+          request.question,
+          request.contextPaths,
+          request.clarificationReply,
+          request.research !== undefined,
+        )
       : state.messages;
     const messages = startAssistantProgress(
       withQuestion,
@@ -364,6 +421,7 @@ export class ChatSessionManager {
     state.completedAt = null;
     state.lastAnswer = null;
     state.progressLabel = null;
+    state.researchActivity = null;
     state.unreadCompletion = false;
     state.interruptionReason = null;
     state.draft = "";
@@ -528,6 +586,7 @@ export class ChatSessionManager {
     state.completedAt = completedAt;
     state.activeRunId = null;
     state.progressLabel = null;
+    state.researchActivity = null;
     this.pending.delete(sessionId);
 
     if (!runId) this.publishTerminal(sessionId);

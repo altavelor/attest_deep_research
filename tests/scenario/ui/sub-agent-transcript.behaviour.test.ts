@@ -27,16 +27,17 @@ const settings: SavedChatSettings = {
 const NOTICE_KINDS = [
   ["created", "chat.agent.notice.created", "bot", true],
   ["queued", "chat.agent.notice.queued", "bot", true],
-  ["finished", "chat.agent.notice.finished", "check", true],
-  ["partial", "chat.agent.notice.partial", "alert-triangle", true],
-  ["failed", "chat.agent.notice.failed", "x", true],
-  ["stopped", "chat.agent.notice.stopped", "x", true],
-  ["interrupted", "chat.agent.notice.interrupted", "x", true],
-  ["import-failed", "chat.agent.notice.import-failed", "alert-triangle", true],
+  ["finished", "chat.agent.status.finished", "check", true],
+  ["partial", "chat.agent.status.partial", "alert-triangle", true],
+  ["failed", "chat.agent.status.failed", "x", true],
+  ["stopped", "chat.agent.status.stopped", "x", true],
+  ["interrupted", "chat.agent.status.interrupted", "x", true],
+  ["import-failed", "chat.agent.status.import-failed", "alert-triangle", true],
   ["not-started", "chat.agent.notice.not-started", "alert-triangle", true],
   ["closed", "chat.agent.notice.closed", "x", false],
   ["batch", "chat.agent.notice.batch", "layers", true],
 ] as const;
+const FOLDED_KINDS: readonly string[] = ["queued", "not-started"];
 
 function notice(kind: string, sequence: number) {
   return {
@@ -170,12 +171,16 @@ describe("sub-agent events in a reloaded parent transcript", () => {
     );
 
     const events = [...transcript.querySelectorAll<HTMLElement>(".attest-chat__agent-event")];
+    const standalone = NOTICE_KINDS.filter(([kind]) => !FOLDED_KINDS.includes(kind));
     expect(events.map((el) => el.dataset.eventKey)).toEqual([
       "dispatch:chat-legacy:p1:s1:r1",
-      ...NOTICE_KINDS.map(([kind]) => `notice:chat-legacy:p1:s1:r1:${kind}`),
+      ...standalone.map(([kind]) => `notice:chat-legacy:p1:s1:r1:${kind}`),
     ]);
     expect(events[0]!.textContent).toContain("Find primary sources for the IPO date");
-    for (const [kind, title, icon, action] of NOTICE_KINDS) {
+    expect(
+      events[0]!.querySelector(".attest-chat__agent-run-icon")?.getAttribute("data-icon"),
+    ).toBe("alert-circle");
+    for (const [kind, title, icon, action] of standalone) {
       const el = transcript.querySelector<HTMLElement>(`.attest-chat__agent-event--${kind}`)!;
       expect([
         kind,
@@ -184,6 +189,9 @@ describe("sub-agent events in a reloaded parent transcript", () => {
         el.querySelector(".attest-chat__agent-open") !== null,
       ]).toEqual([kind, true, icon, action]);
     }
+    expect(
+      transcript.querySelector(".attest-chat__agent-event--batch .attest-chat__agent-status"),
+    ).toBeNull();
     transcript
       .querySelector<HTMLButtonElement>(
         ".attest-chat__agent-event--finished .attest-chat__agent-open",

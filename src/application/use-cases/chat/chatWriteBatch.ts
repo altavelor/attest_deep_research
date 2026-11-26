@@ -16,6 +16,7 @@ import type { ChatSnapshotEntry } from "./chatWriteBufferTypes";
 export interface PendingDelta {
   revision: number;
   firstRevision: number;
+  firstStaged: number;
   value: SubAgentBufferedValue;
   bytes: number;
 }
@@ -130,8 +131,18 @@ export function carryUnsentRevisions(
     const current = pending.get(key);
     if (current && current !== sent) {
       current.firstRevision = Math.min(current.firstRevision, sent.firstRevision);
+      current.firstStaged = Math.min(current.firstStaged, sent.firstStaged);
     }
   }
+}
+
+/**
+ * Tells whether an unsent delta keeps a waiter for a revision open. The chat and the sub-agent
+ * store number their revisions separately, so a delta staged after the request may carry a
+ * revision the waiter already holds; only deltas staged before the request hold it.
+ */
+export function holdsWaiter(delta: PendingDelta, revision: number, staged: number): boolean {
+  return delta.firstRevision <= revision && delta.firstStaged <= staged;
 }
 
 /** Tells whether a buffered value starts new child work rather than updating existing work. */

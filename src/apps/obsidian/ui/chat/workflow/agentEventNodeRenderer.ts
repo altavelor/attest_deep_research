@@ -4,6 +4,7 @@ import type { ParentTimelineEvent } from "@core/chat/subAgentPlacement";
 import {
   renderSubAgentEventContent,
   subAgentEventIcon,
+  subAgentEventKind,
   subAgentEventOptions,
 } from "../subAgentEvents";
 import type { TimelineScope } from "./timelineResources";
@@ -14,7 +15,7 @@ export function renderAgentEventNode(
   event: ParentTimelineEvent,
   scope: TimelineScope,
 ): void {
-  const kind = event.kind === "agent-dispatch" ? "dispatch" : event.notice.kind;
+  const kind = subAgentEventKind(event);
   const key = event.kind === "agent-dispatch" ? event.dispatch.eventKey : event.notice.eventKey;
   const icon = subAgentEventIcon(event);
   const node = listEl.createDiv({

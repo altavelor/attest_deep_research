@@ -95,7 +95,12 @@ function researchModeItems(t: Translate): DropdownItem[] {
   return [
     { id: "instant", name: t("chat.composer.researchMode.instant") },
     { id: "thinking", name: t("chat.composer.researchMode.thinking") },
+    { id: "deep-research", name: t("chat.composer.researchMode.deepResearch") },
   ];
+}
+
+function composerResearchMode(id: string): ResearchMode {
+  return id === "thinking" || id === "deep-research" ? id : "instant";
 }
 
 export function renderChatComposer(
@@ -231,8 +236,7 @@ export function renderChatComposer(
   }
   syncIndexButton();
 
-  let currentResearchMode: Extract<ResearchMode, "instant" | "thinking"> =
-    options.researchMode === "thinking" ? "thinking" : "instant";
+  let currentResearchMode = composerResearchMode(options.researchMode);
   const researchModeDropdown = createMenuDropdown(modelRow, {
     cls: "attest-chat__dropdown--research-mode",
     menuCls: "attest-chat__research-menu",
@@ -241,7 +245,7 @@ export function renderChatComposer(
     items: researchModeItems(t),
     initialId: currentResearchMode,
     onSelect: (id) => {
-      currentResearchMode = id === "thinking" ? "thinking" : "instant";
+      currentResearchMode = composerResearchMode(id);
       options.onUpdateResearchMode(currentResearchMode);
     },
   });
@@ -281,11 +285,10 @@ export function renderChatComposer(
     const supportsAgent =
       options.availableModels.find((model) => model.id === currentModel)?.supportsAgentMode ===
       true;
-    researchModeDropdown.setItemDisabled(
-      "thinking",
-      supportsAgent ? undefined : t("chat.composer.researchMode.thinkingBlocked"),
-    );
-    if (!supportsAgent && currentResearchMode === "thinking") {
+    const blocked = supportsAgent ? undefined : t("chat.composer.researchMode.thinkingBlocked");
+    researchModeDropdown.setItemDisabled("thinking", blocked);
+    researchModeDropdown.setItemDisabled("deep-research", blocked);
+    if (!supportsAgent && currentResearchMode !== "instant") {
       currentResearchMode = "instant";
       researchModeDropdown.setValue("instant");
       options.onUpdateResearchMode("instant");

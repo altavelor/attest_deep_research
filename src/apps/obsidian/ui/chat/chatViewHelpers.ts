@@ -140,6 +140,11 @@ export function resolveChatSettings(
     ),
     searchMode: settings.searchMode,
     contextMode: settings.contextMode ?? defaults.contextMode,
-    researchMode: settings.researchMode === "thinking" ? "thinking" : "instant",
+    researchMode: availableResearchMode(settings.researchMode),
   };
+}
+
+/** Keeps a saved research mode the composer can offer, falling back to Instant. */
+export function availableResearchMode(mode: ResearchMode | undefined): ResearchMode {
+  return mode === "thinking" || mode === "deep-research" ? mode : "instant";
 }

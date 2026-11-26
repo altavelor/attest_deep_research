@@ -21,6 +21,7 @@ import {
   childEvidence,
   delegationGrant,
   executionResult,
+  FakeBudgetOwner,
   FakeChatRegistry,
   importHarness,
   launchChild,
@@ -28,10 +29,12 @@ import {
   managerParts,
   readySubAgentRecord,
   runToImport,
+  scopedGrant,
   sourcePolicy,
 } from "../support/subAgentSessions";
 import { IMPORT_TIMEOUT_MS, SubAgentExecutionAdapter } from "@application/use-cases/sub-agent";
 import { scriptedModelRounds } from "../support/researchFakes";
+import { markdownSource, retrieved, webSource } from "../support/factories";
 import { runPastDeadline } from "../support/timers";
 
 vi.mock("@shared", async (importOriginal) => {
@@ -207,6 +210,56 @@ describe("sub-agent evidence import", () => {
     expect(tasks[0]).toContain(items[0]!.text);
     expect(run.evidence).toEqual([
       expect.objectContaining({ id: state.outcome.evidence[0]!.conversationEvidenceId }),
+    ]);
+  });
+
+  it("reports a page fetched or a note read after its search as the document read", async () => {
+    const harness = importHarness();
+    await launchWith(harness, ["example.com"]);
+    const page = retrieved(
+      "web:p",
+      { ...webSource("https://example.com/p"), wasContentFetched: true },
+      "Page body",
+    );
+    const note = retrieved("note:n", markdownSource("n.md"), "Note body");
+    const adapter = new SubAgentExecutionAdapter({
+      selectModel: () => ({
+        model: { profileId: "p", providerId: "openai", modelId: "m", label: "M" },
+        modelRound: scriptedModelRounds(() => ({ items: [], stopReason: "complete" })),
+      }),
+      createRunner: () => ({
+        run: async () => ({
+          answerText: "Done",
+          snapshot: {
+            evidence: [page, note],
+            citations: [],
+            provenance: [
+              {
+                evidenceId: page.id,
+                calls: [
+                  { callId: "c1", query: "q", tool: "search_web" as const },
+                  { callId: "c2", tool: "fetch_web_page" as const },
+                ],
+              },
+              {
+                evidenceId: note.id,
+                calls: [
+                  { callId: "c3", query: "q", tool: "search_index" as const },
+                  { callId: "c4", tool: "read_note" as const },
+                ],
+              },
+            ],
+          },
+        }),
+      }),
+      now: () => new Date(AT),
+    });
+
+    const run = await adapter.run(harness.execution.requests[0]!);
+
+    expect(run.evidence).toEqual([
+      expect.objectContaining({ tool: "fetch_web_page" }),
+      expect.objectContaining({ tool: "read_note" }),
     ]);
   });
 
@@ -500,7 +553,7 @@ describe("sub-agent evidence import", () => {
     expect(harness.chat.attempts).toBe(1);
   });
 
-  it("U8: imports only allowed hosts, search provenance and ten web sources", async () => {
+  it("U8: imports only allowed hosts, search provenance and ten web sources, cited ones first", async () => {
     const harness = importHarness();
     const { delegator, sessionId, runId } = await launchWith(harness, ["example.com"]);
     const web = Array.from({ length: 11 }, (_, index) => childEvidence(`w${index}`));
@@ -533,8 +586,24 @@ describe("sub-agent evidence import", () => {
     const imported = state.outcome.evidence.map((alias) => alias.subAgentEvidenceId);
     expect(imported).toHaveLength(11);
     expect(imported).toContain("n1");
-    expect(imported).not.toContain("w10");
-    expect(state.outcome.answerText.match(/source unavailable/g)).toHaveLength(5);
+    expect(imported).toContain("w10");
+    expect(imported).not.toContain("w9");
+    expect(state.outcome.answerText.match(/source unavailable/g)).toHaveLength(4);
+  });
+
+  it("imports every cited web source of a research sub-agent past the ten-source cap", async () => {
+    const harness = importHarness({ budget: new FakeBudgetOwner() });
+    harness.grants.set("scope-1", scopedGrant(harness.binding));
+    const delegator = harness.delegator("scope-1");
+    const { session, receipt } = await launchChild(delegator, "research");
+    await settle();
+    const web = Array.from({ length: 11 }, (_, index) => childEvidence(`w${index}`));
+    harness.execution.finish(0, result(web.map((_, index) => `[w${index}]`).join(" "), web));
+    await settle();
+
+    const state = await delegator.getResult(session.subAgentSessionId, receipt.runId);
+
+    expect(state.state === "completed" && state.outcome.evidence).toHaveLength(11);
   });
 
   it("U8: an admitted element without an alias fails the import with its message", async () => {

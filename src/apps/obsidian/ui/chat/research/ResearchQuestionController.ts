@@ -1,3 +1,4 @@
+import type { ClarificationReply } from "@core/answer";
 import { Notice } from "obsidian";
 
 import { chatHistoryForPrompt } from "@application/use-cases/chat";
@@ -6,7 +7,14 @@ import { ResearchService } from "@application/use-cases/research";
 import { estimateResearchRequestTokens } from "@core/research";
 import { ChatDisplayMessage } from "@core/conversation";
 import type { Translate } from "@adapters/i18n";
+import type { ResearchTurnInput } from "@core/research/deepResearch";
+import type { ClarificationReplyOutcome } from "../clarificationCard";
 import { ChatHistoryCompactor } from "./ChatHistoryCompactor";
+
+interface ThinkingTurnOptions {
+  thinking?: true;
+  clarificationReply?: ClarificationReply;
+}
 
 export interface ResearchQuestionControllerOptions {
   getSessionId(): string;
@@ -100,7 +108,8 @@ export class ResearchQuestionController {
     model: string,
     activeFilePath: string | undefined,
     includeActiveFile: boolean,
-  ): Promise<void> {
+    turn: ThinkingTurnOptions = {},
+  ): Promise<ClarificationReplyOutcome> {
     const chatHistory = this.options.getMessages(sessionId);
     if (await this.historyCompactor.compactIfNeeded(sessionId, question)) {
       return this.runCapturedQuestion(
@@ -109,18 +118,22 @@ export class ResearchQuestionController {
         model,
         activeFilePath,
         includeActiveFile,
+        turn,
       );
     }
 
-    if (this.rejectIfContextWindowExceeded(sessionId, question, chatHistory)) {
-      return;
+    if (
+      this.rejectIfContextWindowExceeded(sessionId, question, chatHistory, !turn.clarificationReply)
+    ) {
+      return { started: false, reason: this.options.t("chat.research.contextTooLong") };
     }
 
-    await this.runQuestion(sessionId, question, model, {
+    return this.runQuestion(sessionId, question, model, {
       appendQuestion: true,
       chatHistory,
       activeFilePath,
       includeActiveFile,
+      ...turn,
     });
   }
 
@@ -185,6 +198,41 @@ export class ResearchQuestionController {
     });
   }
 
+  /** Starts a Deep Research turn from a card action; the label becomes the user message. */
+  async submitResearchTurn(research: ResearchTurnInput, label: string): Promise<void> {
+    const sessionId = this.options.getSessionId();
+    if (this.isRunning()) return;
+    await this.runQuestion(sessionId, label, this.options.getModelInputValue(), {
+      appendQuestion: true,
+      chatHistory: this.options.getMessages(sessionId),
+      activeFilePath: undefined,
+      includeActiveFile: false,
+      research,
+    });
+  }
+
+  /**
+   * Sends a reply to clarifying questions as an ordinary user message of a Thinking turn through the
+   * same compaction and context-window checks as a typed question. Reports a refusal with its reason to the card instead of a notice.
+   */
+  async submitClarificationReply(
+    text: string,
+    reply: ClarificationReply,
+  ): Promise<ClarificationReplyOutcome> {
+    const sessionId = this.options.getSessionId();
+    if (this.isRunning()) return { started: false, reason: null };
+    const unavailable = this.options.getSearchUnavailableMessage();
+    if (unavailable !== null) return { started: false, reason: unavailable };
+    return this.runCapturedQuestion(
+      sessionId,
+      text,
+      this.options.getModelInputValue(),
+      undefined,
+      false,
+      { thinking: true, clarificationReply: reply },
+    );
+  }
+
   stopRunningQuestion(): void {
     this.options.stopRun();
   }
@@ -199,8 +247,11 @@ export class ResearchQuestionController {
       contextPaths?: string[];
       activeFilePath: string | undefined;
       includeActiveFile: boolean;
+      research?: ResearchTurnInput;
+      thinking?: true;
+      clarificationReply?: ClarificationReply;
     },
-  ): Promise<void> {
+  ): Promise<ClarificationReplyOutcome> {
     const contextPaths = options.contextPaths ?? this.options.getContextPaths(sessionId);
     await this.options.updateChatModel(sessionId, model || this.options.getCurrentModel(sessionId));
     this.setProgressStatus(sessionId, null);
@@ -214,27 +265,31 @@ export class ResearchQuestionController {
       includeActiveFile: options.includeActiveFile,
       includeContextDiagnostics: this.options.shouldIncludeContextDiagnostics(),
       modelLabel: this.options.getCurrentModelLabel(sessionId),
+      ...(options.research ? { research: options.research } : {}),
+      ...(options.thinking ? { thinking: true as const } : {}),
+      ...(options.clarificationReply ? { clarificationReply: options.clarificationReply } : {}),
     });
 
     if (!result.started) {
-      if (result.error !== undefined) {
-        const message = this.options.t("chat.session.startFailed");
-        this.setProgressStatus(sessionId, message);
-        new Notice(message);
-      }
-      return;
+      if (result.error === undefined) return { started: false, reason: null };
+      const message = this.options.t("chat.session.startFailed");
+      this.setProgressStatus(sessionId, message);
+      if (!options.clarificationReply) new Notice(message);
+      return { started: false, reason: message };
     }
 
     if (this.options.isSessionDisplayed(sessionId)) {
       this.options.clearQuestionInput();
     }
     this.clearContextPaths(sessionId);
+    return { started: true };
   }
 
   private rejectIfContextWindowExceeded(
     sessionId: string,
     question: string,
     chatHistory: ChatDisplayMessage[],
+    notify = true,
   ): boolean {
     const limit = this.options.getContextLimitTokens(sessionId);
 
@@ -256,7 +311,7 @@ export class ResearchQuestionController {
 
     const message = this.options.t("chat.research.contextTooLong");
     this.setProgressStatus(sessionId, message);
-    new Notice(message);
+    if (notify) new Notice(message);
     return true;
   }
 

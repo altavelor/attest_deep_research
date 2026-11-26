@@ -4,7 +4,7 @@ import { describeToolCall } from "@apps/obsidian/ui/chat/toolCallView";
 const t = createTranslator("en").t;
 
 describe("describeToolCall inline arguments", () => {
-  it("renders call arguments on a single line", () => {
+  it("renders call arguments on a single line and none for a clarification call", () => {
     const view = describeToolCall({
       t,
       name: "search_index",
@@ -17,6 +17,16 @@ describe("describeToolCall inline arguments", () => {
     const text = view.inCell?.kind === "code" ? view.inCell.text : "";
     expect(text).not.toContain("\n");
     expect(text).toContain('"query":"riquet"');
+    const clarification = describeToolCall({
+      t,
+      name: "ask_clarification",
+      label: "ask_clarification",
+      status: "complete",
+      args: { questions: [{ prompt: "Which database?" }] },
+      resultJson: JSON.stringify({ ok: true, questionCount: 1 }),
+    });
+    expect(clarification).not.toHaveProperty("inCell");
+    expect(clarification).not.toHaveProperty("outCell");
   });
 });
 

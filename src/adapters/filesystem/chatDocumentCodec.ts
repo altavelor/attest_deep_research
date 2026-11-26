@@ -1,6 +1,7 @@
 import type { ChatFileBaseline } from "@application/ports";
 import { parseSavedChat, type SavedChat } from "@core/chat/savedChat";
 import type { SubAgentStateSnapshot } from "@core/research";
+import type { DeepResearchSection } from "@core/research/deepResearch";
 
 export type ChatSections = Map<string, string>;
 
@@ -12,6 +13,7 @@ export interface ChatDocument {
 }
 
 const SUB_AGENTS = "subAgents";
+const DEEP_RESEARCH = "deepResearch";
 const CHAT_FIELDS = [
   "schemaVersion",
   "id",
@@ -74,6 +76,14 @@ export function withSubAgentSection(
   return new Map(sections).set(SUB_AGENTS, text);
 }
 
+/** Sets the Deep Research section text. */
+export function withResearchSection(
+  sections: ChatSections,
+  section: DeepResearchSection,
+): ChatSections {
+  return new Map(sections).set(DEEP_RESEARCH, JSON.stringify(section));
+}
+
 /** Joins sections into compact JSON: chat fields in fixed order, unknown fields, then the sub-agent section. */
 export function encodeChatDocument(sections: ChatSections): string {
   const known = new Set<string>([...CHAT_FIELDS, SUB_AGENTS]);
@@ -91,7 +101,7 @@ function emptyTimelineText(text: string | undefined): string {
   return text === undefined || text === "[]" || text === "0" ? "" : text;
 }
 
-/** Builds the conflict token: the normalized content and timeline fields and the raw sub-agent section text. */
+/** Builds the conflict token: normalized content, timeline and research section, and the raw sub-agent section. */
 export function baselineOf(chat: SavedChat, sections: ChatSections): ChatFileBaseline {
   return {
     content: JSON.stringify([
@@ -101,6 +111,7 @@ export function baselineOf(chat: SavedChat, sections: ChatSections): ChatFileBas
       chat.chatSettings,
       chat.sourceRegistry,
       ...TIMELINE_FIELDS.map((key) => emptyTimelineText(sections.get(key))),
+      sections.get(DEEP_RESEARCH) ?? "",
     ]),
     subAgents: sections.get(SUB_AGENTS) ?? "",
   };

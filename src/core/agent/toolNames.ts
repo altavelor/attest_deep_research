@@ -25,6 +25,8 @@ export const IMAGE_SEARCH_TOOL = "search_images";
 export const PRESENT_IMAGE_GALLERY_TOOL = "present_image_gallery";
 export const PRESENT_CHART_TOOL = "present_chart";
 
+export const ASK_CLARIFICATION_TOOL = "ask_clarification";
+
 export const SUB_AGENT_TOOL = "run_subagent";
 export const SUB_AGENT_RESULT_TOOL = "get_subagent_result";
 export const SUB_AGENT_WAIT_TOOL = "wait_subagents";
@@ -98,4 +100,5 @@ export const CATALOGUE_TOOL_NAMES: ReadonlySet<string> = new Set([
   WEB_FETCH_URL_TOOL,
   WEB_FETCH_SECTION_TOOL,
   WEB_PAGE_METADATA_TOOL,
+  ASK_CLARIFICATION_TOOL,
 ]);

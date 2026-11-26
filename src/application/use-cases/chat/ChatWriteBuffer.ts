@@ -18,6 +18,7 @@ import {
   chatMissing,
   deltaBytes,
   dropInapplicableDeltas,
+  holdsWaiter,
   isNewWork,
   type PendingDelta,
 } from "./chatWriteBatch";
@@ -50,6 +51,7 @@ export class ChatWriteBuffer implements SubAgentDurableWriter {
   private baseline: ChatFileBaseline | null;
   private waiters: ChatWriteWaiter[] = [];
   private revision = 0;
+  private staged = 0;
   private revisionFloor = 0;
   private updates = 0;
   private firstDirtyAt: number | null = null;
@@ -103,9 +105,11 @@ export class ChatWriteBuffer implements SubAgentDurableWriter {
     if (this.pendingBytes() - (previous?.bytes ?? 0) + bytes > this.limits.maxPendingBytes) {
       return "full";
     }
-    const unsent = previous && !this.batchDeltas.has(previous) ? previous.firstRevision : revision;
-    const firstRevision = Math.min(unsent, revision);
-    this.pending.set(key, { revision, firstRevision, value: payload, bytes });
+    const carried = previous && !this.batchDeltas.has(previous) ? previous : null;
+    const firstRevision = Math.min(carried?.firstRevision ?? revision, revision);
+    this.staged += 1;
+    const firstStaged = carried?.firstStaged ?? this.staged;
+    this.pending.set(key, { revision, firstRevision, firstStaged, value: payload, bytes });
     this.keyRevisions.set(key, revision);
     this.sectionInvalid = null;
     this.revision = Math.max(this.revision, revision);
@@ -116,14 +120,15 @@ export class ChatWriteBuffer implements SubAgentDurableWriter {
 
   flushThrough(revision: number, reason: SubAgentFlushReason): Promise<void> {
     if (this.fenced) return Promise.reject(chatMissing());
-    if (this.isDurable(revision)) return Promise.resolve();
+    const staged = this.staged;
+    if (this.isDurable(revision, staged)) return Promise.resolve();
     if (this.disposed) return Promise.reject(new Error("The chat write buffer is disposed."));
     if (reason === "barrier" || reason === "dispose") {
       if (this.conflict) return Promise.reject(this.conflict);
       this.barrier = true;
     }
     const promise = new Promise<void>((resolve, reject) => {
-      this.waiters.push({ revision, resolve, reject });
+      this.waiters.push({ revision, staged, resolve, reject });
     });
     this.plan();
     return promise;
@@ -350,18 +355,16 @@ export class ChatWriteBuffer implements SubAgentDurableWriter {
     return this.chat !== null || (this.pending.size > 0 && !this.sectionError());
   }
 
-  private isDurable(revision: number): boolean {
+  /** Tells whether the chat and every delta staged before the request up to a revision are durable. */
+  private isDurable(revision: number, staged: number): boolean {
     if (this.chat && this.chat.revision <= revision) return false;
-    for (const delta of this.pending.values()) {
-      if (delta.firstRevision <= revision) return false;
-    }
-    return true;
+    return ![...this.pending.values()].some((delta) => holdsWaiter(delta, revision, staged));
   }
 
   private settleWaiters(): void {
     const open: ChatWriteWaiter[] = [];
     for (const waiter of this.waiters) {
-      if (this.isDurable(waiter.revision)) waiter.resolve();
+      if (this.isDurable(waiter.revision, waiter.staged)) waiter.resolve();
       else if (this.sectionError()) waiter.reject(this.sectionError()!);
       else open.push(waiter);
     }
@@ -372,15 +375,13 @@ export class ChatWriteBuffer implements SubAgentDurableWriter {
     const waiters = this.waiters;
     this.waiters = [];
     for (const waiter of waiters) {
-      if (keepDurable && this.isDurable(waiter.revision)) waiter.resolve();
+      if (keepDurable && this.isDurable(waiter.revision, waiter.staged)) waiter.resolve();
       else waiter.reject(error);
     }
   }
 
   private pendingBytes(): number {
-    let total = 0;
-    for (const delta of this.pending.values()) total += delta.bytes;
-    return total;
+    return [...this.pending.values()].reduce((total, delta) => total + delta.bytes, 0);
   }
 
   private report(error: Error): void {

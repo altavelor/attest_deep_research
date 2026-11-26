@@ -9,6 +9,8 @@ import { ResearchAnswer } from "@core/answer";
 import {
   answerMessageId,
   attachAnswerDetailsToLastAssistantMessage,
+  attachAnswerUsage,
+  attachResearchReference,
   completeAssistantCheckpoint,
   finalizeLastAssistantReasoning,
   nextAssistantCheckpoint,
@@ -26,6 +28,7 @@ import {
   bindAnswerToConversationRegistry,
   recordConversationCitationUsages,
   registerConversationEvidence,
+  resolveConversationEvidence,
 } from "@core/chat/sourceRegistry";
 import type { ChatRepository } from "@application/ports/chat";
 import type { SubAgentInspectionPort } from "@application/ports/subAgent";
@@ -34,6 +37,7 @@ import type { SaveChatInput } from "@core/chat/savedChat";
 import { scheduleTimeout } from "@shared";
 import { stampRunChain } from "./chainStamping";
 import { ChatSubAgents } from "./ChatSubAgents";
+import { ChatResearchState, type ResearchPlanEditRequest } from "./ChatResearchState";
 import { ChatWriteBuffer } from "./ChatWriteBuffer";
 import { redactToolEvent } from "./toolEventRedaction";
 import type {
@@ -61,6 +65,7 @@ export class ChatSessionRuntime {
   private fencedRunIds = new Set<string>();
   private readonly writes: ChatWriteBuffer;
   private readonly subAgents: ChatSubAgents;
+  private readonly research: ChatResearchState;
 
   constructor(
     readonly state: ChatSessionState,
@@ -78,6 +83,11 @@ export class ChatSessionRuntime {
       now: () => environment.now(),
       scheduleTimeout: environment.scheduleTimeout ?? scheduleTimeout,
       onStorageError: (error) => environment.logError?.(error),
+    });
+    this.research = new ChatResearchState({
+      state,
+      persist: () => this.persist(host.saveInput(state)),
+      persistLater: () => this.persistLater(host.saveInput(state)),
     });
     this.subAgents = new ChatSubAgents({
       state,
@@ -115,6 +125,15 @@ export class ChatSessionRuntime {
     } catch (error) {
       this.host.environment.logError?.(error);
     }
+  }
+
+  /** Commits a manual edit of the pending research plan of this chat without a run. */
+  editResearchPlan(request: ResearchPlanEditRequest): Promise<void> {
+    const { environment } = this.host;
+    return this.research.editPlan(request, {
+      now: environment.now().toISOString(),
+      nextDecisionId: `decision-${environment.createRunId()}`,
+    });
   }
 
   /** Closes the children of a terminal parent run before its terminal save. */
@@ -174,9 +193,11 @@ export class ChatSessionRuntime {
     });
     this.diagnostics = diagnostics;
     const { forceSubAgent, cleanedQuestion } = parseSubAgentDirective(request.question);
-    const mode: ResearchMode = forceSubAgent
-      ? "thinking"
-      : (this.state.chatSettings.researchMode ?? "instant");
+    const mode: ResearchMode = request.research
+      ? "deep-research"
+      : forceSubAgent || request.thinking
+        ? "thinking"
+        : (this.state.chatSettings.researchMode ?? "instant");
 
     const subAgents = this.subAgents.beginParentRun(runId, request, mode);
     try {
@@ -203,12 +224,21 @@ export class ChatSessionRuntime {
             }
           : {}),
         finalizeAnswer: (answer: ResearchAnswer) => this.registerAnswerSources(answer, runId),
+        resolveEvidence: (revisionIds) =>
+          resolveConversationEvidence(this.state.sourceRegistry, revisionIds),
         signal: this.controller.signal,
+        ...(mode === "deep-research"
+          ? {
+              researchState: this.research,
+              ...(request.research ? { research: request.research } : {}),
+            }
+          : {}),
         ...(subAgents
           ? {
               subAgentDelegator: subAgents.delegator,
               subAgentParent: subAgents.parent,
               ...(subAgents.mapSources ? { subAgentMapSources: subAgents.mapSources } : {}),
+              ...(subAgents.research ? { subAgentResearch: subAgents.research } : {}),
             }
           : {}),
       })) {
@@ -274,6 +304,17 @@ export class ChatSessionRuntime {
     }
 
     if (event.type === "context") return;
+
+    if (event.type === "usage") {
+      this.state.messages = attachAnswerUsage(this.state.messages, event);
+      return;
+    }
+
+    if (event.type === "research-activity") {
+      this.state.researchActivity = event.activity;
+      this.emit(runId, "progress");
+      return;
+    }
 
     if (event.type === "delta") {
       this.state.messages = nextAssistantMessage(this.state.messages, event.content);
@@ -355,6 +396,12 @@ export class ChatSessionRuntime {
     if (event.type === "checkpoint-promote") {
       this.state.messages = promoteAssistantCheckpoint(this.state.messages, event.checkpointId);
       this.emit(runId, "active-message");
+      return;
+    }
+
+    if (event.type === "research") {
+      this.state.messages = attachResearchReference(this.state.messages, event.reference);
+      this.emit(runId, "messages");
       return;
     }
 

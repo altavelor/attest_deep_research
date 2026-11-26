@@ -1,6 +1,7 @@
 import { FileChatRepository } from "@adapters/filesystem/FileChatRepository";
 import { ChatDocumentSubAgentRepository } from "@adapters/filesystem/sub-agent/ChatDocumentSubAgentRepository";
 import type { ResearchRequest } from "@application/contracts/research";
+import type { SubAgentSessionManagerContext } from "@application/ports/subAgent";
 import { ChatSessionManager, type ChatRunRequest } from "@application/use-cases/chat";
 import { createSubAgentSessionManager } from "@application/use-cases/sub-agent";
 import { selectConversationRegistryPromptView } from "@core/chat/sourceRegistry";
@@ -9,8 +10,11 @@ import { gatedResearch } from "./chatSessions";
 import type { MemoryFileSystem } from "./memoryFileSystem";
 import type { FakeSubAgentExecution } from "./subAgentSessions";
 
-/** Builds a chat session manager whose sub-agent host is the real manager over the file system. */
-export function realSubAgentChat(fileSystem: MemoryFileSystem) {
+/** Builds a chat session manager whose sub-agent host is the real manager over the file system; the manager's context is handed to the caller. */
+export function realSubAgentChat(
+  fileSystem: MemoryFileSystem,
+  onManagerContext: (context: SubAgentSessionManagerContext) => void = () => undefined,
+) {
   const repository = new FileChatRepository({ fileSystem, folder: "chats" });
   const research = gatedResearch();
   let ids = 0;
@@ -23,7 +27,10 @@ export function realSubAgentChat(fileSystem: MemoryFileSystem) {
       createRunId: () => `run-${(ids += 1)}`,
       buildRegistryPromptView: (registry, question) =>
         selectConversationRegistryPromptView(registry, question),
-      createSubAgentSessionManager,
+      createSubAgentSessionManager: (context) => {
+        onManagerContext(context);
+        return createSubAgentSessionManager(context);
+      },
       subAgentServices: {
         repository: new ChatDocumentSubAgentRepository(repository),
         redact: (text) => text,
@@ -65,4 +72,26 @@ export async function endTurn(chat: ReturnType<typeof realSubAgentChat>, index: 
   });
   chat.research.end(index);
   await settle();
+}
+
+/** Starts a Deep Research continue turn of the chat; the returned request carries its research context. */
+export async function startResearchTurn(
+  chat: ReturnType<typeof realSubAgentChat>,
+  sessionId: string,
+  researchId: string,
+): Promise<{ request: ResearchRequest; index: number }> {
+  const run: ChatRunRequest = {
+    question: "Continue",
+    chatHistory: [],
+    appendQuestion: true,
+    contextPaths: [],
+    includeActiveFile: false,
+    includeContextDiagnostics: false,
+    modelLabel: "Model",
+    research: { type: "continue", researchId },
+  };
+  await chat.manager.start(sessionId, run);
+  await settle();
+  const index = chat.research.requests.length - 1;
+  return { request: chat.research.requests[index]!, index };
 }

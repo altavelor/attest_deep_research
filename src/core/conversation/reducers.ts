@@ -1,5 +1,6 @@
+import type { ResearchArtifactReference } from "@core/research/deepResearch/types";
 import { ContextDiagnostics } from "@core/diagnostics";
-import { ResearchAnswer } from "@core/answer";
+import { ClarificationReply, ResearchAnswer } from "@core/answer";
 import { RetrievedChunk } from "@core/model/source";
 import { createMessageId } from "./messageIds";
 
@@ -35,6 +36,8 @@ export function nextUserMessage(
   messages: ChatDisplayMessage[],
   content: string,
   contextPaths: readonly string[] = [],
+  clarificationReply?: ClarificationReply,
+  researchTurn = false,
 ): ChatDisplayMessage[] {
   return [
     ...messages,
@@ -44,6 +47,8 @@ export function nextUserMessage(
       content,
       createdAt: new Date().toISOString(),
       ...(contextPaths.length > 0 ? { contextPaths: [...contextPaths] } : {}),
+      ...(clarificationReply ? { clarificationReply } : {}),
+      ...(researchTurn ? { researchTurn: true as const } : {}),
     },
   ];
 }
@@ -104,6 +109,30 @@ export function attachAnswerDetailsToLastAssistantMessage(
     ];
   }
   return messages;
+}
+
+/** Points the last assistant message at the research artifact its card renders. */
+export function attachResearchReference(
+  messages: ChatDisplayMessage[],
+  research: ResearchArtifactReference,
+): ChatDisplayMessage[] {
+  const index = messages.map((message) => message.role).lastIndexOf("assistant");
+  if (index < 0) return messages;
+  return messages.map((message, at) => (at === index ? { ...message, research } : message));
+}
+
+/** Records the input and output tokens the last assistant answer used. */
+export function attachAnswerUsage(
+  messages: ChatDisplayMessage[],
+  usage: { inputTokens: number; outputTokens: number },
+): ChatDisplayMessage[] {
+  const index = messages.map((message) => message.role).lastIndexOf("assistant");
+  if (index < 0) return messages;
+  return messages.map((message, at) =>
+    at === index
+      ? { ...message, usage: { inputTokens: usage.inputTokens, outputTokens: usage.outputTokens } }
+      : message,
+  );
 }
 
 export function stampLastAssistantModel(

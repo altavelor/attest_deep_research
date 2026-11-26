@@ -29,6 +29,7 @@ export interface SubAgentImportPlanInput {
   policy: SubAgentSourcePolicy;
   resources: readonly string[];
   webCapacity: number;
+  webSourceCap?: number;
   incomplete: boolean;
   result: SubAgentExecutionResult;
   now: string;
@@ -70,6 +71,8 @@ export function planSubAgentImport(input: SubAgentImportPlanInput): SubAgentImpo
     subAgentAllowedHosts(input.resources),
     input.policy,
     input.webCapacity,
+    input.result.answerText,
+    input.webSourceCap,
   );
   const keyed = admitted
     .map((item) => ({ item, key: identityKey(item.source, item.text, item.id) }))

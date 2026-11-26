@@ -7,3 +7,4 @@ export * from "./chatSessionSnapshots";
 export * from "./chatSessionTypes";
 export * from "./ChatWriteBuffer";
 export * from "./ChatSubAgentBridge";
+export type { ResearchPlanEditRequest } from "./ChatResearchState";
