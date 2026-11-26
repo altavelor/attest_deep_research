@@ -5,6 +5,7 @@ import {
   formatWithoutModel,
   label,
   type BranchExecution,
+  type ContestedPoint,
   type ResearchDiscovery,
   type ResearchLabels,
   type ResearchPlan,
@@ -73,7 +74,8 @@ export async function writeReportMarkdown(input: ReportWritingInput): Promise<Wr
       now: input.now,
       plan,
       findings,
-      contested: contestedPoints(input.discovery),
+      contested: resolvedContested(input),
+      omissions: input.discovery?.omissions ?? [],
       ...(input.signal ? { signal: input.signal } : {}),
       ...(input.onText ? { onText: input.onText } : {}),
     });
@@ -93,6 +95,19 @@ export async function writeReportMarkdown(input: ReportWritingInput): Promise<Wr
       summaryFailure: boundedReason(error instanceof Error ? error.message : "model error"),
     };
   }
+}
+
+function resolvedContested(input: ReportWritingInput): ContestedPoint[] {
+  const points = contestedPoints(input.discovery);
+  const known = new Set(
+    (input.resolveEvidence?.(points.flatMap((point) => point.citationTokens)) ?? []).map(
+      (chunk) => chunk.id,
+    ),
+  );
+  return points.map((point) => ({
+    ...point,
+    citationTokens: point.citationTokens.filter((token) => known.has(token)),
+  }));
 }
 
 /** Prefixes the report with the required branches that are missing, when any is. */

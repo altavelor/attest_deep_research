@@ -50,7 +50,7 @@ describe("deep research report writing", () => {
             prediction: "p",
             disconfirmation: "d",
             status: "supported",
-            observationIds: ["o-1"],
+            observationIds: ["o-1", "o-2"],
           },
         ],
         tests: [],
@@ -66,6 +66,89 @@ describe("deep research report writing", () => {
             observedAt: null,
             receivedAt: "2026-11-25T00:00:00.000Z",
           },
+          {
+            observationId: "o-2",
+            testId: "t-1",
+            producer: "user",
+            citationTokens: [],
+            verdict: "supports",
+            quote: "My tide log agrees.",
+            limitations: [],
+            observedAt: null,
+            receivedAt: "2026-11-25T00:00:00.000Z",
+          },
+        ],
+        cycles: [],
+        notes: [],
+        executions: [],
+        omissions: ["The wind test was skipped."],
+      },
+      stopReason: "Stop.",
+      labels: ENGLISH_RESEARCH_LABELS,
+      synthesis: new ReportSynthesisService({ chatModel: model, model: "model", chatOptions: {} }),
+      spendRound: () => true,
+      now: new Date("2026-11-25T00:00:00.000Z"),
+      resolveEvidence: (tokens) =>
+        tokens.map((token) => retrieved(token, markdownSource("Notes/a.md"), "The moon pulls.")),
+    });
+
+    const request = String(model.requests[0]!.messages.at(-1)!.content);
+    expect(request).toContain("The moon causes tides [t1].");
+    expect(request).toContain(
+      '<contested outcome="the first position held in the source check">\n<position>Wind lifts waves.</position>\n<other-position>Only the moon lifts waves.</other-position>\n<quote>Wind builds waves.</quote>\n<user-report>My tide log agrees.</user-report>\n[t2]',
+    );
+    expect(request).toContain("<omission>The wind test was skipped.</omission>");
+    expect(written.synthesized).toBe(true);
+    expect(written.markdown).toContain("wind lifts waves [t2].");
+    expect(written.markdown).toContain("Stop reason: Stop.");
+  });
+
+  it("removes the citation tokens of contested points that no registry lookup resolves", async () => {
+    const plan = researchPlan([researchBranch(1)], "balanced");
+    const execution = {
+      ...gatheringResearch(plan).executions[0]!,
+      state: "completed" as const,
+      finding: {
+        text: "Tides [source-1:revision-1].",
+        citationTokens: ["source-1:revision-1"],
+        partial: false,
+      },
+    };
+    const model = new FakeChatModel([
+      [{ content: "Report [source-1:revision-1] [source-2:revision-2].", isComplete: true }],
+    ]);
+    const written = await writeReportMarkdown({
+      question: "Tides?",
+      plan,
+      executions: [execution],
+      discovery: {
+        hypotheses: [
+          {
+            hypothesisId: "h-1",
+            revision: 1,
+            previousRevision: null,
+            branchId: execution.branchId,
+            claim: "A",
+            alternative: "B",
+            prediction: "p",
+            disconfirmation: "d",
+            status: "supported",
+            observationIds: ["o-1"],
+          },
+        ],
+        tests: [],
+        observations: [
+          {
+            observationId: "o-1",
+            testId: "t-1",
+            producer: "source",
+            citationTokens: ["source-2:revision-2"],
+            verdict: "supports",
+            quote: null,
+            limitations: [],
+            observedAt: null,
+            receivedAt: "2026-11-25T00:00:00.000Z",
+          },
         ],
         cycles: [],
         notes: [],
@@ -77,16 +160,15 @@ describe("deep research report writing", () => {
       synthesis: new ReportSynthesisService({ chatModel: model, model: "model", chatOptions: {} }),
       spendRound: () => true,
       now: new Date("2026-11-25T00:00:00.000Z"),
-      resolveEvidence: () => [retrieved("t1", markdownSource("Notes/a.md"), "The moon pulls.")],
+      resolveEvidence: (tokens) =>
+        tokens
+          .filter((token) => token === "source-1:revision-1")
+          .map((token) => retrieved(token, markdownSource("Notes/a.md"), "x")),
     });
 
-    const request = String(model.requests[0]!.messages.at(-1)!.content);
-    expect(request).toContain("The moon causes tides [t1].");
-    expect(request).toContain(
-      '<contested outcome="the first position held in the source check">\n<position>Wind lifts waves.</position>\n<other-position>Only the moon lifts waves.</other-position>\n<quote>Wind builds waves.</quote>\n[t2]',
+    expect(String(model.requests[0]!.messages.at(-1)!.content)).not.toContain(
+      "[source-2:revision-2]",
     );
-    expect(written.synthesized).toBe(true);
-    expect(written.markdown).toContain("wind lifts waves [t2].");
-    expect(written.markdown).toContain("Stop reason: Stop.");
+    expect(written.markdown).not.toContain("[source-2:revision-2]");
   });
 });

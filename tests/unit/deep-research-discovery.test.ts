@@ -209,6 +209,17 @@ describe("deep research discovery rules", () => {
     expect(String(model.requests[0]!.messages[0]!.content)).toContain("contradictions");
     expect(String(model.requests[0]!.messages.at(-1)!.content)).toContain("END");
     expect(model.requests[0]!.maxTokens).toBe(24_000);
+    const unset = new FakeChatModel([[{ content: '{"hypotheses": []}', isComplete: true }]]);
+    await new ResearchDiscoveryService({
+      chatModel: unset,
+      model: "model",
+      chatOptions: {},
+      resolveEvidence: () => [],
+      spendRound: () => true,
+      createId: (prefix) => `${prefix}-1`,
+      now: () => "2026-01-01T00:00:00.000Z",
+    }).propose("Tides?", plan, findings, [], 3);
+    expect(unset.requests[0]!.maxTokens).toBe(24_000);
   });
 
   it("keeps a late user report as inconclusive text when no discovery round remains", async () => {
@@ -299,6 +310,7 @@ describe("deep research discovery rules", () => {
         alternative: "Wind drives tides.",
         status: "disconfirmed",
         quotes: ["Tides follow the moon closely."],
+        userReports: ["Own result"],
         citationTokens: ["e1"],
       },
     ]);

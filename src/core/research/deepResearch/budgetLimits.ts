@@ -14,8 +14,8 @@ const SCALED_LIMITS = [
  * session ceiling grown by one preset branch's share for each enabled branch above the preset's
  * branch count, so added branches keep the preset's share of the main path. A plan that tests
  * hypotheses, each test counting its attempts apart from its branch, gives every branch one more
- * attempt for its follow-ups and the total one attempt per verification follow-up, so the tests
- * cannot take the follow-ups' attempts.
+ * attempt and the total one attempt per planned verification follow-up, as earlier runs stored
+ * budgets within these grown limits; the tests may use all of them.
  */
 export function budgetLimits(plan: ResearchPlan): ResearchLimits {
   const { limits } = plan;

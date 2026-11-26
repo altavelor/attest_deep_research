@@ -12,8 +12,7 @@ const WRITING_WORDS_STEP = 25;
 /**
  * Reports what a research turn does after its gather wave without committing the state: each
  * step names its stage, every stage keeps its start and end time within the turn, and the spent
- * budget goes along. Entering a stage ends the open ones, except the verification that runs the
- * follow-ups it requested. Streamed report text is reported when a heading appears or the text, or
+ * budget goes along. Entering a stage ends the open ones. Streamed report text is reported when a heading appears or the text, or
  * the reasoning before it, grows by a few words.
  */
 export class ResearchActivityReporter {

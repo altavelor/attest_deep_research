@@ -9,6 +9,7 @@ export interface ContestedPoint {
   alternative: string;
   status: ResearchHypothesis["status"];
   quotes: string[];
+  userReports: string[];
   citationTokens: string[];
 }
 
@@ -18,7 +19,8 @@ const MAX_CONTESTED_QUOTE_CHARS = 400;
 
 /**
  * Lists the points the sources disagree on: each current hypothesis with its alternative, its
- * status after the source checks, and the quotes and citation tokens of its source observations.
+ * status after the source checks, the quotes and citation tokens of its source observations, and
+ * the results the user reported for it.
  */
 export function contestedPoints(discovery: ResearchDiscovery | null): ContestedPoint[] {
   if (!discovery) return [];
@@ -31,6 +33,14 @@ export function contestedPoints(discovery: ResearchDiscovery | null): ContestedP
         alternative: hypothesis.alternative,
         status: hypothesis.status,
         quotes: sources
+          .flatMap((entry) => (entry.quote === null ? [] : [entry.quote]))
+          .slice(0, MAX_CONTESTED_QUOTES)
+          .map((quote) => quote.slice(0, MAX_CONTESTED_QUOTE_CHARS)),
+        userReports: discovery.observations
+          .filter(
+            (entry) =>
+              entry.producer === "user" && hypothesis.observationIds.includes(entry.observationId),
+          )
           .flatMap((entry) => (entry.quote === null ? [] : [entry.quote]))
           .slice(0, MAX_CONTESTED_QUOTES)
           .map((quote) => quote.slice(0, MAX_CONTESTED_QUOTE_CHARS)),
