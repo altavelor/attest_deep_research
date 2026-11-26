@@ -79,8 +79,16 @@ export const deepResearch = {
   "chat.deepResearch.report.outcome.partial": "Partial",
   "chat.deepResearch.report.outcome.failed": "Failed",
   "chat.deepResearch.report.outcome.cancelled": "Cancelled",
-  "chat.deepResearch.report.time": "{minutes} of {max} min",
   "chat.deepResearch.report.stat.branches": "plan items gathered",
+  "chat.deepResearch.report.stat.sources": "sources cited of found",
+  "chat.deepResearch.report.stat.minutes": "{minutes} min",
+  "chat.deepResearch.report.stat.time": "run time · limit {max} min",
+  "chat.deepResearch.report.warning.summaryFailure": "The summary was not written: {reason}",
+  "chat.deepResearch.report.warning.noDocuments":
+    "No page was opened: the findings rest on search snippets only.",
+  "chat.deepResearch.report.warning.uncitedBranches": "No source is cited for: {titles}",
+  "chat.deepResearch.report.warning.removedCitations":
+    "{count} citations without a matching source were removed.",
   "chat.deepResearch.report.missingItem": "Not gathered: {title} — {reason}",
   "chat.deepResearch.report.earlier": "This research has ended; its report is in its latest turn.",
   "chat.deepResearch.report.jump": "Go to report",

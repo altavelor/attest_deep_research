@@ -25,7 +25,7 @@ import { ResearchBudgetPermits } from "./ResearchBudgetPermits";
 import type { AttachedResearchBudget } from "./ResearchScopeRouter";
 import type { ResearchSchedulerRunners } from "./ResearchScheduler";
 import { runSchedulingPhase } from "./researchScheduling";
-import { withMissingNote, writeReportMarkdown } from "./researchReportWriting";
+import { citedSourceCount, withMissingNote, writeReportMarkdown } from "./researchReportWriting";
 import { removeUnknownCitationTokens } from "../strategies/citations";
 import type { ResearchDiscoveryService } from "./ResearchDiscoveryService";
 import { runDiscoveryPhase } from "./researchDiscoveryPhase";
@@ -265,7 +265,7 @@ async function writeReport(
   }
   deps.onStatus("Writing the research report…");
   activity.step("writing", { kind: "writing", words: 0, headings: [] });
-  const { markdown, synthesized, summaryFailure } = await writeReportMarkdown({
+  const written = await writeReportMarkdown({
     question: start.question,
     plan,
     executions,
@@ -279,6 +279,7 @@ async function writeReport(
     ...(deps.signal ? { signal: deps.signal } : {}),
     onText: (text, thinking) => activity.writing(text, thinking),
   });
+  const { markdown, synthesized, summaryFailure } = written;
   const resolve = deps.resolveEvidence ?? (() => []);
   const hypotheses = synthesized
     ? ""
@@ -294,6 +295,8 @@ async function writeReport(
     plan,
     deps.labels,
   );
+  const budget = owner.snapshot();
+  const sourcesCited = citedSourceCount(finalMarkdown, deps.resolveEvidence);
   const report: ResearchReport = {
     reportId: deps.createId("report"),
     quality: decision.quality,
@@ -303,7 +306,14 @@ async function writeReport(
     stopReason,
     createdAt: deps.now().toISOString(),
     verification: null,
-    scale: reportScale(plan, owner.snapshot().activeMs),
+    scale: reportScale(plan, budget.activeMs),
+    stats: {
+      sourcesFound: Math.max(budget.consumed.evidenceItems, sourcesCited),
+      sourcesCited,
+      documentsOpened: budget.diagnostics.fetches,
+      removedCitations: written.removedCitations,
+      uncitedBranches: written.uncitedBranches,
+    },
     ...(summaryFailure !== undefined ? { summaryFailure } : {}),
   };
   const state = await commit({ phase: "completed", report });

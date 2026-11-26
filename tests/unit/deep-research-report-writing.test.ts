@@ -1,6 +1,9 @@
 import { ENGLISH_RESEARCH_LABELS, formatWithoutModel } from "@core/research/deepResearch";
 import { ReportSynthesisService } from "@application/use-cases/research/deep-research";
-import { writeReportMarkdown } from "@application/use-cases/research/deep-research/researchReportWriting";
+import {
+  citedSourceCount,
+  writeReportMarkdown,
+} from "@application/use-cases/research/deep-research/researchReportWriting";
 import { gatheringResearch, researchBranch, researchPlan } from "../support/deepResearch";
 import { markdownSource, retrieved } from "../support/factories";
 import { FakeChatModel } from "../support/researchFakes";
@@ -170,5 +173,50 @@ describe("deep research report writing", () => {
       "[source-2:revision-2]",
     );
     expect(written.markdown).not.toContain("[source-2:revision-2]");
+  });
+
+  it("names the branches that cite no source and counts removed and cited sources", async () => {
+    const plan = researchPlan([researchBranch(1), researchBranch(2)], "balanced");
+    const [first, second] = gatheringResearch(plan).executions;
+    const finding = (text: string, citationTokens: string[]) => ({
+      text,
+      citationTokens,
+      partial: false,
+    });
+    const executions = [
+      {
+        ...first!,
+        state: "completed" as const,
+        finding: finding("Tides [source-1:revision-1] [source-9:revision-9].", [
+          "source-1:revision-1",
+          "source-9:revision-9",
+        ]),
+      },
+      { ...second!, state: "completed" as const, finding: finding("Wind.", []) },
+    ];
+    const resolveEvidence = (tokens: readonly string[]) =>
+      tokens
+        .filter((token) => token === "source-1:revision-1")
+        .map((token) => retrieved(token, markdownSource("Notes/a.md"), "x"));
+
+    const written = await writeReportMarkdown({
+      question: "Tides?",
+      plan,
+      executions,
+      discovery: null,
+      stopReason: "Stop.",
+      labels: ENGLISH_RESEARCH_LABELS,
+      synthesis: {} as ReportSynthesisService,
+      spendRound: () => false,
+      now: new Date("2026-11-25T00:00:00.000Z"),
+      resolveEvidence,
+    });
+
+    expect([
+      written.removedCitations,
+      written.uncitedBranches,
+      citedSourceCount(written.markdown, resolveEvidence),
+      citedSourceCount(written.markdown, undefined),
+    ]).toEqual([1, [{ branchId: second!.branchId, title: plan.branches[1]!.title }], 1, 0]);
   });
 });

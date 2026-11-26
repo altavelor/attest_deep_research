@@ -41,6 +41,13 @@ const approved = {
   },
 };
 const [done, running] = approved.executions;
+const reportStats = {
+  sourcesFound: 12,
+  sourcesCited: 3,
+  documentsOpened: 0,
+  removedCitations: 2,
+  uncitedBranches: [{ branchId: "branch-1", title: "Currents" }],
+};
 const ended = {
   researchId: "research-0",
   question: "Q",
@@ -623,6 +630,24 @@ describe("deep research section validation", () => {
         ]),
       ],
       [
+        "report stats with a negative counter",
+        section(null, [
+          { ...ended, report: { ...ended.report, stats: { ...reportStats, sourcesFound: -1 } } },
+        ]),
+      ],
+      [
+        "report stats naming an uncited branch without a valid id",
+        section(null, [
+          {
+            ...ended,
+            report: {
+              ...ended.report,
+              stats: { ...reportStats, uncitedBranches: [{ branchId: "no id!", title: "T" }] },
+            },
+          },
+        ]),
+      ],
+      [
         "covered objectives above the objective bound",
         section(null, [
           {
@@ -733,6 +758,7 @@ describe("deep research section validation", () => {
         ...ended.report,
         missingBranches: [{ branchId: "branch-2", reason: "Time", title: "Tides" }],
         scale: { objectives: 12, activeMs: 1_000, activeLimitMs: 2_000 },
+        stats: reportStats,
         summaryFailure: "The report came back empty.",
         verification: { ...ended.report.verification, coveredObjectives: 12 },
       },

@@ -79,8 +79,16 @@ export const deepResearch: EnDeepResearchMessages = {
   "chat.deepResearch.report.outcome.partial": "Частичный",
   "chat.deepResearch.report.outcome.failed": "Ошибка",
   "chat.deepResearch.report.outcome.cancelled": "Отменено",
-  "chat.deepResearch.report.time": "{minutes} мин из {max}",
   "chat.deepResearch.report.stat.branches": "пунктов плана собрано",
+  "chat.deepResearch.report.stat.sources": "источников процитировано из найденных",
+  "chat.deepResearch.report.stat.minutes": "{minutes} мин",
+  "chat.deepResearch.report.stat.time": "время выполнения · лимит {max} мин",
+  "chat.deepResearch.report.warning.summaryFailure": "Сводка не написана: {reason}",
+  "chat.deepResearch.report.warning.noDocuments":
+    "Ни одна страница не открыта: выводы опираются только на сниппеты поиска.",
+  "chat.deepResearch.report.warning.uncitedBranches": "Нет ссылок на источники: {titles}",
+  "chat.deepResearch.report.warning.removedCitations":
+    "Удалено ссылок без подходящего источника: {count}.",
   "chat.deepResearch.report.missingItem": "Не собран: {title} — {reason}",
   "chat.deepResearch.report.earlier": "Исследование завершено; его отчёт — в последнем ходе.",
   "chat.deepResearch.report.jump": "К отчёту",

@@ -6,12 +6,12 @@ import {
   type ReportFacts,
   type ReportOutcome,
   type ReportShare,
+  type ReportWarning,
   type ResearchHistoryEntry,
 } from "@core/research/deepResearch";
 import type { ResearchCardContext } from "./researchCardContext";
 import type { ResearchExportController } from "./researchExportController";
 
-const MINUTE_MS = 60_000;
 const OUTCOME_ICONS: Record<ReportOutcome, string> = {
   complete: "check-circle",
   partial: "alert-circle",
@@ -21,8 +21,9 @@ const OUTCOME_ICONS: Record<ReportOutcome, string> = {
 
 /**
  * Renders the final card of a finished research from its history entry: the outcome with its
- * reason and time, the share of gathered branches, the missing branches and the note export. A
- * research without a report gets a short card with its reason and no export.
+ * reason, the gathered branches, the cited sources and the run time, the warnings and missing
+ * branches, and the note export. A research without a report gets a short card with its reason and
+ * no export.
  */
 export function renderEndedResearch(
   cardEl: HTMLElement,
@@ -55,10 +56,16 @@ export function renderEndedResearch(
     cls: `attest-research-report__chip is-${facts.outcome}`,
     text: t(`chat.deepResearch.report.outcome.${facts.outcome}`),
   });
-  const reason = reasonLine(entry, facts, t);
+  const reason = facts.report?.stopReason ?? entry.terminalReason ?? "";
   if (reason) reportEl.createDiv({ cls: "attest-research-report__reason", text: reason });
   if (!facts.report) return;
   renderStats(reportEl, facts, t);
+  for (const warning of facts.warnings) {
+    reportEl.createDiv({
+      cls: "attest-research-report__warning",
+      text: warningText(warning, t),
+    });
+  }
   for (const missing of facts.report.missingBranches) {
     reportEl.createDiv({
       cls: "attest-research-report__missing",
@@ -91,31 +98,48 @@ export function renderEarlierTurn(cardEl: HTMLElement, researchId: string, t: Tr
   });
 }
 
-function reasonLine(entry: ResearchHistoryEntry, facts: ReportFacts, t: Translate): string {
-  const scale = facts.report?.scale;
-  const reason = facts.report?.stopReason ?? entry.terminalReason ?? "";
-  if (!scale || scale.activeLimitMs === 0) return reason;
-  const time = t("chat.deepResearch.report.time", {
-    minutes: Math.floor(scale.activeMs / MINUTE_MS),
-    max: Math.floor(scale.activeLimitMs / MINUTE_MS),
-  });
-  return reason ? `${reason} · ${time}` : time;
-}
-
 function renderStats(reportEl: HTMLElement, facts: ReportFacts, t: Translate): void {
   const statsEl = reportEl.createDiv({ cls: "attest-research-report__stats" });
-  const stat = (share: ReportShare | null, caption: Parameters<Translate>[0]): void => {
-    if (!share) return;
-    const statEl = statsEl.createDiv({
-      cls: `attest-research-report__stat ${shareTone(share)}`,
-    });
-    statEl.createDiv({
-      cls: "attest-research-report__stat-value",
-      text: `${share.done} / ${share.total}`,
-    });
-    statEl.createDiv({ cls: "attest-research-report__stat-caption", text: t(caption) });
+  const stat = (value: string, caption: string, tone: string): void => {
+    const statEl = statsEl.createDiv({ cls: `attest-research-report__stat ${tone}` });
+    statEl.createDiv({ cls: "attest-research-report__stat-value", text: value });
+    statEl.createDiv({ cls: "attest-research-report__stat-caption", text: caption });
   };
-  stat(facts.branches, "chat.deepResearch.report.stat.branches");
+  const { branches, sources, time } = facts;
+  if (branches) {
+    stat(
+      `${branches.done} / ${branches.total}`,
+      t("chat.deepResearch.report.stat.branches"),
+      shareTone(branches),
+    );
+  }
+  if (sources) {
+    stat(
+      `${sources.done} / ${sources.total}`,
+      t("chat.deepResearch.report.stat.sources"),
+      "is-neutral",
+    );
+  }
+  if (time) {
+    stat(
+      t("chat.deepResearch.report.stat.minutes", { minutes: time.minutes }),
+      t("chat.deepResearch.report.stat.time", { max: time.limitMinutes }),
+      "is-neutral",
+    );
+  }
+}
+
+function warningText(warning: ReportWarning, t: Translate): string {
+  if (warning.kind === "summaryFailure") {
+    return t("chat.deepResearch.report.warning.summaryFailure", { reason: warning.reason });
+  }
+  if (warning.kind === "noDocuments") return t("chat.deepResearch.report.warning.noDocuments");
+  if (warning.kind === "uncitedBranches") {
+    return t("chat.deepResearch.report.warning.uncitedBranches", {
+      titles: warning.titles.join(", "),
+    });
+  }
+  return t("chat.deepResearch.report.warning.removedCitations", { count: warning.count });
 }
 
 function shareTone(share: ReportShare): string {

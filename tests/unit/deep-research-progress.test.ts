@@ -65,4 +65,57 @@ describe("deep research report facts", () => {
       reportFacts({ ...entry, phase: "failed", report: null }).outcome,
     ]).toEqual(["complete", "partial", "partial", { done: 1, total: 2 }, "cancelled", "failed"]);
   });
+
+  it("warns about missing sources, citations and summary only when the stored stats show them", () => {
+    const base = {
+      researchId: "r-1",
+      question: "Q",
+      phase: "completed" as const,
+      terminalReason: null,
+      createdAt: "2026-01-01T00:00:00.000Z",
+      updatedAt: "2026-01-01T00:00:00.000Z",
+    };
+    const report = {
+      reportId: "report-1",
+      quality: "complete" as const,
+      completedBranches: ["branch-1"],
+      missingBranches: [],
+      stopReason: "Stop.",
+      createdAt: "2026-01-01T00:00:00.000Z",
+      verification: null,
+    };
+    const stats = {
+      sourcesFound: 8,
+      sourcesCited: 3,
+      documentsOpened: 4,
+      removedCitations: 0,
+      uncitedBranches: [],
+    };
+    const facts = (overrides: object) =>
+      reportFacts({ ...base, report: { ...report, ...overrides } });
+
+    expect([
+      facts({}).warnings,
+      facts({}).sources,
+      facts({}).time,
+      facts({ stats }).warnings,
+      facts({ stats }).sources,
+      facts({ stats: { ...stats, documentsOpened: 0 } }).warnings,
+      facts({ stats: { ...stats, documentsOpened: 0, sourcesFound: 0 } }).warnings,
+      facts({ stats: { ...stats, removedCitations: 2 } }).warnings,
+      facts({ scale: { objectives: 1, activeMs: 125_000, activeLimitMs: 0 } }).time,
+      facts({ scale: { objectives: 1, activeMs: 125_000, activeLimitMs: 1_800_000 } }).time,
+    ]).toEqual([
+      [],
+      null,
+      null,
+      [],
+      { done: 3, total: 8 },
+      [{ kind: "noDocuments" }],
+      [],
+      [{ kind: "removedCitations", count: 2 }],
+      null,
+      { minutes: 2, limitMinutes: 30 },
+    ]);
+  });
 });

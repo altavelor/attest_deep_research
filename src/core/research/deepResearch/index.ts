@@ -1,7 +1,14 @@
 export * from "./types";
 export * from "./limits";
 export { budgetLimits } from "./budgetLimits";
-export { reportFacts, type ReportFacts, type ReportOutcome, type ReportShare } from "./reportFacts";
+export {
+  reportFacts,
+  type ReportFacts,
+  type ReportOutcome,
+  type ReportShare,
+  type ReportTime,
+  type ReportWarning,
+} from "./reportFacts";
 export {
   BRANCH_PROGRESS_STATUSES,
   branchProgressCounts,

@@ -8,6 +8,7 @@ import { budgetLimits } from "./budgetLimits";
 import { isFindingText } from "./findingBounds";
 import { MAX_RESEARCH_CLAIMS } from "./verification";
 import { isResearchId, isRevision } from "./planValidation";
+import { readReportStats } from "./reportStats";
 import { isSubAgentStateId } from "../subAgent/stateIds";
 import type {
   BranchAllocation,
@@ -217,6 +218,7 @@ export function readReportSummary(value: unknown): ResearchReportSummary | null 
         (entry.title === undefined || isText(entry.title)),
     ) ||
     readScale(value.scale) === null ||
+    readReportStats(value.stats) === null ||
     (value.summaryFailure !== undefined && !isText(value.summaryFailure)) ||
     !isText(value.stopReason) ||
     !isTimestamp(value.createdAt)
@@ -235,6 +237,7 @@ export function readReportSummary(value: unknown): ResearchReportSummary | null 
     createdAt: value.createdAt,
     verification,
     ...(value.scale !== undefined ? { scale: readScale(value.scale)! } : {}),
+    ...(value.stats !== undefined ? { stats: readReportStats(value.stats)! } : {}),
     ...(typeof value.summaryFailure === "string" ? { summaryFailure: value.summaryFailure } : {}),
   };
 }

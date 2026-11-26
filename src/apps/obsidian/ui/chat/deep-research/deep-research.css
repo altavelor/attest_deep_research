@@ -432,13 +432,15 @@ body.is-mobile .attest-research-progress__toggle {
 
 .attest-research-report__reason,
 .attest-research-report__missing,
+.attest-research-report__warning,
 .attest-research-report__status {
   color: var(--text-muted);
   font-size: var(--font-ui-small);
 }
 
 .attest-research-report.is-partial .attest-research-report__reason,
-.attest-research-report__missing {
+.attest-research-report__missing,
+.attest-research-report__warning {
   color: var(--color-yellow, #d4a72c);
 }
 

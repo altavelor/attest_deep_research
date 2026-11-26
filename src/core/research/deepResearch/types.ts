@@ -230,6 +230,14 @@ export interface ResearchReportScale {
   activeLimitMs: number;
 }
 
+export interface ResearchReportStats {
+  sourcesFound: number;
+  sourcesCited: number;
+  documentsOpened: number;
+  removedCitations: number;
+  uncitedBranches: readonly { branchId: string; title: string }[];
+}
+
 export interface ResearchMissingBranch {
   branchId: string;
   reason: string;
@@ -246,6 +254,7 @@ export interface ResearchReport {
   createdAt: string;
   verification: ReportVerificationCounts | null;
   scale?: ResearchReportScale;
+  stats?: ResearchReportStats;
   summaryFailure?: string;
 }
 

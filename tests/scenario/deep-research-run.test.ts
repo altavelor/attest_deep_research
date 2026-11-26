@@ -117,6 +117,13 @@ describe("deep research run", () => {
       quality: "complete",
       completedBranches: ["branch-1", "branch-2", "branch-3"],
       scale: { objectives: final.plan!.objectives.length },
+      stats: {
+        sourcesFound: 1,
+        documentsOpened: 0,
+        sourcesCited: 1,
+        removedCitations: 1,
+        uncitedBranches: [],
+      },
     });
     const report = completeAnswer(events)!;
     expect(report.answer).toBe(final.report!.markdown);

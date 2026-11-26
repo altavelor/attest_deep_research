@@ -614,6 +614,14 @@ describe("deep research plan card", () => {
         createdAt: "2026-01-01T00:00:00.000Z",
         verification: null,
         scale: { objectives: 5, activeMs: 125_000, activeLimitMs: 1_800_000 },
+        summaryFailure: "Model error",
+        stats: {
+          sourcesFound: 12,
+          sourcesCited: 3,
+          documentsOpened: 0,
+          removedCitations: 2,
+          uncitedBranches: [{ branchId: "branch-1", title: "Currents" }],
+        },
       },
     };
     const transcript = document.createElement("div");
@@ -639,12 +647,18 @@ describe("deep research plan card", () => {
       texts(".attest-research-report__chip"),
       texts(".attest-research-report__reason"),
       texts(".attest-research-report__stat"),
+      texts(".attest-research-report__warning"),
       texts(".attest-research-report__missing"),
       earlier.querySelector(".attest-research-report"),
     ]).toEqual([
       ["Partial"],
-      ["The active execution time limit was reached. · 2 of 30 min"],
-      ["1 / 2plan items gathered"],
+      ["The active execution time limit was reached."],
+      ["1 / 2plan items gathered", "3 / 12sources cited of found", "2 minrun time · limit 30 min"],
+      [
+        "The summary was not written: Model error",
+        "No page was opened: the findings rest on search snippets only.",
+        "No source is cited for: Currents",
+      ],
       ["Not gathered: Tides — Time"],
       null,
     ]);

@@ -81,8 +81,17 @@ export const deepResearch: EnDeepResearchMessages = {
   "chat.deepResearch.report.outcome.partial": "Teilweise",
   "chat.deepResearch.report.outcome.failed": "Fehler",
   "chat.deepResearch.report.outcome.cancelled": "Abgebrochen",
-  "chat.deepResearch.report.time": "{minutes} von {max} Min.",
   "chat.deepResearch.report.stat.branches": "Planpunkte gesammelt",
+  "chat.deepResearch.report.stat.sources": "zitierte von gefundenen Quellen",
+  "chat.deepResearch.report.stat.minutes": "{minutes} Min.",
+  "chat.deepResearch.report.stat.time": "Laufzeit · Limit {max} Min.",
+  "chat.deepResearch.report.warning.summaryFailure":
+    "Die Zusammenfassung wurde nicht geschrieben: {reason}",
+  "chat.deepResearch.report.warning.noDocuments":
+    "Keine Seite wurde geöffnet: Die Ergebnisse stützen sich nur auf Suchauszüge.",
+  "chat.deepResearch.report.warning.uncitedBranches": "Keine Quelle zitiert für: {titles}",
+  "chat.deepResearch.report.warning.removedCitations":
+    "{count} Zitate ohne passende Quelle wurden entfernt.",
   "chat.deepResearch.report.missingItem": "Nicht gesammelt: {title} — {reason}",
   "chat.deepResearch.report.earlier":
     "Diese Recherche ist beendet; ihr Bericht steht im letzten Schritt.",
