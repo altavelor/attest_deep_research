@@ -29,6 +29,7 @@ export function planGenerationPrompt(maxBranches: number): string {
     '"sourceScope": "indexOnly" | "webOnly" | "indexAndWeb"}]}.',
     "Objective and dependency numbers are 1-based positions in their lists.",
     `Use between 1 and ${maxBranches} branches; tasks must be self-contained instructions.`,
+    "A branch runs alone and sees no other branch: a task never refers to the results of another branch, and dependsOn only orders the runs.",
     RESEARCH_LANGUAGE_RULE,
   ].join("\n");
 }
