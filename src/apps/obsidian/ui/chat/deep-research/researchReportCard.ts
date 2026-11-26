@@ -10,9 +10,7 @@ import {
 } from "@core/research/deepResearch";
 import type { ResearchCardContext } from "./researchCardContext";
 import type { ResearchExportController } from "./researchExportController";
-import { renderClaimBar } from "./researchClaimBar";
 
-const SHOWN_OBJECTIVES = 3;
 const MINUTE_MS = 60_000;
 const OUTCOME_ICONS: Record<ReportOutcome, string> = {
   complete: "check-circle",
@@ -23,8 +21,7 @@ const OUTCOME_ICONS: Record<ReportOutcome, string> = {
 
 /**
  * Renders the final card of a finished research from its history entry: the outcome with its
- * reason and time, the share of gathered branches, verified claims and covered objectives, the
- * missing branches, the claim verification bar, the uncovered objectives and the note export. A
+ * reason and time, the share of gathered branches, the missing branches and the note export. A
  * research without a report gets a short card with its reason and no export.
  */
 export function renderEndedResearch(
@@ -71,8 +68,6 @@ export function renderEndedResearch(
       }),
     });
   }
-  renderClaims(reportEl, facts, t);
-  renderUncovered(reportEl, facts.uncovered, t);
   if (exports) renderExport(reportEl, entry.researchId, t, exports);
 }
 
@@ -121,54 +116,11 @@ function renderStats(reportEl: HTMLElement, facts: ReportFacts, t: Translate): v
     statEl.createDiv({ cls: "attest-research-report__stat-caption", text: t(caption) });
   };
   stat(facts.branches, "chat.deepResearch.report.stat.branches");
-  stat(
-    facts.claims && { done: facts.claims.supported, total: facts.claims.total },
-    "chat.deepResearch.report.stat.claims",
-  );
-  stat(facts.objectives, "chat.deepResearch.report.stat.objectives");
 }
 
 function shareTone(share: ReportShare): string {
   if (share.done === share.total) return "is-full";
   return share.done === 0 ? "is-none" : "is-some";
-}
-
-function renderClaims(reportEl: HTMLElement, facts: ReportFacts, t: Translate): void {
-  const claims = facts.claims;
-  if (!claims) return;
-  const sectionEl = reportEl.createDiv({ cls: "attest-research-report__section" });
-  sectionEl.createDiv({
-    cls: "attest-research-report__label",
-    text: t("chat.deepResearch.report.verification"),
-  });
-  renderClaimBar(sectionEl, claims, t);
-}
-
-function renderUncovered(reportEl: HTMLElement, uncovered: readonly string[], t: Translate): void {
-  if (uncovered.length === 0) return;
-  const warnEl = reportEl.createDiv({ cls: "attest-research-report__warning" });
-  const titleEl = warnEl.createDiv({ cls: "attest-research-report__warning-title" });
-  setIcon(titleEl.createSpan({ attr: { "aria-hidden": "true" } }), "alert-triangle");
-  titleEl.appendText(t("chat.deepResearch.report.uncovered", { count: uncovered.length }));
-  const listEl = warnEl.createEl("ul");
-  const hidden: HTMLElement[] = [];
-  uncovered.forEach((objective, index) => {
-    const itemEl = listEl.createEl("li", { text: objective });
-    if (index >= SHOWN_OBJECTIVES) {
-      itemEl.hidden = true;
-      hidden.push(itemEl);
-    }
-  });
-  if (hidden.length === 0) return;
-  const more = warnEl.createEl("button", {
-    cls: "attest-research-report__link",
-    text: t("chat.deepResearch.report.more", { count: hidden.length }),
-    attr: { type: "button" },
-  });
-  more.addEventListener("click", () => {
-    for (const itemEl of hidden) itemEl.hidden = false;
-    more.remove();
-  });
 }
 
 /**

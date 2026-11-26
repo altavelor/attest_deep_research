@@ -2,20 +2,9 @@ import { researchAnswerMessages } from "../../researchAnswerMessages";
 
 export const researchAnswer = researchAnswerMessages({
   findingsTitle: "Résultats de la recherche",
-  verifiedIntro: "Les affirmations vérifiées sont listées sans synthèse.",
-  unverifiedIntro:
-    "Les résultats non vérifiés sont listés par branche sans synthèse ; leurs affirmations n'ont pas été confrontées aux sources.",
-  supportedClaims: "Affirmations étayées",
+  unverifiedIntro: "Les résultats sont listés par branche sans synthèse.",
   sources: "Sources : {tokens}",
   missingBranches: "Branches manquantes",
-  conflictingEvidence: "Éléments contradictoires",
-  conflictLine: "{claim} — citée {cited} ; contredite par {contradicting}",
-  weakClaims: "Affirmations non étayées ou non résolues",
-  verdictUnsupported: "non étayée",
-  verdictUnresolved: "non résolue",
-  moreWeakClaims: "{count} autre(s) affirmation(s) non étayée(s) ou non résolue(s) sont omises.",
-  unverifiedFindings: "Résultats non vérifiés",
-  uncoveredObjectives: "Objectifs non couverts",
   stopReasonLine: "Raison de l'arrêt : {reason}",
   stopSettled: "Toutes les branches prévues sont terminées.",
   stopTime: "La limite de temps d'exécution a été atteinte.",
@@ -36,8 +25,6 @@ export const researchAnswer = researchAnswerMessages({
   observationLimitation: "rapportée, non vérifiée de façon indépendante",
   partialReport: "Rapport partiel : des branches obligatoires manquent ({branches}).",
   removedCitations: "{count} citation(s) sans source ont été retirées des résultats.",
-  unverifiedCitations:
-    "{count} citation(s) n'ont pas pu être vérifiées dans le texte de la source.",
   turnCancelled: "Recherche annulée.",
   turnPlanUpdated: "Plan mis à jour à la révision {revision}.",
   turnPlanRegenerated: "Plan régénéré (génération {used} sur {max}).",

@@ -46,9 +46,6 @@ export function deepResearchTurnDiagnostics(
   const state = record.after ?? record.before;
   const plan = state?.plan ?? null;
   const works = state ? workDiagnostics(state, record.runs) : [];
-  const verification = state?.verification ?? null;
-  const verdicts = verification?.assessments.map((entry) => entry.verdict) ?? [];
-  const count = (verdict: string): number => verdicts.filter((entry) => entry === verdict).length;
   return {
     researchId: state?.researchId ?? null,
     turnKind: record.turnKind,
@@ -85,17 +82,6 @@ export function deepResearchTurnDiagnostics(
       : null,
     works: works.slice(0, MAX_DIAGNOSTIC_WORKS),
     omittedWorks: Math.max(0, works.length - MAX_DIAGNOSTIC_WORKS),
-    verification: verification && {
-      claims: verification.claims.length,
-      supported: count("supported"),
-      unsupported: count("unsupported"),
-      conflicted: count("conflicted"),
-      unresolved: count("unresolved"),
-      followUpsUsed: verification.followUpsUsed,
-      withoutCitation: verification.claims.filter((claim) => claim.citationTokens.length === 0)
-        .length,
-      unassessed: verification.claims.length - verification.assessments.length,
-    },
     hypotheses: (state?.discovery?.hypotheses ?? [])
       .slice(0, MAX_DIAGNOSTIC_ENTRIES)
       .map((entry) => ({
@@ -120,7 +106,6 @@ function workDiagnostics(
     workDiagnostic(kind, execution, state, runs.get(execution.workId) ?? []);
   return [
     ...state.executions.map(work("gather")),
-    ...(state.verification?.followUps ?? []).map(work("follow-up")),
     ...(state.discovery?.executions ?? []).map(work("test")),
   ];
 }

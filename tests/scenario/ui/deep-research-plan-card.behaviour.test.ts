@@ -323,7 +323,7 @@ describe("deep research plan card", () => {
     };
     const state = {
       ...pending,
-      phase: "verifying" as const,
+      phase: "discovering" as const,
       pending: null,
       plan,
       executions: initialExecutions(plan).map((execution, index) => ({
@@ -343,19 +343,9 @@ describe("deep research plan card", () => {
     const activity = {
       researchId: state.researchId,
       at: 100_000,
-      stage: "verification" as const,
-      stages: {
-        hypotheses: { startedAt: 0, endedAt: 60_000 },
-        verification: { startedAt: 60_000 },
-      },
-      step: {
-        kind: "checking" as const,
-        batch: 1,
-        batches: 2,
-        from: 3,
-        to: 4,
-        tally: { supported: 1, conflicted: 1, unverified: 0, total: 4 },
-      },
+      stage: "hypotheses" as const,
+      stages: { hypotheses: { startedAt: 60_000 } },
+      step: { kind: "proposing" as const, cycle: 2 },
       budget: { activeMs: 5 * 60_000, modelRounds: 7, branchAttempts: 2 },
     };
     const context = {
@@ -388,32 +378,21 @@ describe("deep research plan card", () => {
       texts(host, ".attest-research-stage__time"),
       texts(host, ".attest-research-stage__now"),
       texts(host, ".attest-research-stage__sub"),
-      texts(host, ".attest-research-claims__legend-item"),
       texts(host, ".attest-research-progress__budget"),
       host.querySelector<HTMLElement>(".attest-research-stages__rows")!.hidden,
     ]).toEqual([
-      ["Research · stage 2 of 4"],
+      ["Research · stage 1 of 2"],
       ["5 of 60 min"],
       ["Gathered 1 of 2 plan items"],
-      [
-        "attest-research-stage is-done",
-        "attest-research-stage is-running is-live",
-        "attest-research-stage is-pending",
-        "attest-research-stage is-pending",
-      ],
-      ["1:00", "1:41", "—", "—"],
-      ["Checking claims 3–4 against quotes · batch 1 of 2"],
-      [
-        "Hypotheses: 1 · supported: 1 · disconfirmed: 0",
-        "Extracted claims: 4",
-        "Up to 2 extra searches for items with disputed or uncovered claims",
-      ],
-      ["Supported: 1", "Conflicting: 1", "Unverified: 0", "Left: 2"],
+      ["attest-research-stage is-running is-live", "attest-research-stage is-pending"],
+      ["1:41", "—"],
+      ["Proposing hypotheses from the findings · cycle 2"],
+      [],
       ["Rounds 7 of 280 · attempts 2 of 18 · 5 of 60 min"],
       true,
     ]);
     tickStageClocks(host, 200_000);
-    expect(texts(host, ".attest-research-stage__time")[1]).toBe("2:20");
+    expect(texts(host, ".attest-research-stage__time")[0]).toBe("2:20");
     const toggle = host.querySelector<HTMLButtonElement>(
       ".attest-research-stages__gathered button",
     )!;
@@ -427,7 +406,7 @@ describe("deep research plan card", () => {
     );
   });
 
-  it("lists the tests, follow-ups and report sections of the running stages", () => {
+  it("lists the tests and report sections of the running stages", () => {
     const pending = pendingResearch();
     const plan = {
       ...pending.plan!,
@@ -480,14 +459,6 @@ describe("deep research plan card", () => {
     const writing = {
       ...discovering,
       phase: "synthesizing" as const,
-      verification: {
-        claims: [],
-        assessments: [],
-        coverage: [],
-        verifiedWorks: [],
-        followUps: [{ ...first!, workId: "f-1", state: "completed" as const }],
-        followUpsUsed: 1,
-      },
     };
     const render = (state: typeof discovering | typeof writing, step: unknown): HTMLElement => {
       const host = document.createElement("div");
@@ -525,10 +496,7 @@ describe("deep research plan card", () => {
     expect([
       items(host),
       [...host.querySelectorAll(".attest-research-stage__now")].map((el) => el.textContent),
-    ]).toEqual([
-      ["is-done DoneBranch 1", "is-current Summary", "is-pending Risks"],
-      ["Writing “Summary” · 40 words"],
-    ]);
+    ]).toEqual([["is-current Summary", "is-pending Risks"], ["Writing “Summary” · 40 words"]]);
     const thinking = render(writing, { kind: "writing", words: 0, headings: [], thinking: 120 });
     expect(thinking.querySelector(".attest-research-stage__now")?.textContent).toBe(
       "Thinking over the report · 120 words of reasoning",
@@ -644,13 +612,7 @@ describe("deep research plan card", () => {
         missingBranches: [{ branchId: "branch-2", reason: "Time", title: "Tides" }],
         stopReason: "The active execution time limit was reached.",
         createdAt: "2026-01-01T00:00:00.000Z",
-        verification: {
-          supported: 2,
-          conflicted: 1,
-          unsupported: 1,
-          unresolved: 2,
-          uncoveredObjectives: ["Neap tides", "Spring tides", "Storm surges", "Seiches"],
-        },
+        verification: null,
         scale: { objectives: 5, activeMs: 125_000, activeLimitMs: 1_800_000 },
       },
     };
@@ -678,24 +640,14 @@ describe("deep research plan card", () => {
       texts(".attest-research-report__reason"),
       texts(".attest-research-report__stat"),
       texts(".attest-research-report__missing"),
-      texts(".attest-research-claims__legend-item"),
-      texts(".attest-research-report__warning-title"),
-      [...final.querySelectorAll<HTMLElement>(".attest-research-report__warning li")].map(
-        (item) => item.hidden,
-      ),
       earlier.querySelector(".attest-research-report"),
     ]).toEqual([
       ["Partial"],
       ["The active execution time limit was reached. · 2 of 30 min"],
-      ["1 / 2plan items gathered", "2 / 6claims supported", "1 / 5objectives covered"],
+      ["1 / 2plan items gathered"],
       ["Not gathered: Tides — Time"],
-      ["Supported: 2", "Conflicting: 1", "Unverified: 3"],
-      ["Objectives not covered: 4"],
-      [false, false, false, true],
       null,
     ]);
-    final.querySelector<HTMLButtonElement>(".attest-research-report__warning button")!.click();
-    expect(final.querySelectorAll(".attest-research-report__warning li[hidden]")).toHaveLength(0);
     const report = final.querySelector<HTMLElement>(".attest-research-report")!;
     report.scrollIntoView = vi.fn();
     [...earlier.querySelectorAll("button")]

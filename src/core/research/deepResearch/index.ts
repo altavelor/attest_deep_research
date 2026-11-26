@@ -1,13 +1,7 @@
 export * from "./types";
 export * from "./limits";
 export { budgetLimits } from "./budgetLimits";
-export {
-  reportFacts,
-  type ReportClaims,
-  type ReportFacts,
-  type ReportOutcome,
-  type ReportShare,
-} from "./reportFacts";
+export { reportFacts, type ReportFacts, type ReportOutcome, type ReportShare } from "./reportFacts";
 export {
   BRANCH_PROGRESS_STATUSES,
   branchProgressCounts,
@@ -156,12 +150,9 @@ export {
   researchLanguageOf,
 } from "./researchLanguage";
 export {
-  addTally,
-  claimTally,
   formatClock,
   writingSections,
   writingStep,
-  type ClaimTally,
   type ResearchActivity,
   type ResearchActivityBudget,
   type ResearchStage,

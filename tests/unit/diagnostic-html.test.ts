@@ -140,7 +140,7 @@ describe("readable diagnostic HTML (v3)", () => {
     expect(html).not.toMatch(/@import\s+url\(/);
   });
 
-  it("renders the deep research block with its budget closure, claim counts and escaped titles", () => {
+  it("renders the deep research block with its budget closure, stage tokens and escaped titles", () => {
     const pending = pendingResearch(
       researchPlan([researchBranch(1, { title: "<img src=x onerror=alert(1)>" })]),
     );
@@ -151,39 +151,6 @@ describe("readable diagnostic HTML (v3)", () => {
       budget: {
         ...emptyBudgetState(),
         closed: { reason: "exhausted" as const, dimension: "searches" },
-      },
-      verification: {
-        claims: [
-          {
-            claimId: "c-1",
-            workId: "w",
-            branchId: "branch-1",
-            objective: null,
-            text: "A",
-            citationTokens: [],
-          },
-          {
-            claimId: "c-2",
-            workId: "w",
-            branchId: "branch-1",
-            objective: null,
-            text: "B",
-            citationTokens: ["t"],
-          },
-        ],
-        assessments: [
-          {
-            claimId: "c-1",
-            verdict: "unsupported" as const,
-            quote: null,
-            contradictingTokens: [],
-            independenceGroups: [],
-          },
-        ],
-        coverage: [],
-        verifiedWorks: [],
-        followUps: [],
-        followUpsUsed: 0,
       },
     };
     const deepResearch = deepResearchTurnDiagnostics({
@@ -203,8 +170,6 @@ describe("readable diagnostic HTML (v3)", () => {
     expect(html).toContain("exhausted searches");
     expect(html).toContain("<tr><td>writing</td><td>40</td><td>9</td></tr>");
     expect(html).toContain("<dt>Summary failure</dt><dd>The report came back &lt;empty&gt;.</dd>");
-    expect(html).toContain("<dt>Claims without a citation</dt><dd>1</dd>");
-    expect(html).toContain("<dt>Claims not assessed</dt><dd>1</dd>");
     expect(html).toContain("&lt;img src=x onerror=alert(1)&gt;");
     expect(html).not.toContain("<img src=x");
   });

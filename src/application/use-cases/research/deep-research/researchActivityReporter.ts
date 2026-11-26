@@ -1,13 +1,10 @@
 import {
-  addTally,
-  claimTally,
   writingStep,
   type ResearchActivity,
   type ResearchBudgetState,
   type ResearchStage,
   type ResearchStageTime,
   type ResearchStep,
-  type ResearchVerification,
 } from "@core/research/deepResearch";
 
 const WRITING_WORDS_STEP = 25;
@@ -47,24 +44,6 @@ export class ResearchActivityReporter {
     });
   }
 
-  /** Returns the progress callback of one verification round, counted on top of earlier rounds. */
-  verification(earlier: ResearchVerification | null): (step: ResearchStep) => void {
-    const claims = earlier?.claims.length ?? 0;
-    const tally = claimTally(earlier?.assessments ?? [], claims);
-    return (step) =>
-      this.step(
-        "verification",
-        step.kind === "checking"
-          ? {
-              ...step,
-              from: step.from + claims,
-              to: step.to + claims,
-              tally: addTally(tally, step.tally),
-            }
-          : step,
-      );
-  }
-
   writing(markdown: string, thinking = 0): void {
     const step = writingStep(markdown, thinking);
     const last = this.lastWriting;
@@ -87,7 +66,6 @@ export class ResearchActivityReporter {
       ResearchStageTime,
     ][]) {
       if (name === stage || time.endedAt !== undefined) continue;
-      if (name === "verification" && stage === "follow-ups") continue;
       this.stages[name] = { ...time, endedAt: at };
     }
     const own = this.stages[stage];

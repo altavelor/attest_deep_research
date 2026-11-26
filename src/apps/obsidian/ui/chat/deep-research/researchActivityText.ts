@@ -14,20 +14,6 @@ export function researchStepText(step: ResearchStep, t: Translate): string {
         total: step.total,
         cycle: step.cycle,
       });
-    case "extracting":
-      return t("chat.deepResearch.progress.step.extracting", {
-        batch: step.batch,
-        batches: step.batches,
-      });
-    case "checking":
-      return t("chat.deepResearch.progress.step.checking", {
-        from: step.from,
-        to: step.to,
-        batch: step.batch,
-        batches: step.batches,
-      });
-    case "following-up":
-      return t("chat.deepResearch.progress.step.followingUp", { count: step.count });
     case "writing": {
       const section = step.headings.at(-1);
       if (step.words === 0 && step.thinking !== undefined) {

@@ -32,7 +32,7 @@ describe("deep research branch progress rows", () => {
 });
 
 describe("deep research report facts", () => {
-  it("calls a report complete only when nothing is missing and counts its covered objectives", () => {
+  it("calls a report complete only when its quality is complete and no branch is missing", () => {
     const entry = {
       researchId: "research-1",
       question: "Q",
@@ -47,60 +47,22 @@ describe("deep research report facts", () => {
         missingBranches: [],
         stopReason: "Done",
         createdAt: "t",
-        verification: {
-          supported: 3,
-          conflicted: 0,
-          unsupported: 0,
-          unresolved: 0,
-          uncoveredObjectives: [],
-        },
+        verification: null,
       },
     };
-    const conflicted = {
-      ...entry,
-      report: { ...entry.report, verification: { ...entry.report.verification, conflicted: 1 } },
-    };
+    const partial = { ...entry, report: { ...entry.report, quality: "partial" as const } };
     const missing = {
       ...entry,
       report: { ...entry.report, missingBranches: [{ branchId: "branch-2", reason: "Time" }] },
     };
-    const facts = reportFacts(entry);
+
     expect([
-      facts.outcome,
-      facts.objectives,
-      reportFacts(conflicted).outcome,
+      reportFacts(entry).outcome,
+      reportFacts(partial).outcome,
       reportFacts(missing).outcome,
+      reportFacts(missing).branches,
       reportFacts({ ...entry, phase: "cancelled", report: null }).outcome,
       reportFacts({ ...entry, phase: "failed", report: null }).outcome,
-      reportFacts({
-        ...entry,
-        report: {
-          ...entry.report,
-          scale: { objectives: 5, activeMs: 0, activeLimitMs: 1 },
-          verification: {
-            ...entry.report.verification,
-            uncoveredObjectives: ["A"],
-            coveredObjectives: 0,
-          },
-        },
-      }).objectives,
-      reportFacts({
-        ...entry,
-        report: {
-          ...entry.report,
-          scale: { objectives: 5, activeMs: 0, activeLimitMs: 1 },
-          verification: { ...entry.report.verification, uncoveredObjectives: ["A"] },
-        },
-      }).objectives,
-    ]).toEqual([
-      "complete",
-      null,
-      "partial",
-      "partial",
-      "cancelled",
-      "failed",
-      { done: 0, total: 5 },
-      { done: 4, total: 5 },
-    ]);
+    ]).toEqual(["complete", "partial", "partial", { done: 1, total: 2 }, "cancelled", "failed"]);
   });
 });

@@ -531,14 +531,14 @@ describe("background chat sessions", () => {
       activity: {
         researchId: "research-1",
         at: 0,
-        stage: "verification",
+        stage: "hypotheses",
         stages: {},
-        step: { kind: "extracting", batch: 1, batches: 3 },
+        step: { kind: "proposing", cycle: 1 },
         budget: { activeMs: 0, modelRounds: 0, branchAttempts: 0 },
       },
     });
     await settle();
-    expect(progress.textContent).toBe("Extracting claims from the findings · batch 1 of 3");
+    expect(progress.textContent).toBe("Proposing hypotheses from the findings · cycle 1");
     expect(setInterval).toHaveBeenCalledTimes(1);
 
     harness.gates[0].emit({ type: "complete", answer: answerFor("Done") });

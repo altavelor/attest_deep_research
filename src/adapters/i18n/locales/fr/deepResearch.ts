@@ -43,33 +43,19 @@ export const deepResearch: EnDeepResearchMessages = {
   "chat.deepResearch.progress.show": "Afficher",
   "chat.deepResearch.progress.hide": "Masquer",
   "chat.deepResearch.progress.stage.hypotheses": "Test des hypothèses",
-  "chat.deepResearch.progress.stage.verification": "Vérification des affirmations dans les sources",
-  "chat.deepResearch.progress.stage.followUps":
-    "Recherches supplémentaires sur les affirmations contestées",
   "chat.deepResearch.progress.stage.writing": "Rédaction du rapport",
-  "chat.deepResearch.progress.stageSkipped": "Pas nécessaire",
   "chat.deepResearch.progress.step.proposing":
     "Proposition d’hypothèses à partir des résultats · cycle {cycle}",
   "chat.deepResearch.progress.step.testing":
     "Recherche de littérature pour les hypothèses · cycle {cycle}",
   "chat.deepResearch.progress.step.judging":
     "Évaluation du test {current} sur {total} · cycle {cycle}",
-  "chat.deepResearch.progress.step.extracting":
-    "Extraction des affirmations des résultats · lot {batch} sur {batches}",
-  "chat.deepResearch.progress.step.checking":
-    "Vérification des affirmations {from}–{to} dans les citations · lot {batch} sur {batches}",
-  "chat.deepResearch.progress.step.followingUp": "Recherches supplémentaires : {count}",
   "chat.deepResearch.progress.step.writing": "Rédaction du rapport · {words} mots",
   "chat.deepResearch.progress.step.thinking":
     "Réflexion sur le rapport · {words} mots de raisonnement",
   "chat.deepResearch.progress.step.writingSection": "Rédaction de « {section} » · {words} mots",
-  "chat.deepResearch.progress.extracted": "Affirmations extraites : {count}",
-  "chat.deepResearch.progress.checked": "Affirmations vérifiées : {count}",
-  "chat.deepResearch.progress.claimsLeft": "Restantes : {count}",
   "chat.deepResearch.progress.hypothesesDone":
     "Hypothèses : {count} · étayées : {supported} · réfutées : {disconfirmed}",
-  "chat.deepResearch.progress.followUpsPlanned":
-    "Jusqu’à {count} recherches supplémentaires pour les points aux affirmations contestées ou non couvertes",
   "chat.deepResearch.progress.summary": "{done} sur {total} terminées",
   "chat.deepResearch.progress.count": "{label} : {count}",
   "chat.deepResearch.progress.status.done": "Terminée",
@@ -100,15 +86,7 @@ export const deepResearch: EnDeepResearchMessages = {
   "chat.deepResearch.report.outcome.cancelled": "Annulée",
   "chat.deepResearch.report.time": "{minutes} sur {max} min",
   "chat.deepResearch.report.stat.branches": "points du plan rassemblés",
-  "chat.deepResearch.report.stat.claims": "affirmations étayées",
-  "chat.deepResearch.report.stat.objectives": "objectifs couverts",
   "chat.deepResearch.report.missingItem": "Non rassemblé : {title} — {reason}",
-  "chat.deepResearch.report.verification": "Vérification des affirmations",
-  "chat.deepResearch.report.claims.supported": "Étayées : {count}",
-  "chat.deepResearch.report.claims.conflicted": "Contradictoires : {count}",
-  "chat.deepResearch.report.claims.unverified": "Non étayées : {count}",
-  "chat.deepResearch.report.uncovered": "Objectifs non couverts : {count}",
-  "chat.deepResearch.report.more": "{count} de plus",
   "chat.deepResearch.report.earlier":
     "Cette recherche est terminée ; son rapport se trouve à sa dernière étape.",
   "chat.deepResearch.report.jump": "Aller au rapport",

@@ -52,19 +52,6 @@ export function renderDeepResearch(research: DeepResearchDiagnostics | null): st
       research.omittedWorks > 0 ? `<p>${h(research.omittedWorks)} more omitted</p>` : "";
     body += `${sub("Works")}<table class="data-table"><thead><tr><th>Work</th><th>Kind</th><th>Branch</th><th>Runner</th><th>State</th><th>Reason</th><th>Attempts</th><th>Finding</th><th>Runs</th></tr></thead><tbody>${rows}</tbody></table>${omitted}`;
   }
-  if (research.verification) {
-    const v = research.verification;
-    body += `${sub("Verification")}${dl([
-      ["Claims", text(v.claims)],
-      ["Supported", text(v.supported)],
-      ["Unsupported", text(v.unsupported)],
-      ["Conflicted", text(v.conflicted)],
-      ["Unresolved", text(v.unresolved)],
-      ["Follow-ups used", text(v.followUpsUsed)],
-      ["Claims without a citation", text(v.withoutCitation ?? null)],
-      ["Claims not assessed", text(v.unassessed ?? null)],
-    ])}`;
-  }
   if (research.hypotheses.length > 0) {
     body += `${sub("Hypotheses")}${dl(research.hypotheses.map((entry) => [entry.hypothesisId, h(entry.status)]))}`;
   }

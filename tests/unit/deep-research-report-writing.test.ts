@@ -18,7 +18,7 @@ describe("deep research report writing", () => {
 
     const markdown = formatWithoutModel(plan, [done, missing], "Stop.", ENGLISH_RESEARCH_LABELS);
 
-    expect(markdown).toContain("Unverified findings are listed per branch");
+    expect(markdown).toContain("Findings are listed per branch without a synthesized summary.");
     expect(markdown).toContain("The moon causes tides [t1].\n\nSources: [t1]");
     expect(markdown).toContain("Out of time.");
   });

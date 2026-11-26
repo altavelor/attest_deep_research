@@ -19,8 +19,6 @@ import { renderStageBody } from "./researchStageDetails";
 
 const STAGE_TITLES: Record<ResearchStage, Parameters<Translate>[0]> = {
   hypotheses: "chat.deepResearch.progress.stage.hypotheses",
-  verification: "chat.deepResearch.progress.stage.verification",
-  "follow-ups": "chat.deepResearch.progress.stage.followUps",
   writing: "chat.deepResearch.progress.stage.writing",
 };
 const MARKER_ICONS = { done: "check", pending: "circle", skipped: "minus" } as const;
@@ -41,7 +39,7 @@ export function renderStageProgress(
   const { t } = context;
   const activity =
     context.running && context.activity?.researchId === state.researchId ? context.activity : null;
-  const stages = researchStages(state, plan, activity);
+  const stages = researchStages(state, plan);
   const budget = activity?.budget ?? committedBudget(state);
   const blockEl = cardEl.createDiv({ cls: "attest-research-progress attest-research-stages" });
   const headEl = blockEl.createDiv({ cls: "attest-research-progress__head" });

@@ -1,33 +1,14 @@
-import type { ClaimAssessment } from "./types";
-
-export type ResearchStage = "hypotheses" | "verification" | "follow-ups" | "writing";
+export type ResearchStage = "hypotheses" | "writing";
 
 export interface ResearchStageTime {
   startedAt: number;
   endedAt?: number;
 }
 
-export interface ClaimTally {
-  supported: number;
-  conflicted: number;
-  unverified: number;
-  total: number;
-}
-
 export type ResearchStep =
   | { kind: "proposing"; cycle: number }
   | { kind: "testing"; cycle: number }
   | { kind: "judging"; cycle: number; done: number; total: number }
-  | { kind: "extracting"; batch: number; batches: number }
-  | {
-      kind: "checking";
-      batch: number;
-      batches: number;
-      from: number;
-      to: number;
-      tally: ClaimTally;
-    }
-  | { kind: "following-up"; count: number }
   | { kind: "writing"; words: number; headings: readonly string[]; thinking?: number };
 
 export interface ResearchActivityBudget {
@@ -53,28 +34,6 @@ export interface WritingSection {
 const MAX_HEADINGS = 24;
 const MAX_HEADING_CHARS = 120;
 const HEADING = /^#{1,3}\s+(.+?)\s*#*\s*$/;
-
-/** Counts the verdicts of the given assessments against the number of claims they belong to. */
-export function claimTally(assessments: readonly ClaimAssessment[], total: number): ClaimTally {
-  const count = (verdict: ClaimAssessment["verdict"]): number =>
-    assessments.filter((entry) => entry.verdict === verdict).length;
-  return {
-    supported: count("supported"),
-    conflicted: count("conflicted"),
-    unverified: count("unsupported") + count("unresolved"),
-    total: Math.max(total, assessments.length),
-  };
-}
-
-/** Adds the tally of an earlier verification round to the tally of the current one. */
-export function addTally(earlier: ClaimTally, current: ClaimTally): ClaimTally {
-  return {
-    supported: earlier.supported + current.supported,
-    conflicted: earlier.conflicted + current.conflicted,
-    unverified: earlier.unverified + current.unverified,
-    total: earlier.total + current.total,
-  };
-}
 
 /**
  * Reads the progress of a report being written from its streamed markdown: the word count and the

@@ -499,80 +499,6 @@ body.is-mobile .attest-research-progress__toggle {
   text-transform: uppercase;
 }
 
-.attest-research-claims__bar {
-  display: flex;
-  height: 8px;
-  overflow: hidden;
-  border-radius: 4px;
-  background: var(--background-modifier-border);
-}
-
-.attest-research-claims__bar-part,
-.attest-research-claims__dot {
-  background: var(--text-faint);
-}
-
-.attest-research-claims__bar-part.is-supported,
-.attest-research-claims__legend-item.is-supported .attest-research-claims__dot {
-  background: var(--color-green, #2ea043);
-}
-
-.attest-research-claims__bar-part.is-conflicted,
-.attest-research-claims__legend-item.is-conflicted .attest-research-claims__dot {
-  background: var(--text-error);
-}
-
-.attest-research-claims__legend {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--size-4-1) var(--size-4-3);
-  color: var(--text-muted);
-  font-size: var(--font-ui-small);
-}
-
-.attest-research-claims__legend-item {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--size-4-1);
-}
-
-.attest-research-claims__dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-}
-
-.attest-research-report__warning {
-  display: flex;
-  flex-direction: column;
-  gap: var(--size-4-1);
-  padding: var(--size-4-2) var(--size-4-3);
-  border-radius: var(--radius-m);
-  background: rgba(var(--color-yellow-rgb, 229, 164, 66), 0.08);
-}
-
-.attest-research-report__warning-title {
-  display: flex;
-  align-items: center;
-  gap: var(--size-4-2);
-  color: var(--color-yellow, #d4a72c);
-  font-weight: var(--font-semibold);
-}
-
-.attest-research-report__warning-title svg {
-  width: 16px;
-  height: 16px;
-}
-
-.attest-research-report__warning ul {
-  margin: 0;
-  padding-inline-start: var(--size-4-5);
-}
-
-.attest-research-report__warning li[hidden] {
-  display: none;
-}
-
 .attest-research-report__export {
   display: flex;
   flex-wrap: wrap;
@@ -781,12 +707,4 @@ body.is-mobile .attest-research-progress__toggle {
 .attest-research-stage__item-text {
   min-width: 0;
   overflow-wrap: anywhere;
-}
-
-.attest-research-claims__bar-part.is-left {
-  background: transparent;
-}
-
-.attest-research-claims__legend-item.is-left {
-  color: var(--text-faint);
 }

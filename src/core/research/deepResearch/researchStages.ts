@@ -1,4 +1,4 @@
-import type { ResearchActivity, ResearchStage } from "./activity";
+import type { ResearchStage } from "./activity";
 import type { ResearchPhase, ResearchPlan, ResearchState } from "./types";
 
 export type ResearchStageStatus = "done" | "running" | "pending" | "skipped";
@@ -20,35 +20,13 @@ const PHASE_ORDER: Partial<Record<ResearchPhase, number>> = {
 /**
  * Lists the stages that follow the gather wave of an approved research with their status. The
  * hypothesis stage exists when the plan allows more than one research cycle or hypotheses were
- * proposed, and the follow-up stage when the plan allows follow-ups. While follow-ups run, the
- * verification that requested them counts as done; a follow-up stage that never ran is skipped.
+ * proposed; the report is always written last.
  */
-export function researchStages(
-  state: ResearchState,
-  plan: ResearchPlan,
-  activity: ResearchActivity | null,
-): ResearchStageRow[] {
+export function researchStages(state: ResearchState, plan: ResearchPlan): ResearchStageRow[] {
   const order = PHASE_ORDER[state.phase] ?? 0;
-  const followUps = state.verification?.followUps ?? [];
-  const followingUp =
-    order === 2 &&
-    (activity?.stage === "follow-ups" ||
-      followUps.some((entry) => entry.state === "pending" || entry.state === "running"));
   const rows: ResearchStageRow[] = [];
   if (plan.limits.researchCycles > 1 || (state.discovery?.hypotheses.length ?? 0) > 0) {
     rows.push({ stage: "hypotheses", status: byOrder(order, 1) });
-  }
-  rows.push({
-    stage: "verification",
-    status: followingUp ? "done" : byOrder(order, 2),
-  });
-  if (plan.limits.verificationFollowUps > 0) {
-    const ran = followUps.length > 0;
-    let status: ResearchStageStatus = "pending";
-    if (followingUp) status = "running";
-    else if (order > 2) status = ran ? "done" : "skipped";
-    else if (order === 2 && ran) status = "done";
-    rows.push({ stage: "follow-ups", status });
   }
   rows.push({ stage: "writing", status: byOrder(order, 3) });
   return rows;
