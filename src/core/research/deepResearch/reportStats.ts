@@ -13,6 +13,7 @@ export function readReportStats(value: unknown): ResearchReportStats | null | un
     value === null ||
     !isRevision((value as ResearchReportStats).sourcesFound) ||
     !isRevision((value as ResearchReportStats).sourcesCited) ||
+    (value as ResearchReportStats).sourcesCited > (value as ResearchReportStats).sourcesFound ||
     !isRevision((value as ResearchReportStats).documentsOpened) ||
     !isRevision((value as ResearchReportStats).removedCitations) ||
     !isBranchTitles((value as ResearchReportStats).uncitedBranches)
@@ -39,6 +40,7 @@ function isBranchTitles(value: unknown): value is ResearchReportStats["uncitedBr
         entry !== null &&
         isResearchId(entry.branchId) &&
         typeof entry.title === "string" &&
+        entry.title.length > 0 &&
         entry.title.length <= MAX_RESEARCH_TEXT_CHARS,
     )
   );

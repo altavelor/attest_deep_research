@@ -636,6 +636,24 @@ describe("deep research section validation", () => {
         ]),
       ],
       [
+        "report stats citing more sources than were found",
+        section(null, [
+          { ...ended, report: { ...ended.report, stats: { ...reportStats, sourcesCited: 13 } } },
+        ]),
+      ],
+      [
+        "report stats naming an uncited branch with an empty title",
+        section(null, [
+          {
+            ...ended,
+            report: {
+              ...ended.report,
+              stats: { ...reportStats, uncitedBranches: [{ branchId: "branch-1", title: "" }] },
+            },
+          },
+        ]),
+      ],
+      [
         "report stats naming an uncited branch without a valid id",
         section(null, [
           {
