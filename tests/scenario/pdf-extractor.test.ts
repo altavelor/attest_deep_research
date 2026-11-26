@@ -9,11 +9,6 @@ const plainTextFixturePath = join(__dirname, "../fixtures/pdf/synthetic-unicode.
 const syntheticBookFixturePath = join(__dirname, "../fixtures/pdf/synthetic-book.pdf");
 
 describe("PdfExtractor", () => {
-  beforeAll(async () => {
-    await import("pdfjs-dist/legacy/build/pdf.mjs");
-    await import("pdfjs-dist/legacy/build/pdf.worker.mjs");
-  });
-
   it("extracts PDF text chunks with file path and page numbers", async () => {
     const fixture = readFileSync(fixturePath);
     const extractor = new PdfExtractor({ maxChunkLength: 120 });

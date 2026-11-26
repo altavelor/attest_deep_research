@@ -7,6 +7,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-11-26
+
+### Added
+
+- Deep Research mode in the composer. It clarifies the question, plans research branches you can
+  edit, runs them as observable chat sub-agent sessions, and ends in a cited report with
+  supported claims, conflicts, unsupported claims and uncovered objectives.
+- Deep Research can propose and test hypotheses; you can supply observations, or skip the
+  observation stage and the question or observation prompts.
+- Deep Research answers are written in the language of the question.
+- Finished research reports can be exported as a Markdown note into a research export folder
+  set in the settings.
+- Pause and stop controls for a running Deep Research turn; a stopped turn keeps its partial
+  progress.
+
+### Changed
+
+- Research branches run as chat child sessions, which show their progress and can be stopped
+  individually.
+- The Deep Research option is always shown in the composer; it is disabled with a reason when the
+  model has no verified tool calling. The developer preview setting is removed.
+
+### Fixed
+
+- Research agents read the pages they cite and report page fetches and notes as evidence.
+- Citations in research reports resolve through the conversation's source registry; unresolved
+  citations are removed.
+- Stuck or interrupted research turns end or resume cleanly, and a stale plan is replanned
+  without losing the budget.
+- Research export neutralises embeds, HTML, non-web links and reference definitions in the
+  exported note.
+
 ## [0.5.0] - 2026-11-22
 
 ### Added
