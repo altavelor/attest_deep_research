@@ -38,6 +38,16 @@ describe("research budget owner", () => {
     expect(budget.snapshot().closed).toBeNull();
   });
 
+  it("counts the attempts of each attempt key apart from the branch it belongs to", () => {
+    const budget = owner(0, 2);
+    expect(budget.allocate("w-1", "branch-1", "test-1").ok).toBe(true);
+    expect(budget.allocate("w-2", "branch-1", "test-1").ok).toBe(true);
+    expect(budget.allocate("w-3", "branch-1", "test-1")).toEqual({
+      ok: false,
+      dimension: "branch-attempts",
+    });
+  });
+
   it("charges a discovery round from the gather pool, never from the finalization reserve", () => {
     const budget = owner(23);
     expect(budget.spendDiscovery(1)).toBe(true);
