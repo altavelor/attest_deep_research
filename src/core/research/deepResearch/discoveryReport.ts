@@ -1,5 +1,5 @@
 import type { ResearchHypothesis } from "./discoveryTypes";
-import type { ResearchClaim, ResearchDiscovery } from "./types";
+import type { ResearchDiscovery } from "./types";
 import { USER_OBSERVATION_LIMITATION, currentHypotheses } from "./discovery";
 import { label, type ResearchLabels } from "./reportLabels";
 import { MAX_CLAIM_TOKENS } from "./verification";
@@ -40,36 +40,6 @@ export function contestedPoints(discovery: ResearchDiscovery | null): ContestedP
         ),
       };
     });
-}
-
-/**
- * Returns the claims of kind hypothesis that enter verification: one per current supported
- * hypothesis revision with source observations, citing their tokens, at most `max` of them.
- */
-export function hypothesisClaims(
-  discovery: ResearchDiscovery | null,
-  max: number,
-): ResearchClaim[] {
-  if (!discovery || max <= 0) return [];
-  return currentHypotheses(discovery.hypotheses)
-    .filter((hypothesis) => hypothesis.status === "supported")
-    .flatMap((hypothesis) => {
-      const sources = sourceObservations(discovery, hypothesis);
-      const tokens = [...new Set(sources.flatMap((entry) => entry.citationTokens))];
-      if (tokens.length === 0) return [];
-      return [
-        {
-          claimId: `c-${hypothesis.hypothesisId}-h${hypothesis.revision}`.slice(0, 64),
-          workId: sources[0]!.testId,
-          branchId: hypothesis.branchId,
-          objective: null,
-          text: hypothesis.claim,
-          citationTokens: tokens.slice(0, MAX_CLAIM_TOKENS),
-          kind: "hypothesis" as const,
-        },
-      ];
-    })
-    .slice(0, max);
 }
 
 /**

@@ -71,7 +71,6 @@ describe("deep research scheduling rules", () => {
         plan,
         settled({ "branch-1": "completed", "branch-3": "completed" }),
         "Stop.",
-        null,
         ENGLISH_RESEARCH_LABELS,
       ),
     ).toMatchObject({
@@ -84,13 +83,7 @@ describe("deep research scheduling rules", () => {
       ],
     });
     expect(
-      reportDecision(
-        plan,
-        settled({ "branch-1": "failed" }),
-        "Stop.",
-        null,
-        ENGLISH_RESEARCH_LABELS,
-      ),
+      reportDecision(plan, settled({ "branch-1": "failed" }), "Stop.", ENGLISH_RESEARCH_LABELS),
     ).toEqual({
       kind: "failed",
       reason: "No branch completed. Stop.",
@@ -223,51 +216,6 @@ describe("deep research main-path fallback", () => {
       "sub-agent",
       "main",
     ]);
-  });
-
-  it("leaves a hypothesis test without an attempt when it would take a follow-up's", async () => {
-    const tight = researchPlan([researchBranch(1), researchBranch(2)], "balanced", {
-      approvedAt: "2026-01-01T00:00:00.000Z",
-    });
-    const owner = new ResearchBudgetOwner({ ...tight.limits, attemptsTotal: 2 }, () => 0, 2);
-    owner.open(null);
-    const tests = tight.branches.map((branch) => ({
-      workId: `test-${branch.branchId}`,
-      branchId: branch.branchId,
-      cycle: 2,
-      kind: "test" as const,
-      task: "T",
-    }));
-    const executions = await new ResearchScheduler({
-      plan: tight,
-      executions: tests.map((work) => ({
-        workId: work.workId,
-        branchId: work.branchId,
-        state: "pending" as const,
-        path: null,
-        attempts: 0,
-        finding: null,
-        terminalReason: null,
-      })),
-      owner,
-      runners: {
-        main: {
-          path: "main",
-          run: () => Promise.resolve({ text: "F", citationTokens: [], partial: false }),
-        },
-        sessionByBranch: () => ({}),
-      },
-      waveSize: 1,
-      signal: new AbortController().signal,
-      setTimer: () => () => undefined,
-      barrier: async () => undefined,
-    }).run(tests);
-
-    expect(executions.map((entry) => [entry.state, entry.terminalReason])).toEqual([
-      ["completed", null],
-      ["failed", "No attempts remain for this test."],
-    ]);
-    expect(owner.snapshot().closed).toBeNull();
   });
 
   it("leaves a queued fallback's allocation open exactly once when the user stops", async () => {

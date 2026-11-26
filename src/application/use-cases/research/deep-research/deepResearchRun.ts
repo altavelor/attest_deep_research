@@ -11,7 +11,6 @@ import type { DeepResearchStrategyDeps } from "./DeepResearchStrategy";
 import { MainBranchRunner } from "./MainBranchRunner";
 import { SubAgentBranchRunner } from "./SubAgentBranchRunner";
 import { ReportSynthesisService } from "./ReportSynthesisService";
-import { EvidenceVerificationService } from "./EvidenceVerificationService";
 import { ResearchDiscoveryService } from "./ResearchDiscoveryService";
 import { pumpEvents } from "./eventPump";
 import { runResearch, type ResearchRunResult, type SuppliedObservation } from "./researchRun";
@@ -80,13 +79,6 @@ export async function* runApprovedTurn(
         model: deps.chatModelName,
         chatOptions: deps.chatOptions,
       }),
-      createVerifier: (options) =>
-        new EvidenceVerificationService({
-          chatModel: deps.chatModel,
-          model: deps.chatModelName,
-          chatOptions: deps.chatOptions,
-          ...options,
-        }),
       createDiscovery: (options) =>
         new ResearchDiscoveryService({
           chatModel: deps.chatModel,

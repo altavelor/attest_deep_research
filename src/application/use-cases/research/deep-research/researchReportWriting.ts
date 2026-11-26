@@ -42,7 +42,7 @@ export async function writeReportMarkdown(input: ReportWritingInput): Promise<Wr
   const { plan, stopReason, labels } = input;
   const cited = registryCitedFindings(input.executions, input.resolveEvidence);
   const fallback = withCitationNotes(
-    formatWithoutModel(plan, cited.executions, stopReason, null, labels),
+    formatWithoutModel(plan, cited.executions, stopReason, labels),
     cited.removedTokens,
     labels,
   );

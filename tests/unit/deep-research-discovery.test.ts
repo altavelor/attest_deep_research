@@ -5,7 +5,7 @@ import {
   hypothesesSection,
   parseHypothesisProposals,
   validateResearchSection,
-  hypothesisClaims,
+  contestedPoints,
   cycleDecisionReason,
   nextCycleDecision,
   reduceHypothesis,
@@ -277,20 +277,32 @@ describe("deep research discovery rules", () => {
     expect(() => suppliedObservation(revised, decision)).toThrow("no longer matches the research");
   });
 
-  it("sends only a supported hypothesis with source tokens to verification", () => {
-    const discovery = (status: ResearchHypothesis["status"]) => ({
-      hypotheses: [{ ...hypothesis, status, observationIds: ["o-1"] }],
+  it("lists every current hypothesis as a contested point with the quotes and tokens of its source observations", () => {
+    const discovery = {
+      hypotheses: [
+        { ...hypothesis, status: "disconfirmed" as const, observationIds: ["o-1", "o-2"] },
+      ],
       tests: [],
-      observations: [observation("o-1", "supports")],
+      observations: [
+        observation("o-1", "contradicts"),
+        { ...observation("o-2", "supports"), producer: "user" as const, quote: "Own result" },
+      ],
       cycles: [],
       notes: [],
       executions: [],
       omissions: [],
-    });
-    expect(hypothesisClaims(discovery("disconfirmed"), 40)).toEqual([]);
-    expect(hypothesisClaims(discovery("supported"), 40)).toMatchObject([
-      { kind: "hypothesis", workId: "t-1", citationTokens: ["e1"] },
+    };
+
+    expect(contestedPoints(discovery)).toEqual([
+      {
+        claim: "The moon drives tides.",
+        alternative: "Wind drives tides.",
+        status: "disconfirmed",
+        quotes: ["Tides follow the moon closely."],
+        citationTokens: ["e1"],
+      },
     ]);
+    expect(contestedPoints(null)).toEqual([]);
   });
 
   it("ends the cycle as exhausted with a note when an assessment round is refused", async () => {

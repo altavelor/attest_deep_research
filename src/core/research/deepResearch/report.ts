@@ -1,16 +1,9 @@
-import {
-  fullyAssessed,
-  supportedClaimsSection,
-  uncoveredRequired,
-  verificationSections,
-} from "./reportSections";
 import { label, type ResearchLabels } from "./reportLabels";
 import { budgetLimits } from "./budgetLimits";
 import type {
   BranchExecution,
   ResearchMissingBranch,
   ResearchReportScale,
-  ResearchVerification,
   ResearchBudgetState,
   ResearchPlan,
   ResearchReport,
@@ -33,22 +26,18 @@ export type ReportDecision =
 
 /**
  * Decides what a finished run yields: only a run without a completed branch fails. The report is
- * complete only when every claim was assessed, at least one is supported, every required objective
- * is covered and no required branch is missing; otherwise it is partial.
+ * complete when no required branch is missing; otherwise it is partial.
  */
 export function reportDecision(
   plan: ResearchPlan,
   executions: readonly BranchExecution[],
   stopReason: string,
-  verification: ResearchVerification | null,
   labels: ResearchLabels,
 ): ReportDecision {
   const completed = executions.filter((execution) => execution.state === "completed");
   if (completed.length === 0) {
     return { kind: "failed", reason: label(labels, "noBranchCompleted", { reason: stopReason }) };
   }
-  const verified = verification !== null && verification.assessments.length > 0;
-  const complete = verified && fullyAssessed(verification) && hasSupportedClaim(verification);
   const missing = executions.filter((execution) => execution.state !== "completed");
   const required = new Set(
     plan.branches
@@ -57,12 +46,7 @@ export function reportDecision(
   );
   return {
     kind: "report",
-    quality:
-      complete &&
-      uncoveredRequired(plan, verification).length === 0 &&
-      !missing.some((execution) => required.has(execution.branchId))
-        ? "complete"
-        : "partial",
+    quality: missing.some((execution) => required.has(execution.branchId)) ? "partial" : "complete",
     completedBranches: completed.map((execution) => execution.branchId),
     missingBranches: missing.map((execution) => {
       const title = plan.branches.find((branch) => branch.branchId === execution.branchId)?.title;
@@ -102,27 +86,15 @@ function dimensionName(dimension: string | null, labels: ResearchLabels): string
 }
 
 /**
- * Formats the report without any model or tool call. With a supported claim it lists the supported
- * claims and the verification sections; otherwise it lists the findings of every completed branch
- * with their citations, labelled unverified, then the missing branches, stop reason and, when claims
- * were assessed, the verification sections.
+ * Formats the report without any model or tool call: the findings of every completed branch with
+ * their citations, then the missing branches and the stop reason.
  */
 export function formatWithoutModel(
   plan: ResearchPlan,
   executions: readonly BranchExecution[],
   stopReason: string,
-  verification: ResearchVerification | null,
   labels: ResearchLabels,
 ): string {
-  if (verification && hasSupportedClaim(verification)) {
-    const supported = supportedClaimsSection(verification);
-    return [
-      `# ${labels.findingsTitle}`,
-      labels.verifiedIntro,
-      ...(supported ? [`## ${labels.supportedClaims}`, supported] : []),
-      verificationSections(plan, executions, verification, stopReason, labels),
-    ].join("\n\n");
-  }
   const titleOf = (branchId: string): string =>
     plan.branches.find((branch) => branch.branchId === branchId)?.title ?? branchId;
   const sections = executions
@@ -145,14 +117,7 @@ export function formatWithoutModel(
     `${labels.unverifiedIntro} ${stopReason}`,
     ...sections,
     ...(missing.length > 0 ? [`## ${labels.missingBranches}`, missing.join("\n")] : []),
-    ...(verification && verification.assessments.length > 0
-      ? [verificationSections(plan, executions, verification, stopReason, labels)]
-      : []),
   ].join("\n\n");
-}
-
-function hasSupportedClaim(verification: ResearchVerification): boolean {
-  return verification.assessments.some((entry) => entry.verdict === "supported");
 }
 
 /**

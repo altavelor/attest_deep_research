@@ -145,7 +145,6 @@ export class ResearchScheduler {
       const admitted = owner.allocate(
         work.workId,
         work.branchId,
-        work.kind === "test" ? plan.limits.verificationFollowUps : 0,
         work.kind === "test" ? work.workId : work.branchId,
       );
       if (!admitted.ok) {

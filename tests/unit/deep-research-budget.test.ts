@@ -59,22 +59,6 @@ describe("research budget owner", () => {
     expect(budget.spendFinalization(1)).toBe(true);
   });
 
-  it("keeps reserved attempts for later works without closing the budget", () => {
-    const budget = new ResearchBudgetOwner(
-      { ...limits, attemptsTotal: 3, modelRoundsTotal: 200 },
-      () => 0,
-    );
-    budget.open(null);
-    expect(budget.allocate("w-1", "branch-1", 1).ok).toBe(true);
-    expect(budget.allocate("w-2", "branch-2", 1).ok).toBe(true);
-    expect(budget.allocate("w-3", "branch-3", 1)).toEqual({
-      ok: false,
-      dimension: "branch-attempts",
-    });
-    expect(budget.snapshot().closed).toBeNull();
-    expect(budget.allocate("w-3", "branch-3").ok).toBe(true);
-  });
-
   it("waits for searches and rounds held by open allocations instead of closing the budget", () => {
     const budget = new ResearchBudgetOwner({ ...limits, searchesTotal: 20 }, () => 0, 1);
     budget.open(null);

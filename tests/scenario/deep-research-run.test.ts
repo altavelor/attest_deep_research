@@ -104,7 +104,6 @@ describe("deep research run", () => {
       "Researching: Details",
       "Researching: Context",
       "Testing hypotheses…",
-      "Verifying the findings…",
       "Writing the research report…",
     ]);
     const lastSettle = port.commits.findIndex(

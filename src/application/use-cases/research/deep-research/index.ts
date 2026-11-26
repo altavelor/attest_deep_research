@@ -22,10 +22,6 @@ export {
   type ResearchClarificationOptions,
 } from "./ResearchClarificationService";
 export {
-  EvidenceVerificationService,
-  type EvidenceVerificationOptions,
-} from "./EvidenceVerificationService";
-export {
   ResearchDiscoveryService,
   type PlannedTests,
   type ResearchDiscoveryOptions,

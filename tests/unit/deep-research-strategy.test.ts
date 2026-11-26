@@ -308,7 +308,7 @@ describe("research report citations", () => {
     expect(findings).toEqual([
       { title: expect.any(String), text: "Tides  and waves .", tokens: [] },
     ]);
-    expect(result.report).toMatchObject({ quality: "partial", verification: null });
+    expect(result.report).toMatchObject({ quality: "complete", verification: null });
     expect(result.report!.markdown).toContain("Report");
     expect(result.report!.markdown).toContain(
       "2 citation(s) without a source in the findings were removed.",

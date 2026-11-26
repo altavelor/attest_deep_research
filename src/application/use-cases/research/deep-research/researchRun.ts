@@ -12,25 +12,19 @@ import {
   resumeExecutions,
   researchLanguageOf,
   stopReasonOf,
-  verificationCounts,
   waveSize,
-  type BranchExecution,
   type ResearchActivity,
-  type ResearchPlan,
   type ResearchReport,
   type ResearchLabels,
   type ResearchState,
-  type VerificationSummary,
 } from "@core/research/deepResearch";
 import type { ResearchStatePort } from "@application/ports/researchState";
 import type { BranchRunner } from "./branchRunner";
 import type { ReportSynthesisService } from "./ReportSynthesisService";
-import type { EvidenceVerificationOptions } from "./EvidenceVerificationService";
 import { ResearchBudgetPermits } from "./ResearchBudgetPermits";
 import type { AttachedResearchBudget } from "./ResearchScopeRouter";
 import type { ResearchSchedulerRunners } from "./ResearchScheduler";
 import { runSchedulingPhase } from "./researchScheduling";
-import { runVerificationPhase } from "./researchVerificationPhase";
 import { withMissingNote, writeReportMarkdown } from "./researchReportWriting";
 import { removeUnknownCitationTokens } from "../strategies/citations";
 import type { ResearchDiscoveryService } from "./ResearchDiscoveryService";
@@ -47,23 +41,6 @@ export interface ResearchDiscoveryFactoryOptions {
   signal: AbortSignal;
 }
 
-export type ResearchVerifierOptions = Pick<
-  EvidenceVerificationOptions,
-  | "resolveEvidence"
-  | "spendRound"
-  | "followUpsRemaining"
-  | "followUpCycle"
-  | "claimAllowance"
-  | "onExtracted"
-  | "onProgress"
-  | "hypothesisClaims"
-  | "signal"
->;
-
-export interface ResearchVerifier {
-  verify(findings: readonly BranchExecution[], plan: ResearchPlan): Promise<VerificationSummary>;
-}
-
 export interface ResearchRunDeps {
   port: ResearchStatePort;
   runner: BranchRunner;
@@ -71,7 +48,6 @@ export interface ResearchRunDeps {
   parallelRequests?: boolean;
   synthesis: ReportSynthesisService;
   labels: ResearchLabels;
-  createVerifier?(options: ResearchVerifierOptions): ResearchVerifier;
   createDiscovery?(options: ResearchDiscoveryFactoryOptions): ResearchDiscoveryService;
   observation?: SuppliedObservation;
   signal?: AbortSignal;
@@ -97,8 +73,8 @@ export interface ResearchRunResult {
 
 /**
  * Executes an approved research from its last barrier to its end within one turn: it reopens the
- * budget, gathers every unsettled work, verifies the findings with follow-ups on the main path,
- * and writes the report from verified claims while finalization rounds remain. The time limit
+ * budget, gathers every unsettled work, looks for contradictions between the findings with
+ * hypothesis tests, and writes the report from the findings while finalization rounds remain. The time limit
  * covers the whole turn; a user stop rethrows and leaves the research at its last barrier.
  */
 export async function runResearch(
@@ -143,7 +119,6 @@ export async function runResearch(
     return next;
   };
   const entry = researchResumeEntry(start);
-  const { verifying } = entry;
   const discovery = deps.createDiscovery?.({
     resolveEvidence: deps.resolveEvidence ?? (() => []),
     spendRound: () => owner.spendDiscovery(1),
@@ -212,7 +187,7 @@ export async function runResearch(
       barrier: async (next) => void (await commit({ executions: next })),
     });
     if (stopped()) throw new DOMException("Research stopped", "AbortError");
-    if (discovery && !verifying && !turn.signal.aborted) {
+    if (discovery && !turn.signal.aborted) {
       deps.onStatus("Testing hypotheses…");
       const testPlan = {
         ...plan,
@@ -260,52 +235,6 @@ export async function runResearch(
         return { state, report: null };
       }
     }
-    if (!verifying) await commit({ phase: "verifying" });
-    if (deps.createVerifier && !turn.signal.aborted) {
-      deps.onStatus("Verifying the findings…");
-      const followUpPlan = {
-        ...plan,
-        branches: plan.branches.map((branch) => ({ ...branch, dependsOn: [] })),
-      };
-      const verification = await runVerificationPhase({
-        plan,
-        executions: () => current.executions,
-        verification: current.verification,
-        discovery: current.discovery,
-        verify: async (findings, bounds) => {
-          let extractedWorks: readonly string[] = [];
-          const summary = await deps.createVerifier!({
-            resolveEvidence: deps.resolveEvidence ?? (() => []),
-            spendRound: () => owner.spendFinalization(1),
-            followUpsRemaining: bounds.followUpsRemaining,
-            followUpCycle: bounds.cycle,
-            claimAllowance: bounds.claimAllowance,
-            onExtracted: (workIds) => (extractedWorks = workIds),
-            onProgress: activity.verification(current.verification),
-            hypothesisClaims: bounds.hypothesisClaims,
-            signal: turn.signal,
-          }).verify(findings, plan);
-          return { summary, extractedWorks };
-        },
-        runFollowUps: (followUps, works) =>
-          runSchedulingPhase({
-            ...phase,
-            plan: followUpPlan,
-            executions: followUps,
-            works,
-            barrier: async (next) =>
-              void (await commit({
-                verification: { ...current.verification!, followUps: [...next] },
-              })),
-          }),
-        commit: async (next) => void (await commit({ verification: next })),
-        budgetOpen: () => owner.snapshot().closed === null,
-        aborted: () => turn.signal.aborted,
-        onFollowUps: (count) => activity.step("follow-ups", { kind: "following-up", count }),
-      });
-      if (stopped()) throw new DOMException("Research stopped", "AbortError");
-      await commit({ verification });
-    }
   } catch (error) {
     if (stopped() || !isAbort(error)) throw error;
   } finally {
@@ -329,8 +258,7 @@ async function writeReport(
   if (current.phase !== "synthesizing") await commit({ phase: "synthesizing" });
   const stopReason = stopReasonOf(owner.snapshot(), deps.labels);
   const executions = current.executions;
-  const verification = current.verification;
-  const decision = reportDecision(plan, executions, stopReason, verification, deps.labels);
+  const decision = reportDecision(plan, executions, stopReason, deps.labels);
   if (decision.kind === "failed") {
     const state = await commit({ phase: "failed", terminalReason: boundedReason(decision.reason) });
     return { state, report: null };
@@ -374,10 +302,7 @@ async function writeReport(
     missingBranches: decision.missingBranches,
     stopReason,
     createdAt: deps.now().toISOString(),
-    verification:
-      verification && verification.assessments.length > 0
-        ? verificationCounts(plan, verification)
-        : null,
+    verification: null,
     scale: reportScale(plan, owner.snapshot().activeMs),
     ...(summaryFailure !== undefined ? { summaryFailure } : {}),
   };

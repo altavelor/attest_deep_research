@@ -100,8 +100,6 @@ describe("deep research discovery", () => {
       "hypotheses:proposing",
       "hypotheses:testing",
       "hypotheses:judging",
-      "verification:extracting",
-      "verification:checking",
       "writing:writing",
     ]);
     const writing = events.flatMap((event) =>

@@ -60,24 +60,15 @@ export class ResearchBudgetOwner {
   }
 
   /**
-   * Grants one attempt of a branch work or names the dimension that denies it. Reserved attempts
-   * stay free for later works, and rounds or searches held only by open allocations are waited
-   * for: either denial leaves the budget open. Attempts are capped per key, the branch by default.
+   * Grants one attempt of a branch work or names the dimension that denies it. Rounds or searches
+   * held only by open allocations are waited for and leave the budget open. Attempts are capped
+   * per key, the branch by default.
    */
-  allocate(
-    workId: string,
-    branchId: string,
-    reservedAttempts = 0,
-    attemptKey = branchId,
-  ): AllocationResult {
+  allocate(workId: string, branchId: string, attemptKey = branchId): AllocationResult {
     const { consumed, attemptsByBranch, openAllocations } = this.state;
     if (!this.state.closed && this.remainingMs() <= 0) this.close("time");
     if (this.state.closed) return { ok: false, dimension: "closed" };
-    if (
-      (attemptsByBranch[attemptKey] ?? 0) >= this.limits.attemptsPerBranch ||
-      (reservedAttempts > 0 &&
-        consumed.branchAttempts + reservedAttempts >= this.limits.attemptsTotal)
-    ) {
+    if ((attemptsByBranch[attemptKey] ?? 0) >= this.limits.attemptsPerBranch) {
       return { ok: false, dimension: "branch-attempts" };
     }
     const openRounds = sum(openAllocations, "modelRounds");

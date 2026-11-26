@@ -86,24 +86,9 @@ export {
   MAX_CLAIM_TEXT_CHARS,
   MAX_CLAIM_TOKENS,
   MAX_RESEARCH_CLAIMS,
-  acceptedAssessment,
-  checkClaimReferences,
   containedQuote,
-  followUpWorks,
-  independenceGroups,
   objectiveCoverage,
-  requiredObjectives,
-  type ReferenceCheck,
 } from "./verification";
-export { CLAIM_PASSAGE_CHARS, claimPassage } from "./claimPassage";
-export {
-  supportedClaimsSection,
-  uncoveredRequired,
-  verificationCounts,
-  verificationSections,
-  verifiedClaims,
-  type VerifiedClaim,
-} from "./reportSections";
 export { escapePromptText } from "./promptText";
 export type * from "./discoveryTypes";
 export {
@@ -140,12 +125,7 @@ export {
   type HypothesisProposal,
   type ParsedProposals,
 } from "./discoveryDraft";
-export {
-  contestedPoints,
-  hypothesesSection,
-  hypothesisClaims,
-  type ContestedPoint,
-} from "./discoveryReport";
+export { contestedPoints, hypothesesSection, type ContestedPoint } from "./discoveryReport";
 export {
   DEFAULT_RESEARCH_EXPORT_FOLDER,
   MAX_EXPORT_NAME_ATTEMPTS,
