@@ -135,15 +135,14 @@ describe("diagnostic html rendering of a failing report", () => {
     expect(container.querySelector(".findings-summary")?.textContent).toBe(report.findings.summary);
   });
 
-  it("renders nothing for a report without findings and drops its nav anchor", () => {
+  it("renders nothing for a report without findings and lists only the sections it renders", () => {
     const report = buildDiagnosticReportV3(diagnostics({ executionStrategy: "instant" }));
 
     expect(renderFindings(report.findings)).toBe("");
     const anchors = Array.from(parse(renderNav(report)).querySelectorAll(".nav-anchor")).map(
       (anchor) => anchor.textContent,
     );
-    expect(anchors).not.toContain("findings");
-    expect(anchors).toContain("run-trace");
+    expect(anchors).toEqual(["input", "internals"]);
   });
 
   it("escapes untrusted index errors, warnings and chunk paths in the input card", () => {
