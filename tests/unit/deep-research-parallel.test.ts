@@ -5,13 +5,11 @@ import {
   ResearchScheduler,
   ResearchScopeRouter,
   type BranchRunner,
+  RESEARCH_BRANCH_MAX_RESULT_CHARS,
 } from "@application/use-cases/research/deep-research";
 import type { ReportSynthesisService } from "@application/use-cases/research/deep-research/ReportSynthesisService";
 import { runResearch } from "@application/use-cases/research/deep-research/researchRun";
-import {
-  RESEARCH_BRANCH_MAX_RESULT_CHARS,
-  researchGrant,
-} from "@application/use-cases/chat/researchGrant";
+import { researchGrant } from "@application/use-cases/chat/researchGrant";
 import {
   MemoryResearchState,
   gatheringResearch,

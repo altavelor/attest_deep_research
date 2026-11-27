@@ -260,6 +260,7 @@ export class ResearchService implements ConversationEngine {
       now,
       createBranchEngine: () => new SubAgentRunner(this.subAgentRunnerDeps),
       branchSources: this.subAgentSources,
+      ...(options.pageCacheStore ? { pageCacheStore: options.pageCacheStore } : {}),
       ...(options.researchTimer ? { setTimer: options.researchTimer } : {}),
       researchLabels: options.researchLabels ?? { labelsFor: () => ENGLISH_RESEARCH_LABELS },
       onStage: (stage) => this.usage.enter(stage),

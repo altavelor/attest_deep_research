@@ -262,6 +262,65 @@ describe("main branch runner findings", () => {
     expect(runner.usage("w-1")).toMatchObject({ evidenceItems: 1, fetches: 1 });
   });
 
+  it("gives each attempt its own page cache and widened output budget and releases it after a failure", async () => {
+    const sessions: string[] = [];
+    const released: string[] = [];
+    const budgets: unknown[] = [];
+    const contexts: unknown[] = [];
+    const store = {
+      forSession: (id: string) => {
+        sessions.push(id);
+        return { put: () => undefined, get: () => undefined, list: () => [] };
+      },
+      release: (id: string) => released.push(id),
+      releaseAll: () => undefined,
+    };
+    let fail = false;
+    const runner = new MainBranchRunner({
+      engine: {
+        run: async (input) => {
+          budgets.push(input.budget);
+          contexts.push(input.toolContext);
+          if (fail) throw new Error("model failed");
+          return {
+            answerText: "Plain answer.",
+            snapshot: { evidence: [], citations: [], provenance: [] },
+          };
+        },
+      },
+      sources: {},
+      web: { deadlineMs: 1, perSourceLimit: 1, mergedLimit: 1, maxConcurrentSources: 1 },
+      pageCacheStore: store,
+      chatScope: "indexOnly",
+      branches: pendingResearch().plan!.branches,
+      now: () => new Date("2026-01-01T00:00:00.000Z"),
+    });
+    const work = {
+      workId: "w-1",
+      branchId: "branch-1",
+      cycle: 1,
+      kind: "gather" as const,
+      task: "T",
+    };
+    const allocation = (attempt: number) => ({
+      workId: "w-1",
+      branchId: "branch-1",
+      attempt,
+      modelRounds: 2,
+      searches: 2,
+    });
+    await runner.run(work, allocation(1), new AbortController().signal);
+    fail = true;
+    await expect(runner.run(work, allocation(2), new AbortController().signal)).rejects.toThrow(
+      "model failed",
+    );
+    expect(sessions).toHaveLength(2);
+    expect(new Set(sessions).size).toBe(2);
+    expect(released).toEqual(sessions);
+    expect(contexts[0]).toHaveProperty("pageCache");
+    expect(budgets[0]).toMatchObject({ maxResultChars: 120_000 });
+  });
+
   it("cuts a finding whose stored encoding would exceed the byte bound", () => {
     const bounded = boundFindingText("\u0001".repeat(20_000));
     expect(new TextEncoder().encode(JSON.stringify(bounded)).length).toBeLessThanOrEqual(48 * 1024);

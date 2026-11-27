@@ -4,6 +4,7 @@ import type {
   ChatRequest,
   ToolCallingCapabilities,
 } from "@core/agent";
+import type { PageCacheStore } from "@application/ports/pageCache";
 import type { ResearchStatePort } from "@application/ports/researchState";
 import type { ResearchLabelsPort } from "@application/ports/researchLabels";
 import type { SubAgentPort } from "@application/research/subAgentPort";
@@ -65,6 +66,7 @@ export interface DeepResearchStrategyDeps {
   createId?(): string;
   createBranchEngine(): SubAgentPort;
   branchSources: SubAgentToolSources;
+  pageCacheStore?: PageCacheStore;
   setTimer?(delayMs: number, callback: () => void): () => void;
   researchLabels: ResearchLabelsPort;
   onStage?(stage: string): void;

@@ -8,6 +8,8 @@ import type {
 } from "@core/research/deepResearch";
 import type { ResearchEvidenceSnapshot } from "@application/sources";
 
+export const RESEARCH_BRANCH_MAX_RESULT_CHARS = 120_000;
+
 /**
  * Runs one attempt of a research work within its allocation. Implementations differ only in where
  * the attempt runs; a runner that measured its use reports it through `usage` after the attempt, and

@@ -12,6 +12,7 @@ import {
   type ResearchWork,
 } from "@core/research/deepResearch";
 import type { ResearchStreamEvent } from "@application/contracts/research";
+import type { PageCacheStore } from "@application/ports/pageCache";
 import type { SubAgentPort } from "@application/research/subAgentPort";
 import {
   citationIdsFromText,
@@ -22,6 +23,7 @@ import {
 import {
   BranchNoFindingsError,
   BranchUnavailableError,
+  RESEARCH_BRANCH_MAX_RESULT_CHARS,
   openedDocuments,
   type BranchRunner,
 } from "./branchRunner";
@@ -31,6 +33,7 @@ export interface MainBranchRunnerDeps {
   engine: SubAgentPort;
   sources: SubAgentToolSources;
   web: ResearchModeWebParameters;
+  pageCacheStore?: PageCacheStore;
   chatScope: ResearchSourceScope;
   branches: readonly ResearchBranch[];
   registerAnswer?(answer: ResearchAnswer): ResearchAnswer;
@@ -41,8 +44,9 @@ export interface MainBranchRunnerDeps {
 /**
  * Runs a branch in the parent run with the Thinking engine: the branch task is the question of a
  * fresh model context, tools follow the branch scope intersected with the chat's scope without
- * sub-agents or note mutation, and the allocation bounds rounds and searches. Evidence enters the
- * conversation registry through the answer registration of the chat turn.
+ * sub-agents or note mutation, and the allocation bounds rounds and searches. Pages it fetches are
+ * kept in a cache of that attempt only, released when it ends. Evidence enters the conversation
+ * registry through the answer registration of the chat turn.
  */
 export class MainBranchRunner implements BranchRunner {
   readonly path = "main" as const;
@@ -61,26 +65,37 @@ export class MainBranchRunner implements BranchRunner {
       throw new BranchUnavailableError("The branch has no source available in this chat.");
     this.usages.delete(work.workId);
     const emit = this.deps.onEvent;
-    const result = await this.deps.engine.run({
-      task: work.task,
-      toolContext: subAgentToolContext(
-        this.deps.sources,
-        {
-          searchMode: scope,
-          contextPaths: [],
-          indexScope: scope === "webOnly" ? "none" : "all-allowed",
-          allowActiveFile: false,
-          allowNoteMutation: false,
+    const cacheId = `main-branch-${work.workId}-a${allocation.attempt}`;
+    const { pageCacheStore } = this.deps;
+    const toolContext = subAgentToolContext(
+      this.deps.sources,
+      {
+        searchMode: scope,
+        contextPaths: [],
+        indexScope: scope === "webOnly" ? "none" : "all-allowed",
+        allowActiveFile: false,
+        allowNoteMutation: false,
+      },
+      this.deps.web,
+    );
+    const result = await this.deps.engine
+      .run({
+        task: work.task,
+        toolContext: pageCacheStore
+          ? { ...toolContext, pageCache: pageCacheStore.forSession(cacheId) }
+          : toolContext,
+        budget: {
+          maxRounds: allocation.modelRounds,
+          maxSearches: allocation.searches,
+          ...(pageCacheStore ? { maxResultChars: RESEARCH_BRANCH_MAX_RESULT_CHARS } : {}),
         },
-        this.deps.web,
-      ),
-      budget: { maxRounds: allocation.modelRounds, maxSearches: allocation.searches },
-      signal,
-      onToolCall: (call) =>
-        emit?.({ type: "tool-call-start", ...call, id: `${work.workId}:${call.id}` }),
-      onToolResult: (outcome) =>
-        emit?.({ type: "tool-call-end", ...outcome, id: `${work.workId}:${outcome.id}` }),
-    });
+        signal,
+        onToolCall: (call) =>
+          emit?.({ type: "tool-call-start", ...call, id: `${work.workId}:${call.id}` }),
+        onToolResult: (outcome) =>
+          emit?.({ type: "tool-call-end", ...outcome, id: `${work.workId}:${outcome.id}` }),
+      })
+      .finally(() => pageCacheStore?.release(cacheId));
     const evidence = [...result.snapshot.evidence];
     const telemetry = result.telemetry;
     const opened = openedDocuments(result.snapshot);

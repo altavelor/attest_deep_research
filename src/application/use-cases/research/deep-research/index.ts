@@ -2,6 +2,7 @@ export { DeepResearchStrategy, type DeepResearchStrategyDeps } from "./DeepResea
 export { ResearchPlanService, type ResearchPlanServiceOptions } from "./ResearchPlanService";
 export {
   BranchUnavailableError,
+  RESEARCH_BRANCH_MAX_RESULT_CHARS,
   UnusableBranchSessionError,
   type BranchRunner,
 } from "./branchRunner";

@@ -1,5 +1,8 @@
 import type { SubAgentDelegationGrant } from "@application/ports/subAgent";
-import { BranchUnavailableError } from "@application/use-cases/research/deep-research";
+import {
+  BranchUnavailableError,
+  RESEARCH_BRANCH_MAX_RESULT_CHARS,
+} from "@application/use-cases/research/deep-research";
 import {
   MAX_SUB_AGENT_SEARCHES,
   type ParentRunBinding,
@@ -11,8 +14,6 @@ import {
   type BranchAllocation,
   type ResearchBranch,
 } from "@core/research/deepResearch";
-
-export const RESEARCH_BRANCH_MAX_RESULT_CHARS = 120_000;
 
 /**
  * Builds the grant of one Deep Research branch attempt: bound to the branch's budget scope, with
