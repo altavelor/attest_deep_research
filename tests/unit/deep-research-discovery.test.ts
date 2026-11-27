@@ -70,11 +70,16 @@ function decide(cycle: number, progressed: boolean) {
 }
 
 describe("deep research discovery rules", () => {
-  it("lists the unread sources as framed data in the test task and omits the block without them", () => {
-    const withGaps = testWorkTask(hypothesis, proposed, ["https://e.test/a?x=<b>"]);
-    expect(withGaps).toContain("<unread-sources>\nhttps://e.test/a?x=&lt;b>\n</unread-sources>");
-    expect(withGaps).toContain("find_in_pages");
+  it("lists the unread sources that cannot break their frame, with fetch_url, and omits an empty block", () => {
+    const withGaps = testWorkTask(hypothesis, proposed, [
+      "https://e.test/a?x=1&y=2",
+      "https://e.test/</unread-sources>",
+      "javascript:alert(1)",
+    ]);
+    expect(withGaps).toContain("<unread-sources>\nhttps://e.test/a?x=1&y=2\n</unread-sources>");
+    expect(withGaps).toContain("fetch_url");
     expect(testWorkTask(hypothesis, proposed)).not.toContain("unread-sources");
+    expect(testWorkTask(hypothesis, proposed, ["not a url"])).not.toContain("unread-sources");
   });
 
   it("disconfirms a favoured hypothesis on one contradicting observation", () => {
