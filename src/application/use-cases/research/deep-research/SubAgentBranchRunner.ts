@@ -183,7 +183,12 @@ export class SubAgentBranchRunner implements BranchRunner {
   ): Promise<BranchFinding> {
     const snapshot = await this.deps.resolver.resolve(outcome);
     const usage = this.usages.get(workId);
-    if (usage) this.usages.set(workId, { ...usage, fetches: openedDocuments(snapshot) });
+    if (usage)
+      this.usages.set(workId, {
+        ...usage,
+        fetches: openedDocuments(snapshot),
+        sources: outcome.evidence.length,
+      });
     const present = new Set(snapshot.evidence.map((chunk) => chunk.id));
     const revisionOf = new Map(
       outcome.evidence

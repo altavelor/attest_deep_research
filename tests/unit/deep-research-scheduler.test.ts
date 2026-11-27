@@ -428,6 +428,7 @@ describe("deep research main-path fallback", () => {
       searches: 3,
       evidenceItems: 0,
       fetches: 1,
+      sources: 2,
     });
   });
 

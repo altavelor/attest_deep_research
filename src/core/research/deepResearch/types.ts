@@ -179,7 +179,12 @@ export interface ResearchBudgetState {
   activeMs: number;
   openAllocations: readonly BranchAllocation[];
   closed: { reason: "exhausted" | "time" | "user"; dimension: string | null } | null;
-  diagnostics: { inputTokens: number | null; outputTokens: number | null; fetches: number };
+  diagnostics: {
+    inputTokens: number | null;
+    outputTokens: number | null;
+    fetches: number;
+    sources?: number;
+  };
 }
 
 export interface BranchAllocation {

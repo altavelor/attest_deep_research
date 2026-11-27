@@ -89,6 +89,7 @@ export class MainBranchRunner implements BranchRunner {
       searches: telemetry?.searchCalls ?? allocation.searches,
       evidenceItems: opened,
       fetches: opened,
+      sources: result.snapshot.evidence.length,
       ...(telemetry
         ? { inputTokens: telemetry.usage.inputTokens, outputTokens: telemetry.usage.outputTokens }
         : {}),

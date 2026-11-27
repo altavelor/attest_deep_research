@@ -308,7 +308,7 @@ async function writeReport(
     verification: null,
     scale: reportScale(plan, budget.activeMs),
     stats: {
-      sourcesFound: Math.max(budget.consumed.evidenceItems, sourcesCited),
+      sourcesFound: Math.max(budget.diagnostics.sources ?? 0, sourcesCited),
       sourcesCited,
       documentsOpened: budget.diagnostics.fetches,
       removedCitations: written.removedCitations,

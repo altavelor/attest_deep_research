@@ -38,6 +38,7 @@ const approved = {
     openAllocations: [
       { workId: "w-2", branchId: "branch-2", attempt: 1, modelRounds: 12, searches: 10 },
     ],
+    diagnostics: { ...emptyBudgetState().diagnostics, sources: 4 },
   },
 };
 const [done, running] = approved.executions;
@@ -447,6 +448,9 @@ function budgetRows(): [string, unknown][] {
     }),
     withBudget("searches over the limit with the open allocation", {
       consumed: { ...budget.consumed, searches: 95 },
+    }),
+    withBudget("negative source counter", {
+      diagnostics: { ...budget.diagnostics, sources: -1 },
     }),
     withBudget("closure the owner never writes", {
       openAllocations: [],
