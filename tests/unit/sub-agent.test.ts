@@ -20,7 +20,7 @@ import type {
   ToolContext,
 } from "@core/agent";
 import { SUB_AGENT_PHASE, SUB_AGENT_TOOL_END, SUB_AGENT_TOOL_START } from "@application/research";
-import { SYNTHESIS_TOOL_STUB } from "@application/use-cases/research/ThinkingToolRoundExecutor";
+import { RESULT_BUDGET_STUB } from "@application/use-cases/research/ThinkingToolRoundExecutor";
 import { fakeParentRun, recordingDelegator, sourcePolicy } from "../support/subAgentSessions";
 import { subAgentToolContext } from "@application/use-cases/research/sub-agent/subAgentToolContext";
 
@@ -423,7 +423,7 @@ describe("SubAgentRunner cancellation and budgets", () => {
     expect(result.snapshot.evidence.length).toBeGreaterThan(0);
   });
 
-  it("replaces tool output with the synthesis stub once the result budget is exceeded", async () => {
+  it("replaces tool output with the budget stub once the result budget is exceeded", async () => {
     const modelRound = scriptedRounds((_request, index) =>
       index === 1 ? searchCallRound("1") : textRound("Answer within budget."),
     );
@@ -439,7 +439,8 @@ describe("SubAgentRunner cancellation and budgets", () => {
 
     expect(result.answerText).toBe("Answer within budget.");
     const toolMessage = modelRound.requests[1].messages.find((message) => message.role === "tool");
-    expect(toolMessage?.content).toBe(SYNTHESIS_TOOL_STUB);
+    expect(toolMessage?.content).toBe(RESULT_BUDGET_STUB);
+    expect(RESULT_BUDGET_STUB).toContain("tool output budget");
     expect(toolMessage?.content).not.toContain("xxxx");
   });
 

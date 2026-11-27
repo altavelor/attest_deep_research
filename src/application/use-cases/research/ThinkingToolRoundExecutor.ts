@@ -23,6 +23,10 @@ const PREVIEW_CHARS = 600;
 export const SYNTHESIS_TOOL_STUB =
   "[omitted: stop calling tools — answer from the evidence already gathered]";
 
+export const RESULT_BUDGET_STUB =
+  "[omitted: the tool output budget of this run is spent, so this result was not shown to you; " +
+  "answer from the evidence already gathered]";
+
 export const SEARCH_BUDGET_STUB =
   '{"ok":false,"error":{"code":"search-budget-exhausted","message":"The search budget for ' +
   "this task is spent. Answer from the evidence already gathered and name what stayed " +
@@ -210,7 +214,7 @@ export class ThinkingToolRoundExecutor {
       if (this.totalResultCharsCount + execution.result.length > this.options.maxResultChars) {
         this.budgetExhausted = true;
       }
-      const transcriptResult = this.budgetExhausted ? SYNTHESIS_TOOL_STUB : execution.result;
+      const transcriptResult = this.budgetExhausted ? RESULT_BUDGET_STUB : execution.result;
       this.totalResultCharsCount += transcriptResult.length;
       this.appendToolResult(
         call.id,

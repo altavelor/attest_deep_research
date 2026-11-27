@@ -12,7 +12,7 @@ import {
   type ResearchBranch,
 } from "@core/research/deepResearch";
 
-const CHILD_MAX_RESULT_CHARS = 30_000;
+export const RESEARCH_BRANCH_MAX_RESULT_CHARS = 120_000;
 
 /**
  * Builds the grant of one Deep Research branch attempt: bound to the branch's budget scope, with
@@ -44,7 +44,7 @@ export function researchGrant(
     origin: "direct",
     limits: {
       maxRounds: allocation.modelRounds,
-      maxResultChars: CHILD_MAX_RESULT_CHARS,
+      maxResultChars: RESEARCH_BRANCH_MAX_RESULT_CHARS,
       maxSearches: Math.min(allocation.searches, MAX_SUB_AGENT_SEARCHES),
     },
   };

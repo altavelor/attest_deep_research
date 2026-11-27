@@ -8,7 +8,10 @@ import {
 } from "@application/use-cases/research/deep-research";
 import type { ReportSynthesisService } from "@application/use-cases/research/deep-research/ReportSynthesisService";
 import { runResearch } from "@application/use-cases/research/deep-research/researchRun";
-import { researchGrant } from "@application/use-cases/chat/researchGrant";
+import {
+  RESEARCH_BRANCH_MAX_RESULT_CHARS,
+  researchGrant,
+} from "@application/use-cases/chat/researchGrant";
 import {
   MemoryResearchState,
   gatheringResearch,
@@ -241,7 +244,8 @@ describe("research branch grant", () => {
         allowNoteMutation: false,
       },
       origin: "direct",
-      limits: { maxRounds: 7, maxResultChars: 30_000, maxSearches: 20 },
+      limits: { maxRounds: 7, maxResultChars: RESEARCH_BRANCH_MAX_RESULT_CHARS, maxSearches: 20 },
     });
+    expect(grant.limits.maxResultChars).toBeGreaterThan(30_000);
   });
 });
