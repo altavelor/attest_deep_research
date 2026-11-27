@@ -9,6 +9,7 @@ import {
   openWorks,
   reportDecision,
   reportScale,
+  sourcesFound,
   resumeExecutions,
   researchLanguageOf,
   stopReasonOf,
@@ -308,7 +309,7 @@ async function writeReport(
     verification: null,
     scale: reportScale(plan, budget.activeMs),
     stats: {
-      sourcesFound: Math.max(budget.diagnostics.sources ?? 0, sourcesCited),
+      sourcesFound: sourcesFound(budget, sourcesCited),
       sourcesCited,
       documentsOpened: budget.diagnostics.fetches,
       removedCitations: written.removedCitations,

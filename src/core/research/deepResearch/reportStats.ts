@@ -1,6 +1,6 @@
 import { MAX_RESEARCH_BRANCHES, MAX_RESEARCH_TEXT_CHARS } from "./limits";
 import { isResearchId, isRevision } from "./planValidation";
-import type { ResearchReportStats } from "./types";
+import type { ResearchBudgetState, ResearchReportStats } from "./types";
 
 /**
  * Reads the optional stats of a report summary: undefined when absent, null when malformed. A
@@ -44,4 +44,12 @@ function isBranchTitles(value: unknown): value is ResearchReportStats["uncitedBr
         entry.title.length <= MAX_RESEARCH_TEXT_CHARS,
     )
   );
+}
+
+/**
+ * Counts the sources a research found: the sources its child runs reported, or the documents it
+ * read when the stored budget predates that count, and never fewer than the sources it cited.
+ */
+export function sourcesFound(budget: ResearchBudgetState, sourcesCited: number): number {
+  return Math.max(budget.diagnostics.sources ?? budget.consumed.evidenceItems, sourcesCited);
 }

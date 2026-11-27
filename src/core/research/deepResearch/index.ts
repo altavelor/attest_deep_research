@@ -90,6 +90,7 @@ export {
   containedQuote,
   objectiveCoverage,
 } from "./verification";
+export { readReportStats, sourcesFound } from "./reportStats";
 export { escapePromptText } from "./promptText";
 export type * from "./discoveryTypes";
 export {

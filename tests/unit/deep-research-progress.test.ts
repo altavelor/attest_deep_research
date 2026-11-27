@@ -1,4 +1,9 @@
-import { branchProgressRows, reportFacts } from "@core/research/deepResearch";
+import {
+  branchProgressRows,
+  emptyBudgetState,
+  reportFacts,
+  sourcesFound,
+} from "@core/research/deepResearch";
 import { researchBranch, researchPlan } from "../support/deepResearch";
 
 describe("deep research branch progress rows", () => {
@@ -117,5 +122,22 @@ describe("deep research report facts", () => {
       null,
       { minutes: 2, limitMinutes: 30 },
     ]);
+  });
+
+  it("counts found sources from the child runs, falls back to documents read, and never below the cited", () => {
+    const withSources = (sources: number | undefined, evidenceItems: number) => {
+      const budget = emptyBudgetState();
+      return {
+        ...budget,
+        consumed: { ...budget.consumed, evidenceItems },
+        diagnostics: { ...budget.diagnostics, ...(sources !== undefined ? { sources } : {}) },
+      };
+    };
+
+    expect([
+      sourcesFound(withSources(9, 2), 4),
+      sourcesFound(withSources(undefined, 6), 4),
+      sourcesFound(withSources(1, 0), 4),
+    ]).toEqual([9, 6, 4]);
   });
 });
