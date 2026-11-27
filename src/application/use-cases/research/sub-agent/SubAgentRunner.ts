@@ -1,4 +1,4 @@
-import { ChatMessage, ModelRoundProvider } from "@core/agent";
+import { CATALOGUE_TOOL_NAMES, ChatMessage, ModelRoundProvider } from "@core/agent";
 import type { ToolCallDiagnostic } from "@core/diagnostics";
 import { ResearchExecutionPolicy } from "@core/research";
 import { buildSubAgentFraming, buildThinkingResearchMessages } from "@core/research";
@@ -39,6 +39,7 @@ export interface SubAgentRunnerDeps {
   logger?: SubAgentLogger;
 }
 
+const OTHER_TOOLS = "other";
 const DEFAULT_MAX_ROUNDS = 12;
 const DEFAULT_MAX_SEARCHES = 8;
 const DEFAULT_MAX_RESULT_CHARS = 30_000;
@@ -287,8 +288,10 @@ function countSearchCalls(diagnostics: readonly ToolCallDiagnostic[]): {
 
 function countToolCalls(diagnostics: readonly ToolCallDiagnostic[]): Record<string, number> {
   const counts: Record<string, number> = {};
-  for (const diagnostic of diagnostics)
-    counts[diagnostic.name] = (counts[diagnostic.name] ?? 0) + 1;
+  for (const diagnostic of diagnostics) {
+    const name = CATALOGUE_TOOL_NAMES.has(diagnostic.name) ? diagnostic.name : OTHER_TOOLS;
+    counts[name] = (counts[name] ?? 0) + 1;
+  }
   return counts;
 }
 

@@ -657,6 +657,30 @@ describe("SubAgentRunner telemetry", () => {
     expect(result.telemetry?.failureReason).toBeUndefined();
   });
 
+  it("counts a tool name the model made up in one bucket instead of under its own key", async () => {
+    const runner = runnerWith(
+      scriptedRounds((request, index) => {
+        if (request.toolChoice?.type === "none" || index > 2) return textRound("Answer.");
+        if (index === 1) {
+          return {
+            items: [
+              {
+                type: "toolCall" as const,
+                call: { id: "1", name: "constructor", arguments: {} },
+              },
+            ],
+            stopReason: "tool_calls" as const,
+          };
+        }
+        return searchCallRound("2");
+      }),
+    );
+
+    const result = await runner.run({ task: "What is X?" });
+
+    expect(result.telemetry?.toolCounts).toEqual({ other: 1, search_web: 1 });
+  });
+
   it("keeps the loop duration equal to the run duration without a synthesis pass", async () => {
     const runner = runnerWith(scriptedRounds(() => textRound("Answer.")));
 
