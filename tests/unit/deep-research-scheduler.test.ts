@@ -12,6 +12,7 @@ import {
   ResearchBudgetOwner,
   blockDependants,
   budgetLimits,
+  withoutStaleRunRefs,
   type BranchExecution,
   initialExecutions,
   isPlanStale,
@@ -20,7 +21,7 @@ import {
   SOURCE_READING_INSTRUCTION,
   branchLanguageInstruction,
 } from "@core/research/deepResearch";
-import { researchBranch, researchPlan } from "../support/deepResearch";
+import { gatheringResearch, researchBranch, researchPlan } from "../support/deepResearch";
 import { retrieved, webSource } from "../support/factories";
 import { runSummary } from "../support/subAgentInspection";
 import { settle } from "../support/async";
@@ -112,6 +113,33 @@ describe("deep research scheduling rules", () => {
     );
     expect(isPlanStale(mixed, "2026-01-07T23:59:59.999Z")).toBe(false);
     expect(isPlanStale(mixed, "2026-01-08T00:00:00.000Z")).toBe(true);
+  });
+});
+
+describe("run references of a replaced session", () => {
+  it("drops the references to a session that is no longer mapped to its branch", () => {
+    const state = gatheringResearch(plan);
+    const ref = (sessionId: string) => ({ sessionId, runId: "run-1", resultRevision: 1 });
+    const run = (branchId: string, sessionId: string, workId: string) => ({
+      ...initialExecutions(plan)[0]!,
+      workId,
+      branchId,
+      path: "sub-agent" as const,
+      runRef: ref(sessionId),
+    });
+    const next = withoutStaleRunRefs(
+      {
+        ...state,
+        executions: [run("branch-1", "s-old", "w-1"), run("branch-2", "s-2", "w-2")],
+        discovery: { executions: [run("branch-1", "s-old", "t-1")] } as never,
+        verification: { followUps: [run("branch-1", "s-old", "f-1")] } as never,
+      },
+      { "branch-1": "s-new", "branch-2": "s-2" },
+    );
+
+    expect(next.executions.map((entry) => entry.runRef?.sessionId)).toEqual([undefined, "s-2"]);
+    expect(next.discovery!.executions[0]!.runRef).toBeUndefined();
+    expect(next.verification!.followUps[0]!.runRef).toBeUndefined();
   });
 });
 
@@ -230,6 +258,35 @@ describe("deep research child session scheduling", () => {
     expect(executions.map((entry) => entry.path)).toEqual(["main", "main"]);
   });
 
+  it("never saves an open allocation for a work that is not running when another candidate is out of attempts", async () => {
+    const two = researchPlan([researchBranch(1), researchBranch(2)], "balanced", {
+      approvedAt: "2026-01-01T00:00:00.000Z",
+    });
+    const owner = new ResearchBudgetOwner(budgetLimits(two), () => 0, 2);
+    owner.open(null);
+    for (let attempt = 0; attempt < budgetLimits(two).attemptsPerBranch; attempt += 1) {
+      const used = owner.allocate(`old-${attempt}`, "branch-2", "branch-2");
+      if (used.ok) owner.settle(used.allocation, { modelRounds: 1, searches: 1, evidenceItems: 0 });
+    }
+    const orphans: string[] = [];
+    const child: BranchRunner = { path: "sub-agent", run: () => Promise.resolve(finding) };
+    const executions = await schedulerFor(
+      two,
+      owner,
+      { main: child, subAgent: child },
+      2,
+      async (saved) => {
+        for (const open of owner.snapshot().openAllocations) {
+          const entry = saved.find((candidate) => candidate.workId === open.workId);
+          if (entry?.state !== "running") orphans.push(open.workId);
+        }
+      },
+    ).run(gatherWorks(two));
+
+    expect(orphans).toEqual([]);
+    expect(executions.map((entry) => entry.state)).toEqual(["completed", "failed"]);
+  });
+
   it.each([
     ["renews the session once and charges the allocation once", 1, "completed", 2],
     [
@@ -269,8 +326,7 @@ describe("deep research child session scheduling", () => {
 
     expect(executions[0]).toMatchObject({ state, path: "sub-agent" });
     expect(calls).toBe(runs);
-    expect(released.every((branchId) => branchId === "branch-1")).toBe(true);
-    expect(released.length).toBeGreaterThan(0);
+    expect(released).toEqual(Array(refusals === 1 ? 1 : 2).fill("branch-1"));
     if (state === "completed") {
       expect(executions[0]!.attempts).toBe(1);
       expect(owner.snapshot().consumed).toMatchObject({ branchAttempts: 1, modelRounds: 3 });

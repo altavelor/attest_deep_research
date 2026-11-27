@@ -54,6 +54,7 @@ export {
   nextReadyExecution,
   openWorks,
   resumeExecutions,
+  withoutStaleRunRefs,
 } from "./schedule";
 export {
   formatWithoutModel,

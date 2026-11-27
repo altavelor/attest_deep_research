@@ -11,6 +11,7 @@ import {
   reportScale,
   sourcesFound,
   resumeExecutions,
+  withoutStaleRunRefs,
   researchLanguageOf,
   stopReasonOf,
   waveSize,
@@ -106,14 +107,18 @@ export async function runResearch(
   });
   let current = start;
   const commit = async (patch: Partial<ResearchState>): Promise<ResearchState> => {
-    const next: ResearchState = {
-      ...current,
-      ...patch,
-      revision: current.revision + 1,
-      budget: owner.snapshot(),
-      sessionByBranch: permits.sessionByBranch(),
-      updatedAt: deps.now().toISOString(),
-    };
+    const sessionByBranch = permits.sessionByBranch();
+    const next = withoutStaleRunRefs(
+      {
+        ...current,
+        ...patch,
+        revision: current.revision + 1,
+        budget: owner.snapshot(),
+        sessionByBranch,
+        updatedAt: deps.now().toISOString(),
+      },
+      sessionByBranch,
+    );
     await deps.port.commit(next, current.revision);
     current = next;
     deps.onState(next);

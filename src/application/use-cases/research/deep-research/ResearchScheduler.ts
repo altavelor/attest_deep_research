@@ -52,6 +52,7 @@ interface Admission {
   work: ResearchWork;
   allocation: BranchAllocation;
   runner: BranchRunner;
+  renewed?: true;
 }
 
 interface FlightResult {
@@ -123,6 +124,7 @@ export class ResearchScheduler {
   private async launch(byId: ReadonlyMap<string, ResearchWork>): Promise<void> {
     const { plan, owner } = this.deps;
     const admitted: Admission[] = [];
+    const exhaustedWorks = new Map<string, Partial<BranchExecution>>();
     const claimed = new Set<string>();
     while (this.flights.size + admitted.length < this.deps.waveSize) {
       const next = nextReadyExecution(
@@ -146,8 +148,9 @@ export class ResearchScheduler {
       );
       if (!granted.ok) {
         if (granted.dimension !== "branch-attempts") break;
-        await this.update(
-          next.workId,
+        claimed.add(work.workId);
+        exhaustedWorks.set(
+          work.workId,
           exhausted(
             plan,
             next,
@@ -161,28 +164,35 @@ export class ResearchScheduler {
       claimed.add(work.workId);
       admitted.push({ work, allocation: granted.allocation, runner });
     }
-    await this.start(admitted);
+    await this.start(admitted, exhaustedWorks);
   }
 
-  private async start(admitted: readonly Admission[]): Promise<void> {
-    if (admitted.length === 0) return;
+  private async start(
+    admitted: readonly Admission[],
+    exhaustedWorks: ReadonlyMap<string, Partial<BranchExecution>> = new Map(),
+  ): Promise<void> {
+    if (admitted.length === 0 && exhaustedWorks.size === 0) return;
     await this.commit(
       this.executions.map((entry) => {
         const own = admitted.find((item) => item.work.workId === entry.workId);
-        return own
-          ? {
-              ...entry,
-              state: "running",
-              path: own.runner.path,
-              attempts: own.allocation.attempt,
-              terminalReason: null,
-              runRef: undefined,
-            }
-          : entry;
+        if (own) {
+          return {
+            ...entry,
+            state: "running",
+            path: own.runner.path,
+            attempts: own.allocation.attempt,
+            terminalReason: null,
+            runRef: undefined,
+          };
+        }
+        const patch = exhaustedWorks.get(entry.workId);
+        return patch ? { ...entry, ...patch } : entry;
       }),
     );
-    for (const { work, allocation, runner } of admitted) {
-      this.deps.onStatus?.(`Researching: ${titleOf(this.deps.plan, work.branchId)}`);
+    for (const { work, allocation, runner, renewed } of admitted) {
+      if (!renewed) {
+        this.deps.onStatus?.(`Researching: ${titleOf(this.deps.plan, work.branchId)}`);
+      }
       const flight: Flight = {
         work,
         allocation,
@@ -255,7 +265,7 @@ export class ResearchScheduler {
     ) {
       this.renewed.add(renewKey);
       this.deps.runners.releaseSession(work.branchId);
-      await this.start([{ work, allocation, runner }]);
+      await this.start([{ work, allocation, runner, renewed: true }]);
       return false;
     }
     owner.settle(allocation, runner.usage?.(work.workId) ?? null);

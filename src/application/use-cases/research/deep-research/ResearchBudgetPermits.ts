@@ -68,7 +68,11 @@ export class ResearchBudgetPermits implements SubAgentBudgetPermitPort {
     const closure = this.currentClosure();
     if (closure) return { type: "denied", creationKey, ...closure };
     const distinct = new Set([...Object.keys(this.sessions), ...this.registering.values()]);
-    if (this.sessions[branchId] !== undefined || distinct.size >= this.options.sessionCeiling) {
+    if (
+      this.sessions[branchId] !== undefined ||
+      [...this.registering.values()].includes(branchId) ||
+      distinct.size >= this.options.sessionCeiling
+    ) {
       throw new Error("The research has no child session left for this branch.");
     }
     const registrationId = `registration-${creationKey}`;

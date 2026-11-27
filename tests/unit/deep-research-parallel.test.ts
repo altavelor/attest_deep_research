@@ -53,6 +53,23 @@ describe("deep research budget scopes", () => {
     expect(own.type).toBe("registered");
   });
 
+  it("registers one session per branch at a time, also while its first registration is open", async () => {
+    const port = permits();
+    const scope = researchScopeId("research-1", "branch-1");
+    const first = await port.beginSessionRegistration(scope, "c-1");
+
+    await expect(port.beginSessionRegistration(scope, "c-2")).rejects.toThrow(
+      "The research has no child session left for this branch.",
+    );
+    if (first.type !== "registered") throw new Error("not registered");
+    await port.finishSessionRegistration(first.registration, {
+      type: "published",
+      sessionId: "session-1",
+    });
+    port.releaseSession("branch-1");
+    expect((await port.beginSessionRegistration(scope, "c-3")).type).toBe("registered");
+  });
+
   it("grants one execution permit per open allocation and replays it for the same key", async () => {
     const owner = new ResearchBudgetOwner(limits, () => 0, 2);
     const port = permits(owner);
@@ -166,6 +183,42 @@ describe("deep research waves", () => {
 
     await expect(run).rejects.toThrow("stop");
     expect(delays).toEqual([35 * 60_000]);
+  });
+
+  it("saves no run reference to a session the branch no longer maps to", async () => {
+    const start = gatheringResearch(researchPlan([researchBranch(1)], "balanced"));
+    const earlier = {
+      ...start.executions[0]!,
+      state: "completed" as const,
+      path: "sub-agent" as const,
+      finding: { text: "F", citationTokens: [], partial: false },
+      runRef: { sessionId: "session-old", runId: "run-1", resultRevision: 1 },
+    };
+    const saved: ResearchState[] = [];
+    const port = new MemoryResearchState();
+    port.commit = async (next: ResearchState) => {
+      saved.push(next);
+      throw new Error("stop");
+    };
+    await expect(
+      runResearch(
+        { ...start, executions: [earlier], sessionByBranch: { "branch-1": "session-new" } },
+        {
+          port,
+          runner: { path: "main", run: () => Promise.reject(new Error("unused")) },
+          synthesis: {} as ReportSynthesisService,
+          labels: ENGLISH_RESEARCH_LABELS,
+          now: () => new Date("2026-01-01T01:00:00.000Z"),
+          setTimer: () => () => undefined,
+          createId: (prefix) => `${prefix}-1`,
+          onState: () => undefined,
+          onStatus: () => undefined,
+        },
+      ),
+    ).rejects.toThrow("stop");
+
+    expect(saved[0]!.sessionByBranch).toEqual({ "branch-1": "session-new" });
+    expect(saved[0]!.executions[0]!.runRef).toBeUndefined();
   });
 
   it("fails a branch without a source in the chat once, without a retry", async () => {
