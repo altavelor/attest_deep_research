@@ -594,6 +594,72 @@ describe("ResearchService", () => {
     );
   });
 
+  it("gives each child run the page cache of its own agent session", async () => {
+    const cache = { put: vi.fn(), get: vi.fn(), list: vi.fn(() => []) };
+    const pageCacheStore = {
+      forSession: vi.fn(() => cache),
+      release: vi.fn(),
+      releaseAll: vi.fn(),
+    };
+    const toolsetFactory = vi.fn(createResearchToolRegistry);
+    const chatModel = new FakeChatModel([
+      [{ content: "First attempt", isComplete: true }],
+      [{ content: "Repair attempt", isComplete: true }],
+      [{ content: "Fallback answer", isComplete: true }],
+      [{ content: "Child answer", isComplete: true }],
+    ]);
+    const service = new ResearchService({
+      toolsetFactory,
+      pageCacheStore,
+      runToolLoop,
+      modelRoundFactory: (m) => new ChatCompletionsRoundAdapter(m),
+      retriever: new FakeRetriever(emptyRetrieval()),
+      chatModel,
+      chatModelName: "qwen",
+      toolCapabilities: {
+        calls: true,
+        choiceRequired: true,
+        choiceSpecific: true,
+        parallelCalls: true,
+      },
+      now: fixedNow,
+    });
+    let bound: { run(request: never): Promise<unknown> } | undefined;
+    const parent = fakeParentRun().parent;
+
+    await collectAsync(
+      service.answer({
+        question: "Delegate this",
+        forceSubAgent: true,
+        searchMode: "indexOnly",
+        subAgentDelegator: recordingDelegator().delegator,
+        subAgentParent: { ...parent, bindExecution: (execution) => (bound = execution) },
+      }),
+    );
+    await bound!.run({
+      sessionId: "child-1",
+      runId: "run-1",
+      attempt: 1,
+      task: "Look it up",
+      sourcePolicy: {
+        searchMode: "webOnly",
+        contextPaths: [],
+        indexScope: "none",
+        allowActiveFile: false,
+        allowNoteMutation: false,
+      },
+      resources: [],
+      limits: { maxRounds: 2, maxResultChars: 30_000, maxSearches: 2 },
+      priorContext: { continuesPartial: false, priorEvidenceItems: [] },
+      signal: new AbortController().signal,
+      observe: () => undefined,
+      onObservation: () => undefined,
+    } as never);
+
+    expect(pageCacheStore.forSession).toHaveBeenCalledWith("child-1");
+    expect(toolsetFactory.mock.calls.at(-1)![0].pageCache).toBe(cache);
+  });
+
   it("does not require get_active_note when active-file inclusion is enabled without an active file", async () => {
     const chatModel = new FakeChatModel([{ content: "Direct answer", isComplete: true }]);
     const service = new ResearchService({

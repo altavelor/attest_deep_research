@@ -25,7 +25,8 @@ import { DEFAULT_LOCALE, resolveLocale } from "@core/i18n";
 import { createTranslator } from "@adapters/i18n";
 import type { Translate, UiTranslator } from "@adapters/i18n";
 import { readObsidianLanguage } from "@adapters/obsidian/ObsidianLanguageProbe";
-import { isWebSourceActive } from "@core/web";
+import { isWebSourceActive, pageCacheLimits } from "@core/web";
+import { InMemoryPageCacheStore } from "@adapters/research-tools";
 import { WebSourceHealthTracker } from "@application/web";
 import type { FileSystemPort } from "@application/ports";
 import { ObsidianContextFileProvider } from "@adapters/obsidian/ObsidianContextFileProvider";
@@ -73,6 +74,7 @@ export default class AttestPlugin extends Plugin {
   settings: AttestSettings = DEFAULT_SETTINGS;
   readonly logger = new PluginDebugLogger({ getSettings: () => this.settings });
   private readonly pdfTextCache = new PdfTextCache();
+  private readonly pageCacheStore = new InMemoryPageCacheStore(pageCacheLimits(Platform.isMobile));
   private translator: UiTranslator = createTranslator(DEFAULT_LOCALE);
   private onboardingModal?: OnboardingModal;
   private unloaded = false;
@@ -168,6 +170,7 @@ export default class AttestPlugin extends Plugin {
       warmCaches: this.requireWarmCaches(),
       fileSystem: this.fileSystem,
       isMobile: Platform.isMobile,
+      pageCacheStore: this.pageCacheStore,
       getSettings: () => this.settings,
       saveSettings: () => this.saveSettings(),
       getIndexingState: (profileId) => this.indexing.getState(profileId),
@@ -183,6 +186,9 @@ export default class AttestPlugin extends Plugin {
       persistDiagnostics: () => this.settings.debugMode,
       isDebugCapture: () => this.settings.debugMode,
       logError: (error) => this.logger.logError(error, { url: "chat:session" }),
+      releaseAgentSessions: (sessionIds) => {
+        for (const sessionId of sessionIds) this.pageCacheStore.release(sessionId);
+      },
     });
     return this.chatSessionManager;
   }
@@ -380,6 +386,7 @@ export default class AttestPlugin extends Plugin {
 
   onunload(): void {
     this.unloaded = true;
+    this.pageCacheStore.releaseAll();
     this.onboardingModal?.close();
     this.onboardingModal = undefined;
     void this.chatSessionManager?.dispose();

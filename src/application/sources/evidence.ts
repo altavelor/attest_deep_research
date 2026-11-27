@@ -56,6 +56,11 @@ export interface EvidenceRegistry {
     resultId: string,
     page: { content: string; finalUrl: string; truncated: boolean; callId: string },
   ): void;
+  addWebPassages(
+    resultId: string,
+    passages: readonly { offset: number; text: string }[],
+    callId: string,
+  ): void;
   snapshot(): ResearchEvidenceSnapshot;
   importRegisteredSnapshot(snapshot: ResearchEvidenceSnapshot): void;
   remainingWebCapacity?(): number;

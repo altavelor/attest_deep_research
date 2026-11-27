@@ -14,3 +14,4 @@ export * from "./mapSources";
 export * from "./researchState";
 export * from "./researchExport";
 export * from "./researchLabels";
+export * from "./pageCache";

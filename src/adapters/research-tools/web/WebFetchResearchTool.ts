@@ -1,5 +1,5 @@
 import { MAX_WEB_FETCH_RESULT_IDS } from "@core/web";
-import { SearchProvider } from "@application/ports";
+import type { PageCache, SearchProvider } from "@application/ports";
 import { EvidenceRegistry } from "@application/sources";
 import { ToolError, ToolParseResult, toolFailure } from "@core/agent";
 import { WEB_FETCH_TOOL } from "@core/agent";
@@ -67,7 +67,7 @@ function parseFetchWebPagesInput(
 }
 
 export const WebFetchResearchTool = defineTool<
-  { provider: SearchProvider; evidence: EvidenceRegistry },
+  { provider: SearchProvider; evidence: EvidenceRegistry; pageCache?: PageCache },
   FetchWebPagesInput,
   FetchWebPagesOutput
 >({
@@ -81,7 +81,10 @@ export const WebFetchResearchTool = defineTool<
   },
   parse: parseFetchWebPagesInput,
   execute: async (deps, input, context) => {
-    const maxResponseBytes = responseBytesForBatch(input.resultIds.length);
+    const maxResponseBytes = responseBytesForBatch(
+      input.resultIds.length,
+      deps.pageCache !== undefined,
+    );
     const pages = await Promise.all(
       input.resultIds.map(async (resultId): Promise<FetchWebPageResult> => {
         const fetched = await fetchRegisteredWebPage(

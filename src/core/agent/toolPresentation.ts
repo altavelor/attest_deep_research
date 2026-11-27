@@ -33,6 +33,8 @@ import {
   SUMMARIZE_INDEX_SOURCE_TOOL,
   UPDATE_NOTE_TOOL,
   WEB_FETCH_SECTION_TOOL,
+  FIND_IN_PAGES_TOOL,
+  READ_PAGE_RANGE_TOOL,
   WEB_FETCH_TOOL,
   WEB_FETCH_URL_TOOL,
   WEB_PAGE_METADATA_TOOL,
@@ -164,6 +166,19 @@ export const TOOL_PRESENTATIONS: Readonly<Record<string, ToolPresentation>> = {
         ? `Reading the part of the page about ${quoted(query)}`
         : "Reading the relevant part of the page";
     },
+  },
+  [FIND_IN_PAGES_TOOL]: {
+    title: "Search pages",
+    intent: ({ args }) => {
+      const query = str(args, "query");
+      return query
+        ? `Searching the fetched pages for ${quoted(query)}`
+        : "Searching the fetched pages";
+    },
+  },
+  [READ_PAGE_RANGE_TOOL]: {
+    title: "Read page range",
+    intent: () => "Reading a part of a fetched page",
   },
   [WEB_PAGE_METADATA_TOOL]: {
     title: "Page details",

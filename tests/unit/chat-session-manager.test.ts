@@ -777,6 +777,18 @@ describe("chat session manager lifecycle", () => {
     });
   });
 
+  it("releases the agent sessions a chat dispatched when the manager is disposed", async () => {
+    const releaseAgentSessions = vi.fn();
+    const { manager } = createTestSessionManager({ releaseAgentSessions });
+    const session = newSession(manager);
+    const dispatch = (sessionId: string) => ({ eventKey: sessionId, sessionId }) as never;
+    session.subAgentDispatches = [dispatch("agent-1"), dispatch("agent-2"), dispatch("agent-1")];
+
+    await manager.dispose();
+
+    expect(releaseAgentSessions).toHaveBeenCalledWith(["agent-1", "agent-2"]);
+  });
+
   it("abandons a run whose first save finished after dispose", async () => {
     const gated = createGatedService();
     const { manager } = createTestSessionManager({ createResearchService: gated.service });

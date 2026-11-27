@@ -156,6 +156,9 @@ export class ChatSessionRuntime {
 
   /** Releases this chat's sub-agent manager and flushes or drops its writer. */
   async dispose(): Promise<void> {
+    this.host.environment.releaseAgentSessions?.([
+      ...new Set(this.state.subAgentDispatches.map((entry) => entry.sessionId)),
+    ]);
     await this.subAgents.dispose();
     await this.writes.dispose();
   }

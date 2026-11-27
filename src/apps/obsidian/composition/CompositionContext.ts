@@ -1,3 +1,4 @@
+import type { PageCacheStore } from "@application/ports/pageCache";
 import { App } from "obsidian";
 
 import { IndexingState } from "@adapters/indexing";
@@ -17,6 +18,7 @@ export interface CompositionContext {
   warmCaches: VaultWarmCaches;
   fileSystem: FileSystemPort;
   isMobile?: boolean;
+  pageCacheStore?: PageCacheStore;
   getSettings(): AttestSettings;
   saveSettings(): Promise<void>;
   getIndexingState(profileId: string): IndexingState;

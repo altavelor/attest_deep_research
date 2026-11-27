@@ -67,8 +67,12 @@ export class ThinkingResearchStrategy implements ResearchStrategy {
   ): AsyncGenerator<ResearchStreamEvent, ResearchStrategyOutcome> {
     yield { type: "status", message: "Synthesizing answer..." };
     const liveEvents = createAsyncEventChannel<ResearchStreamEvent>();
-    const thinkingPromise = this.run(ctx, (event) => liveEvents.push(event)).finally(() =>
-      liveEvents.close(),
+    const pageCacheId = `thinking-${crypto.randomUUID()}`;
+    const thinkingPromise = this.run(ctx, (event) => liveEvents.push(event), pageCacheId).finally(
+      () => {
+        this.deps.pageCacheStore?.release(pageCacheId);
+        liveEvents.close();
+      },
     );
     for await (const event of liveEvents) yield event;
     const thinking = await thinkingPromise;
@@ -89,6 +93,7 @@ export class ThinkingResearchStrategy implements ResearchStrategy {
   private async run(
     ctx: ResearchExecutionContext,
     onEvent: (event: ResearchStreamEvent) => void,
+    pageCacheId: string,
   ): Promise<ThinkingRunResult> {
     const { request, question, searchMode, policy, indexDescription } = ctx;
     const assembled = this.deps.contextAssembler
@@ -151,6 +156,9 @@ export class ThinkingResearchStrategy implements ResearchStrategy {
       urlStatusChecker: this.deps.urlStatusChecker,
       indexSourcePaths: request.contextPaths,
       searchProvider: this.deps.searchProvider,
+      ...(this.deps.pageCacheStore
+        ? { pageCache: this.deps.pageCacheStore.forSession(pageCacheId) }
+        : {}),
       web: ctx.retrieval.web,
       onWebSourceSelection: (selection) => {
         if (webSourceSelections.length < MAX_TRACED_WEB_SEARCHES) {

@@ -11,6 +11,7 @@ import {
   WebResultCapacityError,
 } from "@application/sources";
 import { validatePublicWebUrl } from "@application/sources";
+import { MAX_PAGE_EVIDENCE_CHARS } from "@core/web";
 
 interface MutableEvidenceEntry {
   chunk: RetrievedChunk;
@@ -26,6 +27,19 @@ export interface ResearchEvidenceRegistryOptions {
 }
 
 const DEFAULT_MAX_WEB_RESULTS = 25;
+const PASSAGE_SEPARATOR_CHARS = 40;
+
+interface PagePart {
+  offset: number;
+  text: string;
+  seq: number;
+}
+
+interface PageParts {
+  head: string;
+  passages: PagePart[];
+  seq: number;
+}
 
 /**
  * Registers the evidence of one answer under stable IDs and bounded web handles. A fifth of the
@@ -38,6 +52,7 @@ export class ResearchEvidenceRegistry implements EvidenceRegistry {
   private readonly entries = new Map<string, MutableEvidenceEntry>();
   private readonly handles = new Map<string, WebHandleEntry>();
   private readonly handlesByUrl = new Map<string, WebHandleEntry>();
+  private readonly pages = new Map<string, PageParts>();
 
   constructor(options: ResearchEvidenceRegistryOptions = {}) {
     this.createHandle = options.createHandle ?? (() => `result_${crypto.randomUUID()}`);
@@ -181,6 +196,29 @@ export class ResearchEvidenceRegistry implements EvidenceRegistry {
     entry.citation = { ...formatCitation(source), id: handle.evidenceId };
     entry.page = { finalUrl: page.finalUrl, truncated: page.truncated };
     appendCall(entry.calls, { callId: page.callId, tool: "fetch_web_page" });
+    this.pages.set(handle.evidenceId, { head: page.content, passages: [], seq: 0 });
+  }
+
+  addWebPassages(
+    resultId: string,
+    passages: readonly { offset: number; text: string }[],
+    callId: string,
+  ): void {
+    const handle = this.handles.get(resultId);
+    const entry = handle ? this.entries.get(handle.evidenceId) : undefined;
+    const parts = handle ? this.pages.get(handle.evidenceId) : undefined;
+    if (!handle || !entry || !parts) {
+      throw new Error("Registered web page is unavailable.");
+    }
+    parts.seq += 1;
+    for (const passage of passages) {
+      if (passage.text.length > 0) {
+        parts.passages.push({ offset: passage.offset, text: passage.text, seq: parts.seq });
+      }
+    }
+    const text = composePageEvidence(parts);
+    entry.chunk = { ...entry.chunk, text, contentHash: stableId(text) };
+    appendCall(entry.calls, { callId, tool: "fetch_web_page" });
   }
 
   snapshot(): ResearchEvidenceSnapshot {
@@ -230,6 +268,61 @@ export class ResearchEvidenceRegistry implements EvidenceRegistry {
     }
     throw new Error("Could not allocate a unique web result handle.");
   }
+}
+
+/**
+ * Builds the evidence text of a page from its head and the passages returned to the model: the
+ * newest passages first until the evidence cap, merged where they overlap, in reading order.
+ */
+function composePageEvidence(parts: PageParts): string {
+  const budget = MAX_PAGE_EVIDENCE_CHARS - parts.head.length;
+  const newest = [...parts.passages]
+    .map((part) => trimToTail(part, parts.head.length))
+    .filter((part): part is PagePart => part !== null)
+    .sort((a, b) => b.seq - a.seq);
+  let chosen: PagePart[] = [];
+  for (const part of newest) {
+    const next = mergeParts([...chosen, part]);
+    if (partsSize(next) <= budget) chosen = next;
+    else if (chosen.length === 0)
+      chosen = [
+        { ...part, text: part.text.slice(0, Math.max(0, budget - PASSAGE_SEPARATOR_CHARS)) },
+      ];
+  }
+  return [
+    parts.head,
+    ...mergeParts(chosen).map((part) => `[… offset ${part.offset} …]\n${part.text}`),
+  ].join("\n\n");
+}
+
+function trimToTail(part: PagePart, headChars: number): PagePart | null {
+  const end = part.offset + part.text.length;
+  if (end <= headChars) return null;
+  return part.offset >= headChars
+    ? part
+    : { ...part, offset: headChars, text: part.text.slice(headChars - part.offset) };
+}
+
+function mergeParts(parts: readonly PagePart[]): PagePart[] {
+  const merged: PagePart[] = [];
+  for (const part of [...parts].sort((a, b) => a.offset - b.offset)) {
+    const last = merged.at(-1);
+    if (last && part.offset <= last.offset + last.text.length) {
+      const overlap = last.offset + last.text.length - part.offset;
+      merged[merged.length - 1] = {
+        ...last,
+        text: last.text + part.text.slice(overlap),
+        seq: Math.max(last.seq, part.seq),
+      };
+    } else {
+      merged.push({ ...part });
+    }
+  }
+  return merged;
+}
+
+function partsSize(parts: readonly PagePart[]): number {
+  return parts.reduce((total, part) => total + part.text.length + PASSAGE_SEPARATOR_CHARS, 0);
 }
 
 export function canonicalizeWebUrl(value: string): string {

@@ -71,6 +71,7 @@ export function createResearchToolRegistry(
         provider: options.searchProvider,
         evidence,
         artifacts,
+        ...(options.pageCache ? { pageCache: options.pageCache } : {}),
         ...(options.web ? { web: options.web } : {}),
         ...(options.onWebSourceSelection
           ? { onSourceSelection: (selection) => options.onWebSourceSelection?.(selection) }

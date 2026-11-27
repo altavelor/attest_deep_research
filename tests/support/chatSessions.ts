@@ -28,6 +28,7 @@ export interface TestSessionManagerOptions {
   persistDiagnostics?: boolean;
   logError?(error: unknown): void;
   createSubAgentSessionManager?: SubAgentSessionManagerFactory;
+  releaseAgentSessions?: ChatSessionEnvironment["releaseAgentSessions"];
 }
 
 /** Builds a session manager over an in-memory chat repository for tests. */
@@ -56,6 +57,9 @@ export function createTestSessionManager(options: TestSessionManagerOptions = {}
       buildRegistryPromptView: (registry, question) =>
         selectConversationRegistryPromptView(registry, question),
       ...(options.logError ? { logError: options.logError } : {}),
+      ...(options.releaseAgentSessions
+        ? { releaseAgentSessions: options.releaseAgentSessions }
+        : {}),
       ...(options.createSubAgentSessionManager
         ? {
             createSubAgentSessionManager: options.createSubAgentSessionManager,

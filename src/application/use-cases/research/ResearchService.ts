@@ -1,3 +1,4 @@
+import type { PageCacheStore } from "@application/ports/pageCache";
 import { TokenUsageMeter, type StageTokenUsage } from "./TokenUsageMeter";
 import { summarizeCompactionWithModel } from "@application/use-cases/chat/ChatCompaction";
 import { SearchProvider } from "@application/ports/web";
@@ -80,6 +81,8 @@ export interface ResearchServiceOptions {
 
   toolsetFactory: ResearchToolsetFactory;
 
+  pageCacheStore?: PageCacheStore;
+
   runToolLoop: ToolLoopRunner;
   translate?: AnswerTranslate;
 
@@ -129,6 +132,7 @@ export class ResearchService implements ConversationEngine {
     "noteTools" | "retriever" | "searchProvider" | "urlStatusChecker"
   >;
   private readonly now: () => Date;
+  private readonly pageCacheStore: PageCacheStore | undefined;
 
   private readonly usage = new TokenUsageMeter();
 
@@ -186,6 +190,7 @@ export class ResearchService implements ConversationEngine {
     });
 
     this.now = now;
+    this.pageCacheStore = options.pageCacheStore;
     this.subAgentRunnerDeps = {
       toolsetFactory: options.toolsetFactory,
       ...(options.searchProvider ? { searchProvider: options.searchProvider } : {}),
@@ -232,6 +237,7 @@ export class ResearchService implements ConversationEngine {
       vaultWriter: options.vaultWriter,
       downloadFolder: options.downloadFolder,
       toolsetFactory: options.toolsetFactory,
+      ...(options.pageCacheStore ? { pageCacheStore: options.pageCacheStore } : {}),
       toolsEnabled: options.toolsEnabled === true && options.noteTools !== undefined,
       toolCapabilities,
       toolCapabilityProvenance: options.toolCapabilityProvenance,
@@ -384,8 +390,12 @@ export class ResearchService implements ConversationEngine {
         modelRound: this.subAgentRunnerDeps.modelRound,
       }),
       createRunner: (modelRound) => new SubAgentRunner({ ...this.subAgentRunnerDeps, modelRound }),
-      toolContext: (request) =>
-        subAgentToolContext(this.subAgentSources, request.sourcePolicy, web, request.origin),
+      toolContext: (request) => ({
+        ...subAgentToolContext(this.subAgentSources, request.sourcePolicy, web, request.origin),
+        ...(this.pageCacheStore
+          ? { pageCache: this.pageCacheStore.forSession(request.sessionId) }
+          : {}),
+      }),
       now: this.now,
     });
   }

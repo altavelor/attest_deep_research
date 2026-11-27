@@ -109,6 +109,30 @@ async function drain(
   return { events, outcome: next.value };
 }
 
+describe("ThinkingResearchStrategy page cache", () => {
+  it("gives the toolset a page cache for the run and releases it when the run ends", async () => {
+    const cache = { put: vi.fn(), get: vi.fn(), list: vi.fn(() => []) };
+    const pageCacheStore = {
+      forSession: vi.fn(() => cache),
+      release: vi.fn(),
+      releaseAll: vi.fn(),
+    };
+    const toolsetFactory = vi.fn(createResearchToolRegistry);
+    const modelRound = scriptedRounds(() => ({
+      items: [{ type: "text" as const, text: "Answer." }],
+      stopReason: "complete" as const,
+    }));
+
+    await drain(
+      strategy(modelRound, undefined, { pageCacheStore, toolsetFactory }).execute(context()),
+    );
+
+    expect(toolsetFactory.mock.calls[0]![0].pageCache).toBe(cache);
+    const [sessionId] = pageCacheStore.forSession.mock.calls[0] as unknown as [string];
+    expect(pageCacheStore.release).toHaveBeenCalledWith(sessionId);
+  });
+});
+
 describe("ThinkingResearchStrategy failure paths", () => {
   it("returns a cancelled outcome and no answer when the run is aborted mid-stream", async () => {
     const controller = new AbortController();

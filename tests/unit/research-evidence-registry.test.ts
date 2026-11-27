@@ -88,4 +88,32 @@ describe("ResearchEvidenceRegistry", () => {
     expect(Object.isFrozen(snapshot.evidence)).toBe(true);
     expect(() => (snapshot.evidence as unknown[]).push({})).toThrow();
   });
+
+  it("builds the evidence of a page from its head and the passages returned, newest kept at the cap", () => {
+    const registry = new ResearchEvidenceRegistry({ createHandle: () => "handle" });
+    const { resultId } = registry.registerWebResult(
+      { url: "https://example.com/long", title: "Long", snippet: "s", rank: 1 },
+      { callId: "search", query: "q" },
+    );
+    registry.upgradeWebPage(resultId, {
+      content: "HEAD",
+      finalUrl: "https://example.com/long",
+      truncated: false,
+      callId: "fetch",
+    });
+
+    registry.addWebPassages(resultId, [{ offset: 5000, text: "later passage" }], "find-1");
+    registry.addWebPassages(resultId, [{ offset: 100, text: "early passage" }], "find-2");
+    registry.addWebPassages(resultId, [{ offset: 106, text: "passage extended" }], "find-3");
+    const ordered = registry.snapshot().evidence[0]!.text;
+    registry.addWebPassages(resultId, [{ offset: 9000, text: "x".repeat(16_000) }], "find-4");
+    const capped = registry.snapshot().evidence[0]!.text;
+
+    expect(ordered).toBe(
+      "HEAD\n\n[… offset 100 …]\nearly passage extended\n\n[… offset 5000 …]\nlater passage",
+    );
+    expect(capped.length).toBeLessThanOrEqual(16_000);
+    expect(capped).toContain("[… offset 9000 …]");
+    expect(capped).not.toContain("later passage");
+  });
 });

@@ -17,6 +17,7 @@ export interface ChatSessionFactoryOptions {
   persistDiagnostics: () => boolean;
   isDebugCapture: () => boolean;
   logError: (error: unknown) => void;
+  releaseAgentSessions?: (sessionIds: readonly string[]) => void;
 }
 
 let runSequence = 0;
@@ -43,6 +44,9 @@ export function createChatSessionManager(options: ChatSessionFactoryOptions): Ch
       buildRegistryPromptView: (registry, question) =>
         selectConversationRegistryPromptView(registry, question),
       logError: options.logError,
+      ...(options.releaseAgentSessions
+        ? { releaseAgentSessions: options.releaseAgentSessions }
+        : {}),
       scheduleTimeout,
       createSubAgentSessionManager,
       subAgentServices: {

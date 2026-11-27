@@ -1,4 +1,4 @@
-import { SearchProvider } from "@application/ports";
+import type { PageCache, SearchProvider } from "@application/ports";
 import { EvidenceRegistry } from "@application/sources";
 import { ToolParseResult, toolFailure } from "@core/agent";
 import { WEB_FETCH_SECTION_TOOL } from "@core/agent";
@@ -53,7 +53,7 @@ function parseFetchWebSectionInput(
 }
 
 export const WebFetchSectionTool = defineTool<
-  { provider: SearchProvider; evidence: EvidenceRegistry },
+  { provider: SearchProvider; evidence: EvidenceRegistry; pageCache?: PageCache },
   FetchWebSectionInput,
   FetchWebSectionOutput
 >({
@@ -80,7 +80,9 @@ export const WebFetchSectionTool = defineTool<
       return fetched;
     }
 
-    const ranked = rankSectionsByQuery(fetched.value.content, input.query, { limit: input.limit });
+    const ranked = rankSectionsByQuery(fetched.value.content ?? "", input.query, {
+      limit: input.limit,
+    });
 
     return {
       ok: true,
