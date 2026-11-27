@@ -37,6 +37,8 @@ export interface NormalizedUsage {
   requestCount: number;
   modelRounds: number;
   toolCalls: number;
+  searchCalls?: number;
+  toolCounts?: Readonly<Record<string, number>>;
   durationMs: number;
   source: "provider" | "estimated" | "unavailable";
 }

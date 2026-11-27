@@ -651,6 +651,7 @@ describe("SubAgentRunner telemetry", () => {
       searchBudgetRejections: 1,
       hitRoundLimit: false,
       toolCalls: 2,
+      toolCounts: { search_web: 2 },
       usedSynthesisFallback: false,
     });
     expect(result.telemetry?.failureReason).toBeUndefined();

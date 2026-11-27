@@ -13,6 +13,7 @@ export interface BranchUsage {
   outputTokens?: number;
   fetches?: number;
   sources?: number;
+  toolCounts?: Readonly<Record<string, number>>;
 }
 
 export type AllocationResult =

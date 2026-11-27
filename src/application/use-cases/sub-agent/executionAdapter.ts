@@ -76,7 +76,16 @@ export class SubAgentExecutionAdapter implements SubAgentExecutionPort {
     return {
       answerText: output.answerText,
       evidence: resultEvidence(request, output.snapshot, this.deps.now().toISOString()),
-      usage: { ...mergeSubAgentUsage(usages).usage, toolCalls: telemetry?.toolCalls ?? 0 },
+      usage: {
+        ...mergeSubAgentUsage(usages).usage,
+        toolCalls: telemetry?.toolCalls ?? 0,
+        ...(telemetry
+          ? {
+              searchCalls: telemetry.searchCalls,
+              ...(telemetry.toolCounts ? { toolCounts: telemetry.toolCounts } : {}),
+            }
+          : {}),
+      },
       incomplete: request.signal.aborted || failureReason !== null,
       terminalReason: failureReason,
       telemetry: toValidatedJson(telemetry ?? null) ?? null,

@@ -212,11 +212,16 @@ export class SubAgentBranchRunner implements BranchRunner {
   }
 }
 
-/** Reads the rounds and tool calls a child reported; evidence is charged when it is appended. */
+/** Reads the rounds, search calls and per-tool counts a child reported; evidence is charged when it is appended. */
 function measuredUsage(run: SubAgentRunSummary | undefined): BranchUsage | null {
   const usage = run?.usage;
   if (!usage || !isCount(usage.modelRounds) || !isCount(usage.toolCalls)) return null;
-  return { modelRounds: usage.modelRounds, searches: usage.toolCalls, evidenceItems: 0 };
+  return {
+    modelRounds: usage.modelRounds,
+    searches: isCount(usage.searchCalls) ? usage.searchCalls : usage.toolCalls,
+    evidenceItems: 0,
+    ...(usage.toolCounts ? { toolCounts: usage.toolCounts } : {}),
+  };
 }
 
 function isCount(value: unknown): value is number {

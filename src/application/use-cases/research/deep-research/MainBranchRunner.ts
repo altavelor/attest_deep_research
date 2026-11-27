@@ -105,6 +105,7 @@ export class MainBranchRunner implements BranchRunner {
       evidenceItems: opened,
       fetches: opened,
       sources: result.snapshot.evidence.length,
+      ...(telemetry?.toolCounts ? { toolCounts: telemetry.toolCounts } : {}),
       ...(telemetry
         ? { inputTokens: telemetry.usage.inputTokens, outputTokens: telemetry.usage.outputTokens }
         : {}),

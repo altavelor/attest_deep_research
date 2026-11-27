@@ -190,6 +190,7 @@ export class SubAgentRunner implements SubAgentPort {
       hitRoundLimit: failureReason === "model-round-limit-exceeded",
       ...(failureReason ? { failureReason } : {}),
       toolCalls: result.totalCalls,
+      toolCounts: countToolCalls(result.diagnostics),
       duplicateToolCalls: result.duplicateCalls,
       searchCalls: searches.performed,
       maxSearches,
@@ -282,6 +283,13 @@ function countSearchCalls(diagnostics: readonly ToolCallDiagnostic[]): {
     else performed += 1;
   }
   return { performed, rejected };
+}
+
+function countToolCalls(diagnostics: readonly ToolCallDiagnostic[]): Record<string, number> {
+  const counts: Record<string, number> = {};
+  for (const diagnostic of diagnostics)
+    counts[diagnostic.name] = (counts[diagnostic.name] ?? 0) + 1;
+  return counts;
 }
 
 function newRunId(): string {

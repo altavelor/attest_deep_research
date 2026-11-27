@@ -81,6 +81,7 @@ export class DeepResearchTurnRecorder {
         rounds: usage?.modelRounds ?? null,
         searches: usage?.searches ?? null,
         evidenceItems: usage?.evidenceItems ?? null,
+        ...(usage?.toolCounts ? { tools: { ...usage.toolCounts } } : {}),
         allocatedRounds: allocation.modelRounds,
         allocatedSearches: allocation.searches,
         ...(child

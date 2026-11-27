@@ -48,6 +48,7 @@ export interface SubAgentTelemetry {
   hitRoundLimit: boolean;
   failureReason?: SubAgentFailureReason;
   toolCalls: number;
+  toolCounts?: Readonly<Record<string, number>>;
   duplicateToolCalls: number;
   searchCalls: number;
   maxSearches: number;
