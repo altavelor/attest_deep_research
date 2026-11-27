@@ -6,7 +6,7 @@ import {
 import { boundFindingText, initialExecutions } from "@core/research/deepResearch";
 import type { ReportSynthesisService } from "@application/use-cases/research/deep-research/ReportSynthesisService";
 import { runResearch } from "@application/use-cases/research/deep-research/researchRun";
-import { markdownSource, retrieved } from "../support/factories";
+import { markdownSource, retrieved, webSource } from "../support/factories";
 import type { ResearchExecutionContext } from "@application/use-cases/research/strategies/ResearchStrategy";
 import { collectAsync } from "../support/async";
 import {
@@ -227,11 +227,12 @@ describe("main branch runner findings", () => {
         run: async () => ({
           answerText: `Kept [${kept.id}]. ${"x".repeat(30_000)} Cut [${cut.id}].`,
           snapshot: {
-            evidence: [kept, cut],
+            evidence: [kept, cut, retrieved("web-1", webSource("https://e.test/unread"), "W")],
             citations: [],
             provenance: [
               { evidenceId: kept.id, calls: [{ callId: "c1", tool: "read_note" as const }] },
               { evidenceId: cut.id, calls: [{ callId: "c2", tool: "search_index" as const }] },
+              { evidenceId: "web-1", calls: [{ callId: "c3", tool: "search_web" as const }] },
             ],
           },
         }),
@@ -259,6 +260,7 @@ describe("main branch runner findings", () => {
     const finding = await runner.run(work, allocation, new AbortController().signal);
     expect(finding.text).toHaveLength(30_000);
     expect(finding.citationTokens).toEqual([kept.id]);
+    expect(finding.unreadSources).toEqual(["https://e.test/unread"]);
     expect(runner.usage("w-1")).toMatchObject({ evidenceItems: 1, fetches: 1 });
   });
 

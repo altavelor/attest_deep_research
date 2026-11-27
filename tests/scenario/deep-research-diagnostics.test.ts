@@ -80,5 +80,7 @@ describe("deep research turn diagnostics", () => {
     expect(gathered[0]).toMatchObject({ runner: "main", runs: [{ attempt: 1, path: "main" }] });
     expect(gathered[0]!.findingChars).toBeGreaterThan(0);
     expect(gathered[0]!.runs[0]!.rounds).not.toBeNull();
+    const tools = Object.values(gathered[0]!.runs[0]!.tools ?? {});
+    expect(tools.reduce((sum, count) => sum + count, 0)).toBeGreaterThan(0);
   });
 });
