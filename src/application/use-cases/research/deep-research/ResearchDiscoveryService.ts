@@ -42,6 +42,7 @@ const PROPOSE_PROMPT = [
   '"prediction": string, "disconfirmation": string, "test": {"kind": "literature" | "observation", "method": string}}]}.',
   "Each hypothesis states one position on a point where findings or sources disagree, on a date, a scope or who is affected,",
   "or where a finding rests on a secondary source; alternative states the opposing position.",
+  "A change between an earlier and a later version of the same text is not a disagreement: make it a hypothesis only when sources disagree on which version applies.",
   "prediction says what a primary source would show if the claim holds; disconfirmation what it would show if the alternative holds.",
   "branch is the 1-based number of the branch whose sources can test it; revises names an open hypothesis id.",
   "Use kind observation only when the test needs a result the user must supply. Return no hypotheses when the findings agree.",
