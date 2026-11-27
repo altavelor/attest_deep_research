@@ -19,7 +19,7 @@ import {
   branchLanguageInstruction,
 } from "@core/research/deepResearch";
 import { researchBranch, researchPlan } from "../support/deepResearch";
-import { markdownSource, retrieved } from "../support/factories";
+import { retrieved, webSource } from "../support/factories";
 import { runSummary } from "../support/subAgentInspection";
 import { settle } from "../support/async";
 import { runPastDeadline } from "../support/timers";
@@ -408,12 +408,14 @@ describe("deep research main-path fallback", () => {
         resolver: {
           resolve: async () => ({
             evidence: [
-              retrieved("chunk-1", markdownSource("a.md"), "A"),
-              retrieved("chunk-2", markdownSource("b.md"), "B"),
+              retrieved("chunk-1", webSource("https://e.test/opened"), "A"),
+              retrieved("chunk-3", webSource("https://e.test/uncited"), "C"),
+              retrieved("chunk-2", webSource("https://e.test/cited"), "B"),
             ],
             citations: [],
             provenance: [
               { evidenceId: "chunk-1", calls: [call("fetch_web_page")] },
+              { evidenceId: "chunk-3", calls: [call("search_web")] },
               { evidenceId: "chunk-2", calls: [call("search_web")] },
             ],
           }),
@@ -435,8 +437,9 @@ describe("deep research main-path fallback", () => {
         searches: 3,
       };
 
-      await runner.run(work, allocation, new AbortController().signal);
+      const finding = await runner.run(work, allocation, new AbortController().signal);
 
+      expect(finding.unreadSources).toEqual(["https://e.test/cited", "https://e.test/uncited"]);
       expect(runner.usage("w-1")).toEqual({
         modelRounds: 2,
         searches,

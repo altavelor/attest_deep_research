@@ -753,6 +753,35 @@ describe("deep research section validation", () => {
         }),
       ],
       [
+        "more unread sources than the bound",
+        section({
+          ...approved,
+          executions: [
+            {
+              ...done,
+              finding: {
+                ...done!.finding!,
+                unreadSources: Array.from({ length: 6 }, (_, index) => `https://e.test/${index}`),
+              },
+            },
+            running,
+          ],
+        }),
+      ],
+      [
+        "an over-long unread source",
+        section({
+          ...approved,
+          executions: [
+            {
+              ...done,
+              finding: { ...done!.finding!, unreadSources: [`https://e.test/${"x".repeat(500)}`] },
+            },
+            running,
+          ],
+        }),
+      ],
+      [
         "finding over the encoded size",
         section({
           ...approved,
@@ -794,6 +823,7 @@ describe("deep research section validation", () => {
         {
           ...done!,
           path: "sub-agent",
+          finding: { ...done!.finding!, unreadSources: ["https://e.test/a"] },
           runRef: { sessionId: "session-1", runId: "run-1", resultRevision: 2 },
         },
         running,

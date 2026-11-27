@@ -29,6 +29,7 @@ import {
   BranchNoFindingsError,
   UnusableBranchSessionError,
   openedDocuments,
+  unreadWebSources,
   type BranchChildRun,
   type BranchRunner,
 } from "./branchRunner";
@@ -202,12 +203,17 @@ export class SubAgentBranchRunner implements BranchRunner {
     if (text === "") throw new BranchNoFindingsError();
     const bounded = boundFindingText(text);
     const cited = citationIdsFromText(bounded);
+    const unread = unreadWebSources(
+      snapshot,
+      new Set([...revisionOf].filter(([, revision]) => cited.has(revision)).map(([id]) => id)),
+    );
     return {
       text: bounded,
       citationTokens: [...new Set(revisionOf.values())]
         .filter((id) => cited.has(id))
         .slice(0, MAX_FINDING_CITATION_TOKENS),
       partial: outcome.evidenceBudgetExhausted === true,
+      ...(unread.length > 0 ? { unreadSources: unread } : {}),
     };
   }
 }

@@ -1,4 +1,5 @@
 import { isDocumentReadTool } from "@core/research";
+import { MAX_UNREAD_SOURCE_CHARS, MAX_UNREAD_SOURCES } from "@core/research/deepResearch";
 import type {
   BranchAllocation,
   BranchFinding,
@@ -61,4 +62,30 @@ export function openedDocuments(snapshot: ResearchEvidenceSnapshot): number {
   return snapshot.provenance.filter((entry) =>
     entry.calls.some((call) => isDocumentReadTool(call.tool)),
   ).length;
+}
+
+/**
+ * Lists the web pages a branch found in search hits and never opened, those its finding cites
+ * first, as the gaps a later check of the branch should close. The list is bounded and has no repeats.
+ */
+export function unreadWebSources(
+  snapshot: ResearchEvidenceSnapshot,
+  citedEvidenceIds: ReadonlySet<string>,
+): string[] {
+  const opened = new Set(
+    snapshot.provenance
+      .filter((entry) => entry.calls.some((call) => isDocumentReadTool(call.tool)))
+      .map((entry) => entry.evidenceId),
+  );
+  const unread = snapshot.evidence.filter(
+    (chunk) => chunk.source.kind === "web" && !opened.has(chunk.id),
+  );
+  const ordered = [
+    ...unread.filter((chunk) => citedEvidenceIds.has(chunk.id)),
+    ...unread.filter((chunk) => !citedEvidenceIds.has(chunk.id)),
+  ];
+  const urls = ordered.map((chunk) => (chunk.source.kind === "web" ? chunk.source.url : ""));
+  return [...new Set(urls)]
+    .filter((url) => url !== "" && url.length <= MAX_UNREAD_SOURCE_CHARS)
+    .slice(0, MAX_UNREAD_SOURCES);
 }

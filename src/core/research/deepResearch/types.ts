@@ -227,6 +227,7 @@ export interface BranchFinding {
   text: string;
   citationTokens: readonly string[];
   partial: boolean;
+  unreadSources?: readonly string[];
 }
 
 export interface ResearchReportScale {

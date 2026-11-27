@@ -25,6 +25,7 @@ import {
   BranchUnavailableError,
   RESEARCH_BRANCH_MAX_RESULT_CHARS,
   openedDocuments,
+  unreadWebSources,
   type BranchRunner,
 } from "./branchRunner";
 import { subAgentToolContext, type SubAgentToolSources } from "../sub-agent/subAgentToolContext";
@@ -130,12 +131,14 @@ export class MainBranchRunner implements BranchRunner {
     const registered = this.deps.registerAnswer?.(answer) ?? answer;
     const bounded = boundFindingText(registered.answer);
     const cited = citationIdsFromText(bounded);
+    const unread = unreadWebSources(result.snapshot, cited);
     return {
       text: bounded,
       citationTokens: [...new Set((registered.evidence ?? []).map((chunk) => chunk.id))]
         .filter((id) => cited.has(id))
         .slice(0, MAX_FINDING_CITATION_TOKENS),
       partial: telemetry?.failureReason !== undefined,
+      ...(unread.length > 0 ? { unreadSources: unread } : {}),
     };
   }
 
