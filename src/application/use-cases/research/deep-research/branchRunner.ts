@@ -49,7 +49,7 @@ export class BranchNoFindingsError extends Error {
   }
 }
 
-/** The branch's mapped child session refused the attempt before it started; the main path takes it. */
+/** The branch's mapped child session refused the attempt before it started; the branch gets a new session. */
 export class UnusableBranchSessionError extends Error {
   constructor(readonly sessionId: string) {
     super("The branch session can no longer be continued.");

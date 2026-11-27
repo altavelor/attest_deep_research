@@ -66,7 +66,7 @@ export {
 } from "./report";
 export { boundFindingText } from "./findingBounds";
 export { SOURCE_READING_INSTRUCTION, branchTaskText } from "./branchTask";
-export { branchPath, parseResearchScope, researchScopeId, waveSize } from "./waves";
+export { parseResearchScope, researchScopeId, waveSize } from "./waves";
 export {
   MAX_BRIEF_PROMPT_CHARS,
   MAX_BRIEF_SUGGESTION_CHARS,

@@ -1,8 +1,6 @@
 import {
   blockDependants,
   boundedReason,
-  branchPath,
-  budgetLimits,
   DEFAULT_RESEARCH_LANGUAGE,
   ENGLISH_RESEARCH_LABELS,
   label,
@@ -25,7 +23,7 @@ import {
 export interface ResearchSchedulerRunners {
   main: BranchRunner;
   subAgent?: BranchRunner;
-  sessionByBranch(): Readonly<Record<string, string>>;
+  releaseSession?(branchId: string): void;
 }
 
 export interface ResearchSchedulerDeps {
@@ -46,9 +44,14 @@ interface Flight {
   work: ResearchWork;
   allocation: BranchAllocation;
   runner: BranchRunner;
-  newSession: boolean;
   abandon(): void;
   done: Promise<FlightResult>;
+}
+
+interface Admission {
+  work: ResearchWork;
+  allocation: BranchAllocation;
+  runner: BranchRunner;
 }
 
 interface FlightResult {
@@ -61,19 +64,19 @@ interface FlightResult {
 export const STOP_SETTLE_MS = 10_000;
 
 /**
- * Runs research works in waves in dependency and priority order: up to the wave size at once, at
- * most one of them on the main path, each in its branch's child session while the session ceiling
- * allows. Each attempt is admitted by the budget owner and committed as a wave barrier before it
- * starts and as a branch barrier when it settles; a user stop waits for the wave and leaves its open
- * allocations for the next turn to consume, while a budget closure settles them and ends the run.
- * An attempt that has not settled within the settle deadline after the abort is abandoned and
- * consumes its whole allocation.
+ * Runs research works in waves in dependency and priority order. With a sub-agent runner every
+ * work runs in its branch's child session, a free slot is filled in one step and the works beyond
+ * the wave size wait for a slot; without one the works run one at a time on the main path. Each
+ * attempt is admitted by the budget owner and committed as a wave barrier before it starts and as a
+ * branch barrier when it settles; a user stop waits for the wave and leaves its open allocations for
+ * the next turn to consume, while a budget closure settles them and ends the run. An attempt that
+ * has not settled within the settle deadline after the abort is abandoned and consumes its whole
+ * allocation.
  */
 export class ResearchScheduler {
   private executions: BranchExecution[];
   private readonly flights = new Map<string, Flight>();
-  private readonly mainOnly = new Set<string>();
-  private readonly fallbacks: Flight[] = [];
+  private readonly renewed = new Set<string>();
   private cancelDeadline: (() => void) | null = null;
   private readonly onAbort = (): void => {
     this.cancelDeadline ??= this.deps.setTimer(STOP_SETTLE_MS, () => {
@@ -103,11 +106,6 @@ export class ResearchScheduler {
       const stopped = await this.settle(settled);
       if (stopped && userStop === null) userStop = settled.error;
     }
-    for (const flight of this.fallbacks.splice(0)) {
-      if (userStop !== null) continue;
-      this.deps.owner.settle(flight.allocation, null);
-      await this.update(flight.work.workId, { state: "pending" });
-    }
     if (userStop !== null) {
       await this.commit(this.executions);
       throw userStop;
@@ -123,32 +121,31 @@ export class ResearchScheduler {
   }
 
   private async launch(byId: ReadonlyMap<string, ResearchWork>): Promise<void> {
-    const { plan, owner, runners } = this.deps;
-    const fallback = this.fallbacks[0];
-    if (fallback && !this.mainBusy() && this.flights.size < this.deps.waveSize) {
-      this.fallbacks.shift();
-      await this.start(fallback.work, fallback.allocation, runners.main);
-    }
-    while (this.flights.size < this.deps.waveSize) {
+    const { plan, owner } = this.deps;
+    const admitted: Admission[] = [];
+    const claimed = new Set<string>();
+    while (this.flights.size + admitted.length < this.deps.waveSize) {
       const next = nextReadyExecution(
         this.executions.filter(
           (entry) =>
             entry.state !== "pending" ||
-            (byId.has(entry.workId) && !this.flights.has(entry.workId)),
+            (byId.has(entry.workId) &&
+              !this.flights.has(entry.workId) &&
+              !claimed.has(entry.workId)),
         ),
         plan,
       );
-      if (!next) return;
-      const runner = this.runnerFor(next.branchId);
-      if (!runner) return;
+      if (!next) break;
+      const runner = this.runnerFor(admitted);
+      if (!runner) break;
       const work = byId.get(next.workId)!;
-      const admitted = owner.allocate(
+      const granted = owner.allocate(
         work.workId,
         work.branchId,
         work.kind === "test" ? work.workId : work.branchId,
       );
-      if (!admitted.ok) {
-        if (admitted.dimension !== "branch-attempts") return;
+      if (!granted.ok) {
+        if (granted.dimension !== "branch-attempts") break;
         await this.update(
           next.workId,
           exhausted(
@@ -161,77 +158,72 @@ export class ResearchScheduler {
         );
         continue;
       }
-      await this.start(work, admitted.allocation, runner);
+      claimed.add(work.workId);
+      admitted.push({ work, allocation: granted.allocation, runner });
+    }
+    await this.start(admitted);
+  }
+
+  private async start(admitted: readonly Admission[]): Promise<void> {
+    if (admitted.length === 0) return;
+    await this.commit(
+      this.executions.map((entry) => {
+        const own = admitted.find((item) => item.work.workId === entry.workId);
+        return own
+          ? {
+              ...entry,
+              state: "running",
+              path: own.runner.path,
+              attempts: own.allocation.attempt,
+              terminalReason: null,
+              runRef: undefined,
+            }
+          : entry;
+      }),
+    );
+    for (const { work, allocation, runner } of admitted) {
+      this.deps.onStatus?.(`Researching: ${titleOf(this.deps.plan, work.branchId)}`);
+      const flight: Flight = {
+        work,
+        allocation,
+        runner,
+        abandon: () => undefined,
+        done: null as unknown as Flight["done"],
+      };
+      const abandoned = new Promise<FlightResult>((resolve) => {
+        flight.abandon = () =>
+          resolve({ flight, finding: null, error: this.deps.signal.reason, abandoned: true });
+      });
+      const ran = runner
+        .run(
+          {
+            ...work,
+            task: branchTaskText(work.task, this.deps.language ?? DEFAULT_RESEARCH_LANGUAGE),
+          },
+          allocation,
+          this.deps.signal,
+        )
+        .then(
+          (finding): FlightResult => ({ flight, finding, error: null }),
+          (error: unknown): FlightResult => ({
+            flight,
+            finding: null,
+            error: error ?? new Error("failed"),
+          }),
+        );
+      flight.done = Promise.race([ran, abandoned]);
+      this.flights.set(work.workId, flight);
     }
   }
 
-  private async start(
-    work: ResearchWork,
-    allocation: BranchAllocation,
-    runner: BranchRunner,
-  ): Promise<void> {
-    await this.update(work.workId, {
-      state: "running",
-      path: runner.path,
-      attempts: allocation.attempt,
-      terminalReason: null,
-      runRef: undefined,
-    });
-    this.deps.onStatus?.(`Researching: ${titleOf(this.deps.plan, work.branchId)}`);
-    const flight: Flight = {
-      work,
-      allocation,
-      runner,
-      newSession:
-        runner.path === "sub-agent" &&
-        this.deps.runners.sessionByBranch()[work.branchId] === undefined,
-      abandon: () => undefined,
-      done: null as unknown as Flight["done"],
-    };
-    const abandoned = new Promise<FlightResult>((resolve) => {
-      flight.abandon = () =>
-        resolve({ flight, finding: null, error: this.deps.signal.reason, abandoned: true });
-    });
-    const ran = runner
-      .run(
-        {
-          ...work,
-          task: branchTaskText(work.task, this.deps.language ?? DEFAULT_RESEARCH_LANGUAGE),
-        },
-        allocation,
-        this.deps.signal,
-      )
-      .then(
-        (finding): FlightResult => ({ flight, finding, error: null }),
-        (error: unknown): FlightResult => ({
-          flight,
-          finding: null,
-          error: error ?? new Error("failed"),
-        }),
-      );
-    flight.done = Promise.race([ran, abandoned]);
-    this.flights.set(work.workId, flight);
-  }
-
-  private mainBusy(): boolean {
-    return [...this.flights.values()].some((flight) => flight.runner.path === "main");
-  }
-
-  /** Returns null when no runner may take the branch now: the main path is already busy. */
-  private runnerFor(branchId: string): BranchRunner | null {
+  /** Returns the runner for the next work, or null when none may take it now. */
+  private runnerFor(admitted: readonly Admission[]): BranchRunner | null {
     const { runners } = this.deps;
-    const inFlight = [...this.flights.values()];
-    const path =
-      this.mainOnly.has(branchId) || !runners.subAgent
-        ? "main"
-        : branchPath(
-            runners.sessionByBranch(),
-            branchId,
-            inFlight.filter((flight) => flight.newSession).length,
-            budgetLimits(this.deps.plan).childSessions,
-          );
-    if (path === "sub-agent") return runners.subAgent!;
-    return this.mainBusy() || this.fallbacks.length > 0 ? null : runners.main;
+    if (runners.subAgent) return runners.subAgent;
+    const mainBusy =
+      admitted.length > 0 ||
+      [...this.flights.values()].some((flight) => flight.runner.path === "main");
+    return mainBusy ? null : runners.main;
   }
 
   /** Commits the branch barrier of one finished attempt; true when a user stop ended it. */
@@ -254,9 +246,16 @@ export class ResearchScheduler {
       return false;
     }
     if (signal.aborted && owner.snapshot().closed === null) return true;
-    if (result.error instanceof UnusableBranchSessionError && !signal.aborted) {
-      this.mainOnly.add(work.branchId);
-      this.fallbacks.push(result.flight);
+    const renewKey = `${work.workId}#${allocation.attempt}`;
+    if (
+      result.error instanceof UnusableBranchSessionError &&
+      !signal.aborted &&
+      this.deps.runners.releaseSession &&
+      !this.renewed.has(renewKey)
+    ) {
+      this.renewed.add(renewKey);
+      this.deps.runners.releaseSession(work.branchId);
+      await this.start([{ work, allocation, runner }]);
       return false;
     }
     owner.settle(allocation, runner.usage?.(work.workId) ?? null);

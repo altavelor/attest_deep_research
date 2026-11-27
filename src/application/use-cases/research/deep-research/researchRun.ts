@@ -144,7 +144,7 @@ export async function runResearch(
   const runners: ResearchSchedulerRunners = {
     main: deps.runner,
     ...(subAgent ? { subAgent } : {}),
-    sessionByBranch: () => permits.sessionByBranch(),
+    releaseSession: (branchId) => permits.releaseSession(branchId),
   };
   const phase = {
     language: researchLanguageOf(start),

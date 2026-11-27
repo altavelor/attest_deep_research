@@ -55,6 +55,11 @@ export class ResearchBudgetPermits implements SubAgentBudgetPermitPort {
     return { ...this.sessions };
   }
 
+  /** Forgets the child session of a branch whose session can no longer be continued, so it gets a new one. */
+  releaseSession(branchId: string): void {
+    delete this.sessions[branchId];
+  }
+
   async beginSessionRegistration(
     scopeId: string,
     creationKey: string,

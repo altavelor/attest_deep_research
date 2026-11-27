@@ -18,7 +18,6 @@ import {
 } from "../support/deepResearch";
 import {
   ResearchBudgetOwner,
-  branchPath,
   initialExecutions,
   presetLimits,
   researchScopeId,
@@ -96,19 +95,6 @@ describe("deep research budget scopes", () => {
     expect(denied.type).toBe("denied");
     expect(claims).toEqual([true, true, false]);
     expect(await port.beginExecution(b!, "key-after")).toMatchObject({ type: "denied", closureId });
-  });
-});
-
-describe("deep research branch path", () => {
-  it("delegates up to the session ceiling and runs a new branch on the main path beyond it", () => {
-    const sessions = { "branch-1": "s-1" };
-    expect(branchPath(sessions, "branch-2", 0, 2)).toBe("sub-agent");
-    expect(branchPath(sessions, "branch-2", 1, 2)).toBe("main");
-    expect(branchPath(sessions, "branch-1", 1, 2)).toBe("sub-agent");
-  });
-
-  it("runs every branch on the main path with a ceiling of zero", () => {
-    expect(branchPath({}, "branch-1", 0, 0)).toBe("main");
   });
 });
 
@@ -197,7 +183,6 @@ describe("deep research waves", () => {
           path: "main",
           run: () => Promise.reject(new BranchUnavailableError("No source for this branch.")),
         },
-        sessionByBranch: () => ({}),
       },
       waveSize: 1,
       signal: new AbortController().signal,
