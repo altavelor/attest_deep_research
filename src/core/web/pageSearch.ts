@@ -69,6 +69,8 @@ export function findInText(
  */
 export function readRange(text: string, offset: number, length: number): PageRange {
   const requested = Math.min(Math.max(0, offset), text.length);
+  if (requested >= text.length)
+    return { offset: text.length, length: 0, text: "", nextOffset: null };
   const start = snapStart(text, requested);
   const end = Math.max(start, snapEnd(text, Math.min(text.length, requested + length)));
   return {
@@ -117,22 +119,25 @@ function literalTerm(query: string): string[] {
 function foldCase(text: string): string {
   const lower = text.toLowerCase();
   if (lower.length === text.length) return lower;
-  let folded = "";
+  const chars = new Array<string>(text.length);
   for (let index = 0; index < text.length; index += 1) {
     const char = text[index]!.toLowerCase();
-    folded += char.length === 1 ? char : text[index]!;
+    chars[index] = char.length === 1 ? char : text[index]!;
   }
-  return folded;
+  return chars.join("");
 }
 
 function collectHits(haystack: string, terms: readonly string[]): Hit[] {
   const hits: Hit[] = [];
-  for (let term = 0; term < terms.length && hits.length < MAX_HITS; term += 1) {
+  const perTerm = Math.max(1, Math.floor(MAX_HITS / terms.length));
+  for (let term = 0; term < terms.length; term += 1) {
+    let found = 0;
     let from = 0;
-    for (;;) {
+    while (found < perTerm) {
       const position = haystack.indexOf(terms[term]!, from);
-      if (position === -1 || hits.length >= MAX_HITS) break;
+      if (position === -1) break;
       hits.push({ position, term });
+      found += 1;
       from = position + 1;
     }
   }
@@ -211,7 +216,9 @@ function selectNonOverlapping(candidates: Candidate[]): PageMatch[] {
 function snapStart(text: string, position: number): number {
   if (position <= 0) return 0;
   for (let index = position; index >= Math.max(0, position - MAX_SNAP_CHARS); index -= 1) {
-    if (index === 0 || /\s/u.test(text[index - 1]!)) return avoidSplit(text, index);
+    if (index === 0 || /\s/u.test(text[index - 1]!) || /\s/u.test(text[index] ?? "")) {
+      return avoidSplit(text, index);
+    }
   }
   return avoidSplit(text, position);
 }

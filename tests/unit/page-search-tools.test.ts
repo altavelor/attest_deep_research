@@ -117,20 +117,49 @@ describe("page search tools", () => {
     const store = new InMemoryPageCacheStore();
     const owner = await fetched(BIG, store, "one");
     const other = session(store, "two");
-    const foreign = other.register("https://other.example/page");
+    const foreign = other.register();
+    const small = await fetched(
+      BIG,
+      new InMemoryPageCacheStore({
+        maxPageChars: 1_000_000,
+        maxSessionChars: BIG.length + 50,
+        maxTotalChars: 10_000_000,
+      }),
+    );
+    small.pageCache.put({
+      evidenceId: "filler",
+      url: "https://example.com/filler",
+      finalUrl: "https://example.com/filler",
+      title: "Filler",
+      snippet: "",
+      contentType: "text/html",
+      text: "y".repeat(100),
+      truncated: false,
+    });
 
     const empty = await other.find({ query: "lorem" });
     const unknown = await owner.read({ resultId: "missing", offset: 0 });
     const foreignRead = await other.read({ resultId: foreign.resultId, offset: 0 });
     const foreignFind = await owner.find({ query: "lorem", resultIds: ["missing"] });
+    const evicted = await small.read({ resultId: small.registered.resultId, offset: 0 });
 
     expect(empty).toMatchObject({ ok: false, error: { code: "no-pages-fetched" } });
-    const messages = [unknown, foreignRead, foreignFind].map((result) => {
+    const messages = [unknown, foreignRead, foreignFind, evicted].map((result) => {
       expect(result).toMatchObject({ ok: false, error: { code: "page-not-in-session" } });
       return (result as { error: { message: string } }).error.message;
     });
     expect(new Set(messages).size).toBe(1);
     expect(messages[0]).toContain("fetch_web_page");
+    await other.call(other.fetchTool("own lorem page"), "fetch_web_page", {
+      resultIds: [foreign.resultId],
+    });
+    const own = (await other.find({ query: "lorem" })) as {
+      value: { matches: { text: string }[]; pages: unknown[] };
+    };
+    expect([own.value.pages.length, own.value.matches.some((m) => m.text.includes(DEEP))]).toEqual([
+      1,
+      false,
+    ]);
     expect(await owner.find({ query: "  " })).toMatchObject({ error: { code: "invalid-query" } });
     expect(await owner.read({ resultId: "x", offset: -1 })).toMatchObject({
       error: { code: "invalid-offset" },

@@ -216,7 +216,8 @@ export class ResearchEvidenceRegistry implements EvidenceRegistry {
         parts.passages.push({ offset: passage.offset, text: passage.text, seq: parts.seq });
       }
     }
-    const text = composePageEvidence(parts);
+    const { text, kept } = composePageEvidence(parts);
+    parts.passages = kept;
     entry.chunk = { ...entry.chunk, text, contentHash: stableId(text) };
     appendCall(entry.calls, { callId, tool: "fetch_web_page" });
   }
@@ -274,7 +275,7 @@ export class ResearchEvidenceRegistry implements EvidenceRegistry {
  * Builds the evidence text of a page from its head and the passages returned to the model: the
  * newest passages first until the evidence cap, merged where they overlap, in reading order.
  */
-function composePageEvidence(parts: PageParts): string {
+function composePageEvidence(parts: PageParts): { text: string; kept: PagePart[] } {
   const budget = MAX_PAGE_EVIDENCE_CHARS - parts.head.length;
   const newest = [...parts.passages]
     .map((part) => trimToTail(part, parts.head.length))
@@ -289,10 +290,13 @@ function composePageEvidence(parts: PageParts): string {
         { ...part, text: part.text.slice(0, Math.max(0, budget - PASSAGE_SEPARATOR_CHARS)) },
       ];
   }
-  return [
-    parts.head,
-    ...mergeParts(chosen).map((part) => `[… offset ${part.offset} …]\n${part.text}`),
-  ].join("\n\n");
+  const kept = mergeParts(chosen);
+  return {
+    text: [parts.head, ...kept.map((part) => `[… offset ${part.offset} …]\n${part.text}`)].join(
+      "\n\n",
+    ),
+    kept,
+  };
 }
 
 function trimToTail(part: PagePart, headChars: number): PagePart | null {

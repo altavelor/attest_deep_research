@@ -54,6 +54,25 @@ describe("page search", () => {
     expect(text.slice(0, inside.offset).endsWith(" ") || inside.offset === 0).toBe(true);
   });
 
+  it("pages through a text without overlap or gaps and reads nothing past its end", () => {
+    const text = "aaa bbb ccc ddd eee fff ggg";
+    const pages: string[] = [];
+    let offset: number | null = 0;
+    while (offset !== null) {
+      const range = readRange(text, offset, 5);
+      pages.push(range.text);
+      offset = range.nextOffset;
+    }
+
+    expect(pages.join("")).toBe(text);
+    expect(readRange(text, text.length + 10, 50)).toEqual({
+      offset: text.length,
+      length: 0,
+      text: "",
+      nextOffset: null,
+    });
+  });
+
   it("lists heading-like lines in reading order and thins them across the text", () => {
     const text = [
       "# Title",
