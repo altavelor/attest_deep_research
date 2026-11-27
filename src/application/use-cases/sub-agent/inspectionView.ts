@@ -1,6 +1,7 @@
 import type {
   SubAgentInspectionDetail,
   SubAgentInspectionSnapshot,
+  SubAgentRunAnswer,
   SubAgentSessionCard,
 } from "@application/contracts/subAgentInspection";
 import {
@@ -110,6 +111,27 @@ export function buildInspectionDetail(
     selectedRunId: controlRunIdOf(record),
     initialPrompts: record.runs.map((run) => initialPrompt(run, observation)),
     lifetime,
+    answers: runAnswers(inputs, sessionId),
+  });
+}
+
+export const MAX_ANSWER_CHARS = 30_000;
+
+/** Returns the committed final answer of each run of a session, redacted and cut to a bounded size. */
+function runAnswers(inputs: SubAgentInspectionInputs, sessionId: string): SubAgentRunAnswer[] {
+  const latest = new Map<string, string>();
+  for (const entry of inputs.state?.imports ?? []) {
+    if (entry.sessionId === sessionId && entry.state === "committed") {
+      latest.set(entry.runId, entry.answerText);
+    }
+  }
+  return [...latest].map(([runId, text]) => {
+    const redacted = inputs.redact(text);
+    return {
+      runId,
+      text: redacted.slice(0, MAX_ANSWER_CHARS),
+      truncated: redacted.length > MAX_ANSWER_CHARS,
+    };
   });
 }
 

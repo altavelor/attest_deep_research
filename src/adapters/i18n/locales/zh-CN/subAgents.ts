@@ -63,6 +63,10 @@ export const subAgents: EnSubAgentMessages = {
   "chat.subAgents.work.summary": "{runs} 次运行 · {calls} 次工具调用 · {pending} 个待处理",
   "chat.subAgents.work.empty": "代理尚未调用任何工具。",
   "chat.subAgents.work.showMore": "显示更多（还有 {count} 个）",
+  "chat.subAgents.answer.title": "最终答案",
+  "chat.subAgents.answer.summary": "运行 {run} · {chars} 个字符",
+  "chat.subAgents.answer.empty": "此次运行还没有最终答案。",
+  "chat.subAgents.answer.truncated": "已截断——仅显示开头部分",
   "chat.subAgents.stop": "停止代理",
   "chat.subAgents.stop.hint":
     "只停止此代理。主回答和其他代理会继续运行。关闭此窗口不会停止任何内容。",

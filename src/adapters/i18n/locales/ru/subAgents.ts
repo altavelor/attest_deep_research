@@ -63,6 +63,10 @@ export const subAgents: EnSubAgentMessages = {
   "chat.subAgents.work.summary": "запусков {runs} · вызовов {calls} · ожидает {pending}",
   "chat.subAgents.work.empty": "Агент ещё не вызывал инструменты.",
   "chat.subAgents.work.showMore": "Показать ещё (ещё {count})",
+  "chat.subAgents.answer.title": "Финальный ответ",
+  "chat.subAgents.answer.summary": "Запуск {run} · символов {chars}",
+  "chat.subAgents.answer.empty": "У этого запуска пока нет финального ответа.",
+  "chat.subAgents.answer.truncated": "Обрезано — показано только начало",
   "chat.subAgents.stop": "Остановить агента",
   "chat.subAgents.stop.hint":
     "Останавливает только этого агента. Основной ответ и другие агенты продолжают работу. Закрытие окна ничего не останавливает.",

@@ -61,6 +61,10 @@ export const subAgents = {
   "chat.subAgents.work.summary": "{runs} runs · {calls} tool calls · {pending} pending",
   "chat.subAgents.work.empty": "The agent has not called any tools yet.",
   "chat.subAgents.work.showMore": "Show more ({count} more)",
+  "chat.subAgents.answer.title": "Final answer",
+  "chat.subAgents.answer.summary": "Run {run} · {chars} characters",
+  "chat.subAgents.answer.empty": "This run has no final answer yet.",
+  "chat.subAgents.answer.truncated": "Truncated — only the first part is shown",
   "chat.subAgents.stop": "Stop agent",
   "chat.subAgents.stop.hint":
     "Stops only this agent. The main answer and other agents keep running. Closing this window stops nothing.",
