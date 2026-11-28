@@ -66,7 +66,7 @@ export class MainBranchRunner implements BranchRunner {
       throw new BranchUnavailableError("The branch has no source available in this chat.");
     this.usages.delete(work.workId);
     const emit = this.deps.onEvent;
-    const cacheId = `main-branch-${work.workId}-a${allocation.attempt}`;
+    const cacheId = `main-branch-${crypto.randomUUID()}`;
     const { pageCacheStore } = this.deps;
     const toolContext = subAgentToolContext(
       this.deps.sources,

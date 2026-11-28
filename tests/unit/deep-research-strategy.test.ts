@@ -264,7 +264,7 @@ describe("main branch runner findings", () => {
     expect(runner.usage("w-1")).toMatchObject({ evidenceItems: 1, fetches: 1 });
   });
 
-  it("gives each attempt its own page cache and widened output budget and releases it after a failure", async () => {
+  it("gives each run its own page cache, never shared by work id, and widened output budget and releases it after a failure", async () => {
     const sessions: string[] = [];
     const released: string[] = [];
     const budgets: unknown[] = [];
@@ -312,12 +312,13 @@ describe("main branch runner findings", () => {
       searches: 2,
     });
     await runner.run(work, allocation(1), new AbortController().signal);
+    await runner.run(work, allocation(1), new AbortController().signal);
     fail = true;
     await expect(runner.run(work, allocation(2), new AbortController().signal)).rejects.toThrow(
       "model failed",
     );
-    expect(sessions).toHaveLength(2);
-    expect(new Set(sessions).size).toBe(2);
+    expect(sessions).toHaveLength(3);
+    expect(new Set(sessions).size).toBe(3);
     expect(released).toEqual(sessions);
     expect(contexts[0]).toHaveProperty("pageCache");
     expect(budgets[0]).toMatchObject({ maxResultChars: 120_000 });
