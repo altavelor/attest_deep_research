@@ -89,7 +89,7 @@ describe("ResearchEvidenceRegistry", () => {
     expect(() => (snapshot.evidence as unknown[]).push({})).toThrow();
   });
 
-  it("builds the evidence of a page from its head and the passages returned, newest kept at the cap", () => {
+  it("builds the evidence of a page from its head and the passages returned, and cuts a new passage to the room left instead of dropping an earlier one", () => {
     const registry = new ResearchEvidenceRegistry({ createHandle: () => "handle" });
     const { resultId } = registry.registerWebResult(
       { url: "https://example.com/long", title: "Long", snippet: "s", rank: 1 },
@@ -106,7 +106,11 @@ describe("ResearchEvidenceRegistry", () => {
     registry.addWebPassages(resultId, [{ offset: 100, text: "early passage" }], "find-2");
     registry.addWebPassages(resultId, [{ offset: 106, text: "passage extended" }], "find-3");
     const ordered = registry.snapshot().evidence[0]!.text;
-    registry.addWebPassages(resultId, [{ offset: 9000, text: "x".repeat(16_000) }], "find-4");
+    const accepted = registry.addWebPassages(
+      resultId,
+      [{ offset: 9000, text: "x".repeat(16_000) }],
+      "find-4",
+    );
     const capped = registry.snapshot().evidence[0]!.text;
 
     expect(ordered).toBe(
@@ -114,6 +118,9 @@ describe("ResearchEvidenceRegistry", () => {
     );
     expect(capped.length).toBeLessThanOrEqual(16_000);
     expect(capped).toContain("[… offset 9000 …]");
-    expect(capped).not.toContain("later passage");
+    expect(capped).toContain("later passage");
+    expect(capped).toContain("early passage extended");
+    expect(accepted[0]!.text.length).toBeLessThan(16_000);
+    expect(accepted[0]!.text.length).toBeGreaterThan(0);
   });
 });

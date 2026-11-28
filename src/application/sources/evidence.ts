@@ -60,7 +60,7 @@ export interface EvidenceRegistry {
     resultId: string,
     passages: readonly { offset: number; text: string }[],
     callId: string,
-  ): void;
+  ): readonly { offset: number; text: string }[];
   snapshot(): ResearchEvidenceSnapshot;
   importRegisteredSnapshot(snapshot: ResearchEvidenceSnapshot): void;
   remainingWebCapacity?(): number;

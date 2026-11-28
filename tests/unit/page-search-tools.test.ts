@@ -151,6 +151,25 @@ describe("page search tools", () => {
     expect(page.evidence.snapshot().evidence[0]!.text).toContain(DEEP);
   });
 
+  it("keeps a passage read earlier citable, cuts a later read to the evidence room and then refuses", async () => {
+    const text = `${"a ".repeat(1_000)}FIRSTMARK ${"b ".repeat(4_000)}${"c ".repeat(4_000)}SECONDMARK ${"d ".repeat(4_000)}`;
+    const page = await fetched(text);
+    const resultId = page.registered.resultId;
+    const value = (execution: unknown) =>
+      (execution as { value: { text: string; nextOffset: number | null; length: number } }).value;
+
+    const first = value(await page.read({ resultId, offset: 2_000, length: 8_000 }));
+    const second = value(await page.read({ resultId, offset: 10_000, length: 8_000 }));
+    const evidence = page.evidence.snapshot().evidence[0]!.text;
+    const third = await page.read({ resultId, offset: 20_000, length: 8_000 });
+
+    expect(first.text).toContain("FIRSTMARK");
+    expect(evidence).toContain("FIRSTMARK");
+    expect(second.length).toBeLessThan(8_000);
+    expect(second.nextOffset).toBe(10_000 + second.length);
+    expect(third).toMatchObject({ ok: false, error: { code: "page-evidence-full" } });
+  });
+
   it("answers every miss with the same error and rejects malformed arguments", async () => {
     const store = new InMemoryPageCacheStore();
     const owner = await fetched(BIG, store, "one");

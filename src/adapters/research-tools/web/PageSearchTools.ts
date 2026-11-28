@@ -38,6 +38,7 @@ interface RecordedPage {
   resultId: string;
   evidenceId: string;
   url: string;
+  accepted: readonly { offset: number; text: string }[];
 }
 
 interface FindMatch {
@@ -62,8 +63,9 @@ function recordPassages(
     { url: page.url, title: page.title, snippet: page.snippet, rank: 1 },
     { callId, query, fetch: true },
   );
+  let accepted: RecordedPage["accepted"];
   try {
-    deps.evidence.addWebPassages(registered.resultId, passages, callId);
+    accepted = deps.evidence.addWebPassages(registered.resultId, passages, callId);
   } catch {
     deps.evidence.upgradeWebPage(registered.resultId, {
       content: page.text.slice(
@@ -74,12 +76,13 @@ function recordPassages(
       truncated: page.truncated,
       callId,
     });
-    deps.evidence.addWebPassages(registered.resultId, passages, callId);
+    accepted = deps.evidence.addWebPassages(registered.resultId, passages, callId);
   }
   return {
     resultId: registered.resultId,
     evidenceId: registered.evidenceId,
     url: registered.canonicalUrl,
+    accepted,
   };
 }
 
@@ -271,13 +274,19 @@ export const FindInPagesTool = defineTool<
         "Too many web results registered for this answer; search the pages already listed.",
       );
     }
+    let withheld = 0;
     for (const match of kept) {
-      const page = recorded.get(match.page.evidenceId)!;
+      const { accepted, ...page } = recorded.get(match.page.evidenceId)!;
+      const passage = accepted.find((entry) => entry.offset === match.offset);
+      if (!passage) {
+        withheld += 1;
+        continue;
+      }
       outputs.push({
         ...page,
         offset: match.offset,
-        length: match.length,
-        text: match.page.text.slice(match.offset, match.offset + match.length),
+        length: passage.text.length,
+        text: passage.text,
         score: match.score,
       });
     }
@@ -287,7 +296,7 @@ export const FindInPagesTool = defineTool<
         matches: outputs,
         pages: listed.entries,
         ...(listed.omitted > 0 ? { omittedPages: listed.omitted } : {}),
-        truncatedMatches: kept.length < matches.length,
+        truncatedMatches: kept.length - withheld < matches.length,
         untrustedEvidence: true,
       },
     };
@@ -357,6 +366,14 @@ export const ReadPageRangeTool = defineTool<
       if (!isWebResultCapacityError(error)) throw error;
       return toolFailure("web-result-capacity", "Too many web results registered for this answer.");
     }
+    const shown = recorded.accepted[0];
+    if (!shown) {
+      return toolFailure(
+        "page-evidence-full",
+        "The evidence of this page is full. Cite the passages already read from it.",
+      );
+    }
+    const end = range.offset + shown.text.length;
     return {
       ok: true,
       value: {
@@ -364,10 +381,10 @@ export const ReadPageRangeTool = defineTool<
         evidenceId: recorded.evidenceId,
         url: recorded.url,
         offset: range.offset,
-        length: range.length,
+        length: shown.text.length,
         totalChars: page.text.length,
-        nextOffset: range.nextOffset,
-        text: range.text,
+        nextOffset: end < page.text.length ? end : null,
+        text: shown.text,
         untrustedEvidence: true,
       },
     };

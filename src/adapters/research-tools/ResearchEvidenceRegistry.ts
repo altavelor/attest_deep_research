@@ -11,7 +11,7 @@ import {
   WebResultCapacityError,
 } from "@application/sources";
 import { validatePublicWebUrl } from "@application/sources";
-import { MAX_PAGE_EVIDENCE_CHARS } from "@core/web";
+import { MAX_PAGE_EVIDENCE_CHARS, MIN_READ_RANGE_CHARS } from "@core/web";
 
 interface MutableEvidenceEntry {
   chunk: RetrievedChunk;
@@ -203,7 +203,7 @@ export class ResearchEvidenceRegistry implements EvidenceRegistry {
     resultId: string,
     passages: readonly { offset: number; text: string }[],
     callId: string,
-  ): void {
+  ): readonly { offset: number; text: string }[] {
     const handle = this.handles.get(resultId);
     const entry = handle ? this.entries.get(handle.evidenceId) : undefined;
     const parts = handle ? this.pages.get(handle.evidenceId) : undefined;
@@ -211,15 +211,15 @@ export class ResearchEvidenceRegistry implements EvidenceRegistry {
       throw new Error("Registered web page is unavailable.");
     }
     parts.seq += 1;
-    for (const passage of passages) {
-      if (passage.text.length > 0) {
-        parts.passages.push({ offset: passage.offset, text: passage.text, seq: parts.seq });
-      }
+    const accepted = fitPassages(parts, passages);
+    for (const passage of accepted) {
+      parts.passages.push({ offset: passage.offset, text: passage.text, seq: parts.seq });
     }
     const { text, kept } = composePageEvidence(parts);
     parts.passages = kept;
     entry.chunk = { ...entry.chunk, text, contentHash: stableId(text) };
     appendCall(entry.calls, { callId, tool: "fetch_web_page" });
+    return accepted;
   }
 
   snapshot(): ResearchEvidenceSnapshot {
@@ -269,6 +269,42 @@ export class ResearchEvidenceRegistry implements EvidenceRegistry {
     }
     throw new Error("Could not allocate a unique web result handle.");
   }
+}
+
+/**
+ * Returns the passages that still fit the evidence of the page next to what it already holds, the
+ * last one cut to the room left, so text handed to the model is never dropped from the evidence.
+ */
+function fitPassages(
+  parts: PageParts,
+  passages: readonly { offset: number; text: string }[],
+): { offset: number; text: string }[] {
+  const budget = MAX_PAGE_EVIDENCE_CHARS - parts.head.length;
+  const accepted: { offset: number; text: string }[] = [];
+  let held: PagePart[] = parts.passages.map((part) => ({ ...part }));
+  for (const passage of passages) {
+    if (passage.text.length === 0) continue;
+    const tail = trimToTail(
+      { offset: passage.offset, text: passage.text, seq: 0 },
+      parts.head.length,
+    );
+    if (!tail) {
+      accepted.push(passage);
+      continue;
+    }
+    const skipped = tail.offset - passage.offset;
+    const room = budget - partsSize(held) - PASSAGE_SEPARATOR_CHARS;
+    for (const length of [tail.text.length, room >= MIN_READ_RANGE_CHARS ? room : 0]) {
+      const text = tail.text.slice(0, length);
+      if (text.length === 0) continue;
+      const next = mergeParts([...held, { ...tail, text }]);
+      if (partsSize(next) > budget) continue;
+      held = next;
+      accepted.push({ offset: passage.offset, text: passage.text.slice(0, skipped + text.length) });
+      break;
+    }
+  }
+  return accepted;
 }
 
 /**
