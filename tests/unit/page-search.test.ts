@@ -54,6 +54,16 @@ describe("page search", () => {
     expect(text.slice(0, inside.offset).endsWith(" ") || inside.offset === 0).toBe(true);
   });
 
+  it("flags a range that ends inside a word longer than the snapping window and continues exactly where it stopped", () => {
+    const text = `intro ${"x".repeat(450)} outro`;
+    const first = readRange(text, 6, 200);
+    const next = readRange(text, first.nextOffset!, 200);
+
+    expect(first).toMatchObject({ length: 200, splitsToken: true });
+    expect(next.offset).toBe(first.nextOffset);
+    expect(readRange("alpha beta gamma", 0, 8)).not.toHaveProperty("splitsToken");
+  });
+
   it("pages through a text without overlap or gaps and reads nothing past its end", () => {
     const text = "aaa bbb ccc ddd eee fff ggg";
     const pages: string[] = [];

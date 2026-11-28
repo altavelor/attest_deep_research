@@ -11,6 +11,7 @@ export interface PageRange {
   length: number;
   text: string;
   nextOffset: number | null;
+  splitsToken?: true;
 }
 
 export interface PageOutlineEntry {
@@ -65,7 +66,8 @@ export function findInText(
 
 /**
  * Reads a range of a text with both edges moved to the nearest whitespace within a hundred
- * characters and never inside a surrogate pair; `nextOffset` is null at the end of the text.
+ * characters and never inside a surrogate pair; `nextOffset` is null at the end of the text. A word
+ * longer than that window is cut where the range ends and `splitsToken` is set.
  */
 export function readRange(text: string, offset: number, length: number): PageRange {
   const requested = Math.min(Math.max(0, offset), text.length);
@@ -78,7 +80,13 @@ export function readRange(text: string, offset: number, length: number): PageRan
     length: end - start,
     text: text.slice(start, end),
     nextOffset: end < text.length ? end : null,
+    ...(insideToken(text, start) || insideToken(text, end) ? { splitsToken: true as const } : {}),
   };
+}
+
+function insideToken(text: string, position: number): boolean {
+  if (position <= 0 || position >= text.length) return false;
+  return !/\s/u.test(text[position - 1]!) && !/\s/u.test(text[position]!);
 }
 
 /**
