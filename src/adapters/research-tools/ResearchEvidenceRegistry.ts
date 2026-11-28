@@ -39,6 +39,7 @@ interface PageParts {
   head: string;
   passages: PagePart[];
   seq: number;
+  version?: string;
 }
 
 /**
@@ -172,7 +173,13 @@ export class ResearchEvidenceRegistry implements EvidenceRegistry {
 
   upgradeWebPage(
     resultId: string,
-    page: { content: string; finalUrl: string; truncated: boolean; callId: string },
+    page: {
+      content: string;
+      finalUrl: string;
+      truncated: boolean;
+      callId: string;
+      version?: string;
+    },
   ): void {
     const handle = this.handles.get(resultId);
     if (!handle) {
@@ -196,7 +203,21 @@ export class ResearchEvidenceRegistry implements EvidenceRegistry {
     entry.citation = { ...formatCitation(source), id: handle.evidenceId };
     entry.page = { finalUrl: page.finalUrl, truncated: page.truncated };
     appendCall(entry.calls, { callId: page.callId, tool: "fetch_web_page" });
-    this.pages.set(handle.evidenceId, { head: page.content, passages: [], seq: 0 });
+    const previous = this.pages.get(handle.evidenceId);
+    const sameVersion =
+      page.version !== undefined &&
+      previous?.version === page.version &&
+      previous.head === page.content;
+    const parts: PageParts = {
+      head: page.content,
+      passages: sameVersion ? previous.passages : [],
+      seq: sameVersion ? previous.seq : 0,
+      ...(page.version !== undefined ? { version: page.version } : {}),
+    };
+    const { text, kept } = composePageEvidence(parts);
+    parts.passages = kept;
+    this.pages.set(handle.evidenceId, parts);
+    entry.chunk = { ...entry.chunk, text, contentHash: stableId(text) };
   }
 
   addWebPassages(

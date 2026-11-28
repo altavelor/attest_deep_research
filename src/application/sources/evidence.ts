@@ -54,7 +54,13 @@ export interface EvidenceRegistry {
   resolveWebResult(resultId: string): Readonly<WebHandleEntry> | undefined;
   upgradeWebPage(
     resultId: string,
-    page: { content: string; finalUrl: string; truncated: boolean; callId: string },
+    page: {
+      content: string;
+      finalUrl: string;
+      truncated: boolean;
+      callId: string;
+      version?: string;
+    },
   ): void;
   addWebPassages(
     resultId: string,

@@ -1,6 +1,7 @@
 import type { PageCache, SearchProvider } from "@application/ports";
 import { validatePublicWebUrl } from "@application/sources";
 import { EvidenceRegistry } from "@application/sources";
+import { stableId } from "@adapters/extractors/common";
 import { ToolExecution, toolFailure } from "@core/agent";
 import type { ImageCandidate } from "@core/media";
 import {
@@ -141,6 +142,7 @@ export async function fetchRegisteredWebPage(
 
   const cap = maxContentChars ?? DEFAULT_FETCH_OPTIONS.maxContentChars;
   const totalChars = result.content.length;
+  const version = pageVersion(result.content);
   deps.pageCache?.put({
     evidenceId: registered.evidenceId,
     url: registered.canonicalUrl,
@@ -150,6 +152,7 @@ export async function fetchRegisteredWebPage(
     contentType: result.contentType,
     text: result.content,
     truncated: result.truncated,
+    version,
   });
   const metadataChars = METADATA_CHARS + registered.canonicalUrl.length + finalUrl.url.length;
   const room =
@@ -167,6 +170,7 @@ export async function fetchRegisteredWebPage(
     finalUrl: finalUrl.url,
     truncated,
     callId,
+    version,
   });
 
   return {
@@ -201,4 +205,9 @@ function compactView(
     outline.pop();
   }
   return { head, outline, hint: LARGE_PAGE_HINT };
+}
+
+/** Fingerprints the text of a fetched page so a repeated fetch of an unchanged page is recognised. */
+function pageVersion(text: string): string {
+  return `${text.length}:${stableId(text.slice(0, 4_000) + text.slice(-4_000))}`;
 }

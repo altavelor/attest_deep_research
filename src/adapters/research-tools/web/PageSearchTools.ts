@@ -79,6 +79,7 @@ function recordPassages(
       finalUrl: page.finalUrl,
       truncated: page.truncated,
       callId,
+      version: page.version,
     });
     accepted = deps.evidence.addWebPassages(registered.resultId, passages, callId);
   }

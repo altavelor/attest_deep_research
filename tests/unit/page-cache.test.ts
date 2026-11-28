@@ -12,6 +12,7 @@ function page(evidenceId: string, text: string): CachedPage {
     contentType: "text/html",
     text,
     truncated: false,
+    version: evidenceId,
   };
 }
 

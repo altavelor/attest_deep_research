@@ -7,6 +7,7 @@ export interface CachedPage {
   contentType: string;
   text: string;
   truncated: boolean;
+  version: string;
 }
 
 /** The full text of the pages one agent session fetched, looked up by the evidence id of the page. */

@@ -243,6 +243,22 @@ describe("page search tools", () => {
     expect(third).toMatchObject({ ok: false, error: { code: "page-evidence-full" } });
   });
 
+  it("keeps a passage read earlier when the same page is fetched again and drops it when the page changed", async () => {
+    const store = new InMemoryPageCacheStore();
+    const page = await fetched(BIG, store);
+    const resultId = page.registered.resultId;
+    const offset = BIG.indexOf(DEEP);
+    await page.read({ resultId, offset: offset - 100, length: 600 });
+
+    await page.call(page.fetchTool(BIG), "fetch_web_page", { resultIds: [resultId] });
+    const same = page.evidence.snapshot().evidence[0]!.text;
+    await page.call(page.fetchTool(`${BIG} changed`), "fetch_web_page", { resultIds: [resultId] });
+    const changed = page.evidence.snapshot().evidence[0]!.text;
+
+    expect(same).toContain(DEEP);
+    expect(changed).not.toContain(DEEP);
+  });
+
   it("answers a read at the end of a page with an empty range and leaves the evidence alone", async () => {
     const page = await fetched(BIG);
     const before = page.evidence.snapshot().evidence[0]!.text;
@@ -278,6 +294,7 @@ describe("page search tools", () => {
       contentType: "text/html",
       text: "y".repeat(100),
       truncated: false,
+      version: "filler",
     });
 
     const empty = await other.find({ query: "lorem" });
