@@ -160,6 +160,41 @@ describe("page search tools", () => {
     expect(s.pageCache.list()).toHaveLength(pages.filter((page) => page.ok).length);
   });
 
+  it("defers pages whose redirected links make the serialized batch exceed its budget", async () => {
+    const s = session(new InMemoryPageCacheStore(), "s1");
+    const redirecting: SearchProvider = {
+      search: vi.fn(),
+      fetchPage: async (url) => ({
+        ok: true as const,
+        url,
+        finalUrl: `${url}/${"r".repeat(3_200)}`,
+        content: "w".repeat(8_000),
+        contentType: "text/html",
+        bytes: 8_000,
+        truncated: false,
+        redirects: [url],
+      }),
+    };
+    const ids = Array.from({ length: 10 }, (_, index) =>
+      s.register(`https://example.com/${index}`),
+    );
+    const tool = new WebFetchResearchTool({
+      provider: redirecting,
+      evidence: s.evidence,
+      pageCache: s.pageCache,
+    });
+
+    const batch = await s.call(tool, "fetch_web_page", {
+      resultIds: ids.map((entry) => entry.resultId),
+    });
+
+    const pages = (batch as { value: { pages: { ok: boolean; error?: { code: string } }[] } }).value
+      .pages;
+    expect(JSON.stringify(batch).length).toBeLessThanOrEqual(BATCH_OUTPUT_CHARS);
+    expect(pages[0]!.ok).toBe(true);
+    expect(pages.some((page) => page.error?.code === "batch-output-limit")).toBe(true);
+  });
+
   it("answers a batch of ordinary pages within the batch output budget", async () => {
     const s = session(new InMemoryPageCacheStore(), "s1");
     const ids = Array.from({ length: 10 }, (_, index) =>
@@ -264,7 +299,7 @@ describe("page search tools", () => {
     expect(third).toMatchObject({ ok: false, error: { code: "page-evidence-full" } });
   });
 
-  it("keeps a passage read earlier when the same page is fetched again and drops it when the page changed", async () => {
+  it("keeps a passage read earlier when the same page is fetched again and drops it when the page changed in its middle without changing its length", async () => {
     const store = new InMemoryPageCacheStore();
     const page = await fetched(BIG, store);
     const resultId = page.registered.resultId;
@@ -273,7 +308,8 @@ describe("page search tools", () => {
 
     await page.call(page.fetchTool(BIG), "fetch_web_page", { resultIds: [resultId] });
     const same = page.evidence.snapshot().evidence[0]!.text;
-    await page.call(page.fetchTool(`${BIG} changed`), "fetch_web_page", { resultIds: [resultId] });
+    const edited = `${BIG.slice(0, 100_000)}Z${BIG.slice(100_001)}`;
+    await page.call(page.fetchTool(edited), "fetch_web_page", { resultIds: [resultId] });
     const changed = page.evidence.snapshot().evidence[0]!.text;
 
     expect(same).toContain(DEEP);

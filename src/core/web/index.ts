@@ -1,5 +1,6 @@
 export { rankSectionsByQuery, splitIntoSections } from "./sectionRanking";
 export type { RankedSection, SectionRankingOptions } from "./sectionRanking";
+export { pageFingerprint } from "./pageFingerprint";
 export {
   MAX_PAGE_MATCHES,
   findInText,

@@ -67,6 +67,7 @@ function parseFetchWebPagesInput(
 }
 
 const PAGE_METADATA_CHARS = 200;
+const BATCH_ENVELOPE_CHARS = 600;
 
 /**
  * Admits pages in order while the links of their results fit the output budget of one batch. The
@@ -87,6 +88,25 @@ function admitWithinOutputBudget(
     used += cost;
   }
   return admitted;
+}
+
+/**
+ * Measures the results as they will be serialized, redirects included, and answers the pages after
+ * the budget is spent with a retryable error; the first page is always answered.
+ */
+function deferPagesOverBudget(pages: readonly FetchWebPageResult[]): FetchWebPageResult[] {
+  const budget = BATCH_OUTPUT_CHARS - BATCH_ENVELOPE_CHARS;
+  let used = 0;
+  let answered = 0;
+  return pages.map((page) => {
+    const size = JSON.stringify(page).length;
+    if (page.ok && answered > 0 && used + size > budget) {
+      return { ok: false, resultId: page.resultId, error: batchLimitError() };
+    }
+    used += size;
+    if (page.ok) answered += 1;
+    return page;
+  });
 }
 
 function batchLimitError(): ToolError {
@@ -122,7 +142,7 @@ export const WebFetchResearchTool = defineTool<
     const outputBudget = deps.pageCache
       ? Math.floor(BATCH_OUTPUT_CHARS / Math.max(1, admitted.size))
       : undefined;
-    const pages = await Promise.all(
+    const fetchedPages = await Promise.all(
       input.resultIds.map(async (resultId): Promise<FetchWebPageResult> => {
         if (!admitted.has(resultId)) {
           return {
@@ -145,6 +165,7 @@ export const WebFetchResearchTool = defineTool<
           : { ok: false, resultId, error: fetched.error };
       }),
     );
+    const pages = deps.pageCache ? deferPagesOverBudget(fetchedPages) : fetchedPages;
     const failed = pages.reduce((count, page) => count + (page.ok ? 0 : 1), 0);
 
     return {
