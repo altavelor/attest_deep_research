@@ -84,14 +84,17 @@ describe("page search in a sub-agent session", () => {
     const store = new InMemoryPageCacheStore();
     const first = scripted((request) => {
       const resultId = /"resultId":"([^"]+)"/u.exec(lastToolMessage(request))?.[1] ?? "";
+      const offset = Number(/"offset":(\d+)/u.exec(lastToolMessage(request))?.[1] ?? 0);
       return [
         call("1", "search_web", { query: "eu", limit: 3 }),
         call("2", "fetch_web_page", { resultIds: [resultId] }),
         call("3", "find_in_pages", { query: "article 53(2) documentation" }),
+        call("4", "read_page_range", { resultId, offset: Math.max(0, offset - 200) }),
       ];
     });
 
-    await runner(first, store, "session-one");
+    const firstRun = await runner(first, store, "session-one");
+    const handle = /"resultId":"([^"]+)"/u.exec(lastToolMessage(first.requests[3]!))?.[1] ?? "";
 
     const afterFetch = lastToolMessage(first.requests[2]!);
     const afterFind = lastToolMessage(first.requests[3]!);
@@ -99,9 +102,17 @@ describe("page search in a sub-agent session", () => {
     expect(afterFetch.length).toBeLessThan(6_000);
     expect(afterFind).toContain(DEEP);
 
-    const second = scripted(() => [call("1", "find_in_pages", { query: "article 53(2)" })]);
+    const afterRead = lastToolMessage(first.requests[4]!);
+    expect(afterRead).toContain(DEEP);
+    expect(firstRun.snapshot.evidence.some((chunk) => chunk.text.includes(DEEP))).toBe(true);
+
+    const second = scripted(() => [
+      call("1", "find_in_pages", { query: "article 53(2)" }),
+      call("2", "read_page_range", { resultId: handle, offset: 0 }),
+    ]);
     await runner(second, store, "session-two");
 
     expect(lastToolMessage(second.requests[1]!)).toContain("no-pages-fetched");
+    expect(lastToolMessage(second.requests[2]!)).toContain("page-not-in-session");
   });
 });
