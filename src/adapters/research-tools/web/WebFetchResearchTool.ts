@@ -66,6 +66,37 @@ function parseFetchWebPagesInput(
   return { ok: true, value: { resultIds } };
 }
 
+const PAGE_METADATA_CHARS = 200;
+
+/**
+ * Admits pages in order while the links of their results fit the output budget of one batch. The
+ * links are kept whole because host checks read them, so a page whose links do not fit is fetched
+ * in a later call instead.
+ */
+function admitWithinOutputBudget(
+  evidence: EvidenceRegistry,
+  resultIds: readonly string[],
+): Set<string> {
+  const admitted = new Set<string>();
+  let used = 0;
+  for (const resultId of resultIds) {
+    const url = evidence.resolveWebResult(resultId)?.canonicalUrl ?? "";
+    const cost = PAGE_METADATA_CHARS + url.length * 2;
+    if (admitted.size > 0 && used + cost > BATCH_OUTPUT_CHARS) continue;
+    admitted.add(resultId);
+    used += cost;
+  }
+  return admitted;
+}
+
+function batchLimitError(): ToolError {
+  return {
+    code: "batch-output-limit",
+    message: "The result of this batch is full. Fetch this page in a separate call.",
+    retryable: true,
+  };
+}
+
 export const WebFetchResearchTool = defineTool<
   { provider: SearchProvider; evidence: EvidenceRegistry; pageCache?: PageCache },
   FetchWebPagesInput,
@@ -85,8 +116,21 @@ export const WebFetchResearchTool = defineTool<
       input.resultIds.length,
       deps.pageCache !== undefined,
     );
+    const admitted = deps.pageCache
+      ? admitWithinOutputBudget(deps.evidence, input.resultIds)
+      : new Set(input.resultIds);
+    const outputBudget = deps.pageCache
+      ? Math.floor(BATCH_OUTPUT_CHARS / Math.max(1, admitted.size))
+      : undefined;
     const pages = await Promise.all(
       input.resultIds.map(async (resultId): Promise<FetchWebPageResult> => {
+        if (!admitted.has(resultId)) {
+          return {
+            ok: false,
+            resultId,
+            error: batchLimitError(),
+          };
+        }
         const fetched = await fetchRegisteredWebPage(
           deps,
           resultId,
@@ -94,7 +138,7 @@ export const WebFetchResearchTool = defineTool<
           undefined,
           maxResponseBytes,
           context.signal,
-          deps.pageCache ? Math.floor(BATCH_OUTPUT_CHARS / input.resultIds.length) : undefined,
+          outputBudget,
         );
         return fetched.ok
           ? { ok: true, ...fetched.value }

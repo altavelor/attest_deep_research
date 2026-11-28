@@ -96,7 +96,7 @@ describe("page search tools", () => {
 
   it("bounds the serialized result of a batch fetch and of a search over many pages", async () => {
     const s = session(new InMemoryPageCacheStore(), "s1");
-    const longPath = "p".repeat(1_300);
+    const longPath = "p".repeat(300);
     const ids = Array.from({ length: 20 }, (_, index) =>
       s.register(`https://example.com/${index}/${longPath}`),
     );
@@ -137,6 +137,27 @@ describe("page search tools", () => {
     expect(JSON.stringify(found).length).toBeLessThanOrEqual(MAX_FIND_RESULT_CHARS);
     expect(value.matches.length).toBeGreaterThan(0);
     expect(value.matches[0]!.text).toContain("needle");
+  });
+
+  it("fetches only the pages of a batch whose links fit its output budget and defers the rest", async () => {
+    const s = session(new InMemoryPageCacheStore(), "s1");
+    const longPath = "p".repeat(1_500);
+    const ids = Array.from({ length: 10 }, (_, index) =>
+      s.register(`https://example.com/${index}/${longPath}`),
+    );
+
+    const batch = await s.call(s.fetchTool("w".repeat(8_000)), "fetch_web_page", {
+      resultIds: ids.map((entry) => entry.resultId),
+    });
+
+    const pages = (batch as { value: { pages: { ok: boolean; error?: { code: string } }[] } }).value
+      .pages;
+    expect(JSON.stringify(batch).length).toBeLessThanOrEqual(BATCH_OUTPUT_CHARS + 1_500);
+    expect(pages.filter((page) => page.ok).length).toBeGreaterThan(0);
+    expect(
+      pages.filter((page) => page.error?.code === "batch-output-limit").length,
+    ).toBeGreaterThan(0);
+    expect(s.pageCache.list()).toHaveLength(pages.filter((page) => page.ok).length);
   });
 
   it("answers a batch of ordinary pages within the batch output budget", async () => {
