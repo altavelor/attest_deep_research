@@ -18,7 +18,6 @@ import {
   findInText,
   readRange,
   splitsInsideToken,
-  trimToBoundary,
   type PageSearchMode,
 } from "@core/web";
 
@@ -34,7 +33,6 @@ const MATCH_OVERHEAD_CHARS = 200;
 const MAX_LISTED_URL_CHARS = 200;
 const FIND_ENVELOPE_CHARS = 300;
 const MIN_LISTED_CHARS = 300;
-const MIN_KEPT_MATCH_CHARS = 200;
 const NOT_IN_SESSION =
   "This page is not available in this session. Fetch it again with fetch_web_page.";
 
@@ -134,35 +132,45 @@ function listPages(
 
 /**
  * Keeps the best matches while their serialized size, with the fields around them, fits the budget.
- * The first match is cut to the budget when it alone does not fit.
+ * A first match that alone does not fit is looked up again with a narrower context around the same
+ * hit and dropped when even the narrowest does not fit.
  */
 function keepWithinBudget(
   ranked: readonly FindMatch[],
   budget: number,
+  narrow: (match: FindMatch, context: number) => FindMatch | null,
+  startContext: number,
 ): { kept: FindMatch[]; used: number } {
   const kept: FindMatch[] = [];
   let used = 0;
   for (const match of ranked) {
-    const fixed = serializedSize(match.page.url) + MATCH_OVERHEAD_CHARS;
-    const text = match.page.text.slice(match.offset, match.offset + match.length);
-    let length = match.length;
-    if (kept.length === 0 && serializedSize(text) + fixed > budget) {
-      length = fitLength(text, Math.max(MIN_KEPT_MATCH_CHARS, budget - fixed));
+    let candidate: FindMatch | null = match;
+    if (kept.length === 0) {
+      let context = startContext;
+      while (candidate && matchSize(candidate) > budget && context > MIN_FIND_CONTEXT) {
+        context = Math.max(MIN_FIND_CONTEXT, Math.floor(context / 2));
+        candidate = narrow(match, context);
+      }
     }
-    const size = serializedSize(text.slice(0, length)) + fixed;
-    if (kept.length > 0 && used + size > budget) break;
-    kept.push({ ...match, length });
+    if (!candidate) continue;
+    const size = matchSize(candidate);
+    if (kept.length === 0 ? size > budget : used + size > budget) break;
+    kept.push(candidate);
     used += size;
   }
   return { kept, used };
 }
 
-function fitLength(text: string, textBudget: number): number {
-  let length = trimToBoundary(text, Math.min(text.length, textBudget));
-  while (length > MIN_KEPT_MATCH_CHARS && serializedSize(text.slice(0, length)) > textBudget) {
-    length = trimToBoundary(text, Math.floor(length * 0.9));
-  }
-  return length;
+function matchSize(match: FindMatch): number {
+  return (
+    serializedSize(match.page.text.slice(match.offset, match.offset + match.length)) +
+    serializedSize(shownUrl(match.page.url)) +
+    MATCH_OVERHEAD_CHARS
+  );
+}
+
+function shownUrl(url: string): string {
+  return url.length > MAX_LISTED_URL_CHARS ? url.slice(0, MAX_LISTED_URL_CHARS) : url;
 }
 
 function cachedPageOf(deps: PageSearchDeps, resultId: string): CachedPage | undefined {
@@ -265,9 +273,21 @@ export const FindInPagesTool = defineTool<
     const ranked = matches
       .sort((a, b) => (input.mode === "literal" ? 0 : b.score - a.score))
       .slice(0, input.limit);
+    const narrow = (match: FindMatch, narrowContext: number): FindMatch | null => {
+      const again = findInText(match.page.text, input.query, input.mode, narrowContext);
+      const hit =
+        again.find(
+          (entry) =>
+            entry.offset < match.offset + match.length &&
+            match.offset < entry.offset + entry.length,
+        ) ?? again[0];
+      return hit ? { page: match.page, ...hit } : null;
+    };
     const { kept, used } = keepWithinBudget(
       ranked,
       MAX_FIND_RESULT_CHARS - FIND_ENVELOPE_CHARS - MIN_LISTED_CHARS,
+      narrow,
+      input.context,
     );
     const listed = listPages(
       pages,
@@ -280,6 +300,7 @@ export const FindInPagesTool = defineTool<
       resultId: string;
       evidenceId: string;
       url: string;
+      urlTruncated?: true;
       offset: number;
       length: number;
       text: string;
@@ -315,6 +336,8 @@ export const FindInPagesTool = defineTool<
       }
       outputs.push({
         ...page,
+        url: shownUrl(page.url),
+        ...(page.url.length > MAX_LISTED_URL_CHARS ? { urlTruncated: true } : {}),
         offset: match.offset,
         length: passage.text.length,
         text: passage.text,

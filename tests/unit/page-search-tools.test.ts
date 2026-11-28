@@ -119,9 +119,9 @@ describe("page search tools", () => {
     expect(single?.content).toHaveLength(8_000);
   });
 
-  it("keeps a find with matches inside the result bound even for long urls and a hit wider than the bound", async () => {
+  it("keeps a find inside the result bound for a very long url and a wide hit by narrowing the context around the hit", async () => {
     const s = session(new InMemoryPageCacheStore(), "s1");
-    const longPath = "p".repeat(2_000);
+    const longPath = "p".repeat(6_000);
     const quotes = `${'"'.repeat(19)} `.repeat(100);
     const content = `${quotes}needle ${quotes}`;
     const ids = Array.from({ length: 10 }, (_, index) =>
@@ -133,10 +133,12 @@ describe("page search tools", () => {
 
     const found = await s.find({ query: "needle", context: 1_000 });
 
-    const value = (found as { value: { matches: { text: string }[] } }).value;
+    const value = (found as { value: { matches: { text: string; urlTruncated?: boolean }[] } })
+      .value;
     expect(JSON.stringify(found).length).toBeLessThanOrEqual(MAX_FIND_RESULT_CHARS);
     expect(value.matches.length).toBeGreaterThan(0);
     expect(value.matches[0]!.text).toContain("needle");
+    expect(value.matches[0]!.urlTruncated).toBe(true);
   });
 
   it("fetches only the pages of a batch whose links fit its output budget and defers the rest", async () => {
@@ -193,6 +195,22 @@ describe("page search tools", () => {
     expect(JSON.stringify(batch).length).toBeLessThanOrEqual(BATCH_OUTPUT_CHARS);
     expect(pages[0]!.ok).toBe(true);
     expect(pages.some((page) => page.error?.code === "batch-output-limit")).toBe(true);
+  });
+
+  it("narrows the context around the hit when one match alone would not fit the result bound", async () => {
+    const s = session(new InMemoryPageCacheStore(), "s1");
+    const control = "\u0001".repeat(1_000);
+    const registered = s.register();
+    await s.call(s.fetchTool(`${control} needle ${control}`), "fetch_web_page", {
+      resultIds: [registered.resultId],
+    });
+
+    const found = await s.find({ query: "needle", context: 1_000 });
+
+    const matches = (found as { value: { matches: { text: string }[] } }).value.matches;
+    expect(JSON.stringify(found).length).toBeLessThanOrEqual(MAX_FIND_RESULT_CHARS);
+    expect(matches).toHaveLength(1);
+    expect(matches[0]!.text).toContain("needle");
   });
 
   it("answers a batch of ordinary pages within the batch output budget", async () => {
