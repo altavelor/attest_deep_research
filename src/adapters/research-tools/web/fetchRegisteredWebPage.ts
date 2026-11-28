@@ -42,6 +42,7 @@ const MIN_RESPONSE_BYTES = 1_048_576;
 const BATCH_RESPONSE_BYTES = 10_485_760;
 const CACHED_RESPONSE_BYTES = 16_777_216;
 const CACHED_BATCH_RESPONSE_BYTES = 33_554_432;
+const METADATA_CHARS = 200;
 const LARGE_PAGE_HINT = "Large page: use find_in_pages and read_page_range to read it.";
 
 /**
@@ -72,7 +73,9 @@ export interface FetchRegisteredWebPageDeps {
 /**
  * Fetch and register the page behind a known resultId. With a page cache the whole page is stored
  * there and a page longer than the inline threshold returns only its size, outline and head; an
- * explicit `maxContentChars` (fetch_web_section) always returns that much of the text instead.
+ * explicit `maxContentChars` (fetch_web_section) always returns that much of the text instead. An
+ * `outputBudget` bounds the serialized result of this page: a page that does not fit it inline is
+ * answered with a shortened head and outline.
  */
 export async function fetchRegisteredWebPage(
   deps: FetchRegisteredWebPageDeps,
@@ -81,6 +84,7 @@ export async function fetchRegisteredWebPage(
   maxContentChars?: number,
   maxResponseBytes?: number,
   signal?: AbortSignal,
+  outputBudget?: number,
 ): Promise<ToolExecution<FetchWebPageOutput>> {
   if (signal?.aborted) {
     return toolFailure("web-fetch-cancelled", "Page fetch was cancelled.", false);
@@ -148,8 +152,15 @@ export async function fetchRegisteredWebPage(
     text: result.content,
     truncated: result.truncated,
   });
+  const metadataChars = METADATA_CHARS + registered.canonicalUrl.length + finalUrl.url.length;
+  const room =
+    outputBudget === undefined
+      ? Number.POSITIVE_INFINITY
+      : Math.max(0, outputBudget - metadataChars);
   const compact =
-    deps.pageCache !== undefined && maxContentChars === undefined && totalChars > PAGE_INLINE_CHARS;
+    deps.pageCache !== undefined &&
+    maxContentChars === undefined &&
+    totalChars > Math.min(PAGE_INLINE_CHARS, room);
   const content = result.content.slice(0, compact ? PAGE_EVIDENCE_HEAD_CHARS : cap);
   const truncated = result.truncated || (!compact && content.length < totalChars);
   deps.evidence.upgradeWebPage(resultId, {
@@ -167,17 +178,28 @@ export async function fetchRegisteredWebPage(
       url: registered.canonicalUrl,
       finalUrl: finalUrl.url,
       totalChars,
-      ...(compact
-        ? {
-            head: result.content.slice(0, PAGE_HEAD_CHARS),
-            outline: pageOutline(result.content, PAGE_OUTLINE_ENTRIES),
-            hint: LARGE_PAGE_HINT,
-          }
-        : { content }),
+      ...(compact ? compactView(result.content, room) : { content }),
       contentType: result.contentType,
       truncated,
       ...(imageIds.length > 0 ? { imageIds } : {}),
       untrustedEvidence: true,
     },
   };
+}
+
+/**
+ * Builds the head, outline and hint of a page too large to return whole, shortened until their
+ * serialized size fits the room left for the page.
+ */
+function compactView(
+  text: string,
+  room: number,
+): Pick<FetchWebPageOutput, "head" | "outline" | "hint"> {
+  const hintChars = LARGE_PAGE_HINT.length + 40;
+  const head = text.slice(0, Math.min(PAGE_HEAD_CHARS, Math.max(0, Math.floor(room / 3))));
+  const outline = pageOutline(text, PAGE_OUTLINE_ENTRIES);
+  while (outline.length > 0 && JSON.stringify(outline).length + head.length + hintChars > room) {
+    outline.pop();
+  }
+  return { head, outline, hint: LARGE_PAGE_HINT };
 }

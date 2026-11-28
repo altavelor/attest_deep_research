@@ -1,4 +1,4 @@
-import { MAX_WEB_FETCH_RESULT_IDS } from "@core/web";
+import { BATCH_OUTPUT_CHARS, MAX_WEB_FETCH_RESULT_IDS } from "@core/web";
 import type { PageCache, SearchProvider } from "@application/ports";
 import { EvidenceRegistry } from "@application/sources";
 import { ToolError, ToolParseResult, toolFailure } from "@core/agent";
@@ -94,6 +94,7 @@ export const WebFetchResearchTool = defineTool<
           undefined,
           maxResponseBytes,
           context.signal,
+          deps.pageCache ? Math.floor(BATCH_OUTPUT_CHARS / input.resultIds.length) : undefined,
         );
         return fetched.ok
           ? { ok: true, ...fetched.value }

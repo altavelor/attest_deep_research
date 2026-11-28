@@ -4,7 +4,12 @@ import { FindInPagesTool, ReadPageRangeTool } from "@adapters/research-tools/web
 import { WebFetchResearchTool } from "@adapters/research-tools/web/WebFetchResearchTool";
 import type { SearchProvider } from "@application/ports";
 import { executeTool, type Tool } from "@core/agent";
-import { MAX_FIND_RESULT_CHARS, PAGE_EVIDENCE_HEAD_CHARS, PAGE_HEAD_CHARS } from "@core/web";
+import {
+  BATCH_OUTPUT_CHARS,
+  MAX_FIND_RESULT_CHARS,
+  PAGE_EVIDENCE_HEAD_CHARS,
+  PAGE_HEAD_CHARS,
+} from "@core/web";
 
 const DEEP = "Open-source models are exempt from Article 53(2) documentation duties.";
 const FILLER = "lorem ipsum dolor sit amet consectetur. ";
@@ -79,6 +84,39 @@ describe("page search tools", () => {
     expect(
       (small.execution as { value: { pages: Record<string, unknown>[] } }).value.pages[0],
     ).toMatchObject({ content: "A short page.", totalChars: 13 });
+  });
+
+  it("bounds the serialized result of a batch fetch and of a search over many pages", async () => {
+    const s = session(new InMemoryPageCacheStore(), "s1");
+    const longPath = "p".repeat(1_300);
+    const ids = Array.from({ length: 10 }, (_, index) =>
+      s.register(`https://example.com/${index}/${longPath}`),
+    );
+    const fetchedBatch = await s.call(s.fetchTool("w".repeat(8_000)), "fetch_web_page", {
+      resultIds: ids.map((entry) => entry.resultId),
+    });
+    const none = await s.find({ query: "zzzz absent" });
+
+    expect(JSON.stringify(none).length).toBeLessThanOrEqual(MAX_FIND_RESULT_CHARS);
+    expect((none as { value: { omittedPages?: number } }).value.omittedPages).toBeGreaterThan(0);
+    const pages = (fetchedBatch as { value: { pages: Record<string, unknown>[] } }).value.pages;
+    expect(pages.every((page) => !("content" in page))).toBe(true);
+    const compact = await fetched("w".repeat(8_000));
+    const single = (compact.execution as { value: { pages: { content?: string }[] } }).value
+      .pages[0];
+    expect(single?.content).toHaveLength(8_000);
+  });
+
+  it("answers a batch of ordinary pages within the batch output budget", async () => {
+    const s = session(new InMemoryPageCacheStore(), "s1");
+    const ids = Array.from({ length: 10 }, (_, index) =>
+      s.register(`https://example.com/page-${index}`),
+    );
+    const batch = await s.call(s.fetchTool(BIG), "fetch_web_page", {
+      resultIds: ids.map((entry) => entry.resultId),
+    });
+
+    expect(JSON.stringify(batch).length).toBeLessThanOrEqual(BATCH_OUTPUT_CHARS + 1_000);
   });
 
   it("finds a passage deep in a cached page, bounds the output and registers the passage as evidence", async () => {

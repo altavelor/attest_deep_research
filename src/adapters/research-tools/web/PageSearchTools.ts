@@ -29,6 +29,8 @@ const MAX_RESULT_ID_LENGTH = 200;
 const MAX_QUERY_CHARS = 240;
 const MAX_OFFSET = 1_000_000_000;
 const MATCH_OVERHEAD_CHARS = 200;
+const MAX_LISTED_URL_CHARS = 200;
+const PAGE_LIST_BUDGET_CHARS = 2_500;
 const NOT_IN_SESSION =
   "This page is not available in this session. Fetch it again with fetch_web_page.";
 
@@ -79,6 +81,62 @@ function recordPassages(
     evidenceId: registered.evidenceId,
     url: registered.canonicalUrl,
   };
+}
+
+interface ListedPage {
+  evidenceId: string;
+  url: string;
+  totalChars: number;
+  matchCount: number;
+}
+
+function serializedSize(value: unknown): number {
+  return JSON.stringify(value).length;
+}
+
+/**
+ * Lists the pages of the search, pages with matches first, within a share of the result budget; the
+ * url is shortened because the match handles, not the listing, identify a page.
+ */
+function listPages(
+  pages: readonly CachedPage[],
+  counts: ReadonlyMap<string, number>,
+  matches: readonly FindMatch[],
+): { entries: ListedPage[]; omitted: number } {
+  const matched = new Set(matches.map((match) => match.page.evidenceId));
+  const ordered = [...pages].sort(
+    (a, b) => Number(matched.has(b.evidenceId)) - Number(matched.has(a.evidenceId)),
+  );
+  const entries: ListedPage[] = [];
+  let used = 0;
+  for (const page of ordered) {
+    const entry = {
+      evidenceId: page.evidenceId,
+      url: page.url.slice(0, MAX_LISTED_URL_CHARS),
+      totalChars: page.text.length,
+      matchCount: counts.get(page.evidenceId) ?? 0,
+    };
+    used += serializedSize(entry) + 1;
+    if (used > PAGE_LIST_BUDGET_CHARS && entries.length > 0) break;
+    entries.push(entry);
+  }
+  return { entries, omitted: pages.length - entries.length };
+}
+
+/** Keeps the best matches while their serialized size, with the fields around them, fits the budget. */
+function keepWithinBudget(ranked: readonly FindMatch[], budget: number): FindMatch[] {
+  const kept: FindMatch[] = [];
+  let used = 0;
+  for (const match of ranked) {
+    const size =
+      serializedSize(match.page.text.slice(match.offset, match.offset + match.length)) +
+      serializedSize(match.page.url) +
+      MATCH_OVERHEAD_CHARS;
+    if (kept.length > 0 && used + size > budget) break;
+    kept.push(match);
+    used += size;
+  }
+  return kept;
 }
 
 function cachedPageOf(deps: PageSearchDeps, resultId: string): CachedPage | undefined {
@@ -181,14 +239,8 @@ export const FindInPagesTool = defineTool<
     const ranked = matches
       .sort((a, b) => (input.mode === "literal" ? 0 : b.score - a.score))
       .slice(0, input.limit);
-    const kept: FindMatch[] = [];
-    let used = 0;
-    for (const match of ranked) {
-      const size = match.length + MATCH_OVERHEAD_CHARS;
-      if (kept.length > 0 && used + size > MAX_FIND_RESULT_CHARS) break;
-      kept.push(match);
-      used += size;
-    }
+    const listed = listPages(pages, counts, matches);
+    const kept = keepWithinBudget(ranked, MAX_FIND_RESULT_CHARS - serializedSize(listed.entries));
     const recorded = new Map<string, RecordedPage>();
     const outputs: {
       resultId: string;
@@ -233,12 +285,8 @@ export const FindInPagesTool = defineTool<
       ok: true,
       value: {
         matches: outputs,
-        pages: pages.map((page) => ({
-          evidenceId: page.evidenceId,
-          url: page.url,
-          totalChars: page.text.length,
-          matchCount: counts.get(page.evidenceId) ?? 0,
-        })),
+        pages: listed.entries,
+        ...(listed.omitted > 0 ? { omittedPages: listed.omitted } : {}),
         truncatedMatches: kept.length < matches.length,
         untrustedEvidence: true,
       },

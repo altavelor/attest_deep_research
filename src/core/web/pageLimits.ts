@@ -3,6 +3,7 @@ export const PAGE_HEAD_CHARS = 1_500;
 export const PAGE_EVIDENCE_HEAD_CHARS = 2_000;
 export const MAX_PAGE_EVIDENCE_CHARS = 16_000;
 export const PAGE_OUTLINE_ENTRIES = 40;
+export const BATCH_OUTPUT_CHARS = 16_000;
 export const MAX_FIND_RESULT_CHARS = 6_000;
 export const MAX_READ_RANGE_CHARS = 8_000;
 export const MIN_READ_RANGE_CHARS = 200;
