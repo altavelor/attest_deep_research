@@ -349,10 +349,11 @@ function composePageEvidence(parts: PageParts): { text: string; kept: PagePart[]
       ];
   }
   const kept = mergeParts(chosen);
+  const [first, ...rest] = kept;
+  const joined = first?.offset === parts.head.length;
+  const marked = (part: PagePart): string => `\n\n[… offset ${part.offset} …]\n${part.text}`;
   return {
-    text: [parts.head, ...kept.map((part) => `[… offset ${part.offset} …]\n${part.text}`)].join(
-      "\n\n",
-    ),
+    text: `${parts.head}${first ? (joined ? first.text : marked(first)) : ""}${rest.map(marked).join("")}`,
     kept,
   };
 }

@@ -147,4 +147,30 @@ describe("ResearchEvidenceRegistry", () => {
     expect(second!.text.length).toBeGreaterThan(200);
     expect(second!.text).toMatch(/^(?:😀)+$/u);
   });
+
+  it("joins a passage that continues the head without a marker so a quote across them stays whole", () => {
+    const registry = new ResearchEvidenceRegistry({ createHandle: () => "handle" });
+    const { resultId } = registry.registerWebResult(
+      { url: "https://example.com/long", title: "Long", snippet: "s", rank: 1 },
+      { callId: "search", query: "q" },
+    );
+    const head = `${"a ".repeat(995)}the quote starts`;
+    registry.upgradeWebPage(resultId, {
+      content: head,
+      finalUrl: "https://example.com/long",
+      truncated: false,
+      callId: "fetch",
+    });
+
+    registry.addWebPassages(
+      resultId,
+      [{ offset: head.length - 16, text: "the quote starts and ends here. Later text." }],
+      "read-1",
+    );
+    registry.addWebPassages(resultId, [{ offset: 9_000, text: "far passage" }], "read-2");
+
+    const text = registry.snapshot().evidence[0]!.text;
+    expect(text).toContain("the quote starts and ends here.");
+    expect(text).toContain("[… offset 9000 …]\nfar passage");
+  });
 });
