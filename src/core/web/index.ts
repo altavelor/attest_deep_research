@@ -6,6 +6,8 @@ export {
   pageOutline,
   pageSearchTerms,
   readRange,
+  splitsInsideToken,
+  trimToBoundary,
   type PageMatch,
   type PageOutlineEntry,
   type PageRange,

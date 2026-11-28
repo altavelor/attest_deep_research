@@ -97,11 +97,15 @@ describe("page search tools", () => {
   it("bounds the serialized result of a batch fetch and of a search over many pages", async () => {
     const s = session(new InMemoryPageCacheStore(), "s1");
     const longPath = "p".repeat(1_300);
-    const ids = Array.from({ length: 10 }, (_, index) =>
+    const ids = Array.from({ length: 20 }, (_, index) =>
       s.register(`https://example.com/${index}/${longPath}`),
     );
+    const resultIds = ids.map((entry) => entry.resultId);
     const fetchedBatch = await s.call(s.fetchTool("w".repeat(8_000)), "fetch_web_page", {
-      resultIds: ids.map((entry) => entry.resultId),
+      resultIds: resultIds.slice(0, 10),
+    });
+    await s.call(s.fetchTool("w".repeat(8_000)), "fetch_web_page", {
+      resultIds: resultIds.slice(10),
     });
     const none = await s.find({ query: "zzzz absent" });
 
@@ -113,6 +117,26 @@ describe("page search tools", () => {
     const single = (compact.execution as { value: { pages: { content?: string }[] } }).value
       .pages[0];
     expect(single?.content).toHaveLength(8_000);
+  });
+
+  it("keeps a find with matches inside the result bound even for long urls and a hit wider than the bound", async () => {
+    const s = session(new InMemoryPageCacheStore(), "s1");
+    const longPath = "p".repeat(2_000);
+    const quotes = `${'"'.repeat(19)} `.repeat(100);
+    const content = `${quotes}needle ${quotes}`;
+    const ids = Array.from({ length: 10 }, (_, index) =>
+      s.register(`https://example.com/${index}/${longPath}`),
+    );
+    await s.call(s.fetchTool(content), "fetch_web_page", {
+      resultIds: ids.map((entry) => entry.resultId),
+    });
+
+    const found = await s.find({ query: "needle", context: 1_000 });
+
+    const value = (found as { value: { matches: { text: string }[] } }).value;
+    expect(JSON.stringify(found).length).toBeLessThanOrEqual(MAX_FIND_RESULT_CHARS);
+    expect(value.matches.length).toBeGreaterThan(0);
+    expect(value.matches[0]!.text).toContain("needle");
   });
 
   it("answers a batch of ordinary pages within the batch output budget", async () => {
@@ -217,6 +241,19 @@ describe("page search tools", () => {
     expect(second.length).toBeLessThan(8_000);
     expect(second.nextOffset).toBe(10_000 + second.length);
     expect(third).toMatchObject({ ok: false, error: { code: "page-evidence-full" } });
+  });
+
+  it("answers a read at the end of a page with an empty range and leaves the evidence alone", async () => {
+    const page = await fetched(BIG);
+    const before = page.evidence.snapshot().evidence[0]!.text;
+
+    const read = await page.read({ resultId: page.registered.resultId, offset: BIG.length });
+
+    expect(read).toMatchObject({
+      ok: true,
+      value: { text: "", length: 0, nextOffset: null, totalChars: BIG.length },
+    });
+    expect(page.evidence.snapshot().evidence[0]!.text).toBe(before);
   });
 
   it("answers every miss with the same error and rejects malformed arguments", async () => {

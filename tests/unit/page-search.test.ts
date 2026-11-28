@@ -54,13 +54,16 @@ describe("page search", () => {
     expect(text.slice(0, inside.offset).endsWith(" ") || inside.offset === 0).toBe(true);
   });
 
-  it("flags a range that ends inside a word longer than the snapping window and continues exactly where it stopped", () => {
-    const text = `intro ${"x".repeat(450)} outro`;
-    const first = readRange(text, 6, 200);
-    const next = readRange(text, first.nextOffset!, 200);
+  it("reads a word whole up to the largest range and cuts a longer one at the requested end with a flag", () => {
+    const word = `intro ${"x".repeat(450)} outro`;
+    const huge = `intro ${"y".repeat(9_000)} outro`;
+    const whole = readRange(word, 6, 200);
+    const cut = readRange(huge, 6, 200);
 
-    expect(first).toMatchObject({ length: 200, splitsToken: true });
-    expect(next.offset).toBe(first.nextOffset);
+    expect(whole).toMatchObject({ offset: 6, length: 450 });
+    expect(whole).not.toHaveProperty("splitsToken");
+    expect(cut).toMatchObject({ length: 200, splitsToken: true });
+    expect(readRange(huge, cut.nextOffset!, 200).offset).toBe(cut.nextOffset);
     expect(readRange("alpha beta gamma", 0, 8)).not.toHaveProperty("splitsToken");
   });
 

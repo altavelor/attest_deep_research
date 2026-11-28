@@ -1,3 +1,5 @@
+import { MAX_READ_RANGE_CHARS } from "./pageLimits";
+
 export type PageSearchMode = "keywords" | "literal";
 
 export interface PageMatch {
@@ -67,14 +69,21 @@ export function findInText(
 /**
  * Reads a range of a text with both edges moved to the nearest whitespace within a hundred
  * characters and never inside a surrogate pair; `nextOffset` is null at the end of the text. A word
- * longer than that window is cut where the range ends and `splitsToken` is set.
+ * is read whole up to the largest range; a longer one is cut there and `splitsToken` is set.
  */
 export function readRange(text: string, offset: number, length: number): PageRange {
   const requested = Math.min(Math.max(0, offset), text.length);
   if (requested >= text.length)
     return { offset: text.length, length: 0, text: "", nextOffset: null };
   const start = snapStart(text, requested);
-  const end = Math.max(start, snapEnd(text, Math.min(text.length, requested + length)));
+  const hardEnd = avoidSplit(text, Math.min(text.length, start + MAX_READ_RANGE_CHARS));
+  const end = Math.max(
+    start,
+    Math.min(
+      snapEnd(text, Math.min(text.length, requested + length), MAX_READ_RANGE_CHARS),
+      hardEnd,
+    ),
+  );
   return {
     offset: start,
     length: end - start,
@@ -82,6 +91,23 @@ export function readRange(text: string, offset: number, length: number): PageRan
     nextOffset: end < text.length ? end : null,
     ...(insideToken(text, start) || insideToken(text, end) ? { splitsToken: true as const } : {}),
   };
+}
+
+/**
+ * Returns where a text may be cut at or before `limit`: the nearest whitespace within a hundred
+ * characters, otherwise `limit` itself, never inside a surrogate pair.
+ */
+export function trimToBoundary(text: string, limit: number): number {
+  if (limit >= text.length) return text.length;
+  for (let index = limit; index >= Math.max(0, limit - MAX_SNAP_CHARS); index -= 1) {
+    if (/\s/u.test(text[index] ?? " ")) return index;
+  }
+  return avoidSplit(text, limit);
+}
+
+/** Tells whether cutting the text at `position` falls inside a run of non-whitespace characters. */
+export function splitsInsideToken(text: string, position: number): boolean {
+  return insideToken(text, position);
 }
 
 function insideToken(text: string, position: number): boolean {
@@ -221,9 +247,9 @@ function selectNonOverlapping(candidates: Candidate[]): PageMatch[] {
   return chosen;
 }
 
-function snapStart(text: string, position: number): number {
+function snapStart(text: string, position: number, reach = MAX_SNAP_CHARS): number {
   if (position <= 0) return 0;
-  for (let index = position; index >= Math.max(0, position - MAX_SNAP_CHARS); index -= 1) {
+  for (let index = position; index >= Math.max(0, position - reach); index -= 1) {
     if (index === 0 || /\s/u.test(text[index - 1]!) || /\s/u.test(text[index] ?? "")) {
       return avoidSplit(text, index);
     }
@@ -231,13 +257,9 @@ function snapStart(text: string, position: number): number {
   return avoidSplit(text, position);
 }
 
-function snapEnd(text: string, position: number): number {
+function snapEnd(text: string, position: number, reach = MAX_SNAP_CHARS): number {
   if (position >= text.length) return text.length;
-  for (
-    let index = position;
-    index <= Math.min(text.length, position + MAX_SNAP_CHARS);
-    index += 1
-  ) {
+  for (let index = position; index <= Math.min(text.length, position + reach); index += 1) {
     if (index === text.length || /\s/u.test(text[index]!)) return avoidSplit(text, index);
   }
   return avoidSplit(text, position);

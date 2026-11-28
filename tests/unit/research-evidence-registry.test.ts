@@ -123,4 +123,28 @@ describe("ResearchEvidenceRegistry", () => {
     expect(accepted[0]!.text.length).toBeLessThan(16_000);
     expect(accepted[0]!.text.length).toBeGreaterThan(0);
   });
+
+  it("cuts a passage to the room left at a text boundary, never inside a surrogate pair", () => {
+    const registry = new ResearchEvidenceRegistry({ createHandle: () => "handle" });
+    const { resultId } = registry.registerWebResult(
+      { url: "https://example.com/long", title: "Long", snippet: "s", rank: 1 },
+      { callId: "search", query: "q" },
+    );
+    registry.upgradeWebPage(resultId, {
+      content: "HEAD",
+      finalUrl: "https://example.com/long",
+      truncated: false,
+      callId: "fetch",
+    });
+
+    registry.addWebPassages(resultId, [{ offset: 100, text: "a".repeat(15_001) }], "read-1");
+    const [second] = registry.addWebPassages(
+      resultId,
+      [{ offset: 50_000, text: "😀".repeat(2_000) }],
+      "read-2",
+    );
+
+    expect(second!.text.length).toBeGreaterThan(200);
+    expect(second!.text).toMatch(/^(?:😀)+$/u);
+  });
 });

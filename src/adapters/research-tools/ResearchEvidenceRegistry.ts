@@ -11,7 +11,7 @@ import {
   WebResultCapacityError,
 } from "@application/sources";
 import { validatePublicWebUrl } from "@application/sources";
-import { MAX_PAGE_EVIDENCE_CHARS, MIN_READ_RANGE_CHARS } from "@core/web";
+import { MAX_PAGE_EVIDENCE_CHARS, MIN_READ_RANGE_CHARS, trimToBoundary } from "@core/web";
 
 interface MutableEvidenceEntry {
   chunk: RetrievedChunk;
@@ -294,7 +294,8 @@ function fitPassages(
     }
     const skipped = tail.offset - passage.offset;
     const room = budget - partsSize(held) - PASSAGE_SEPARATOR_CHARS;
-    for (const length of [tail.text.length, room >= MIN_READ_RANGE_CHARS ? room : 0]) {
+    const cut = room >= MIN_READ_RANGE_CHARS ? trimToBoundary(tail.text, room) : 0;
+    for (const length of [tail.text.length, cut >= MIN_READ_RANGE_CHARS ? cut : 0]) {
       const text = tail.text.slice(0, length);
       if (text.length === 0) continue;
       const next = mergeParts([...held, { ...tail, text }]);

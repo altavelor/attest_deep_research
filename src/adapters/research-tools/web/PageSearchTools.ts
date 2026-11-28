@@ -17,6 +17,8 @@ import {
   PAGE_INLINE_CHARS,
   findInText,
   readRange,
+  splitsInsideToken,
+  trimToBoundary,
   type PageSearchMode,
 } from "@core/web";
 
@@ -30,7 +32,9 @@ const MAX_QUERY_CHARS = 240;
 const MAX_OFFSET = 1_000_000_000;
 const MATCH_OVERHEAD_CHARS = 200;
 const MAX_LISTED_URL_CHARS = 200;
-const PAGE_LIST_BUDGET_CHARS = 2_500;
+const FIND_ENVELOPE_CHARS = 300;
+const MIN_LISTED_CHARS = 300;
+const MIN_KEPT_MATCH_CHARS = 200;
 const NOT_IN_SESSION =
   "This page is not available in this session. Fetch it again with fetch_web_page.";
 
@@ -98,13 +102,14 @@ function serializedSize(value: unknown): number {
 }
 
 /**
- * Lists the pages of the search, pages with matches first, within a share of the result budget; the
- * url is shortened because the match handles, not the listing, identify a page.
+ * Lists the pages of the search, pages with matches first, within the budget left; the url is
+ * shortened because the match handles, not the listing, identify a page.
  */
 function listPages(
   pages: readonly CachedPage[],
   counts: ReadonlyMap<string, number>,
   matches: readonly FindMatch[],
+  budget: number,
 ): { entries: ListedPage[]; omitted: number } {
   const matched = new Set(matches.map((match) => match.page.evidenceId));
   const ordered = [...pages].sort(
@@ -120,26 +125,43 @@ function listPages(
       matchCount: counts.get(page.evidenceId) ?? 0,
     };
     used += serializedSize(entry) + 1;
-    if (used > PAGE_LIST_BUDGET_CHARS && entries.length > 0) break;
+    if (used > budget) break;
     entries.push(entry);
   }
   return { entries, omitted: pages.length - entries.length };
 }
 
-/** Keeps the best matches while their serialized size, with the fields around them, fits the budget. */
-function keepWithinBudget(ranked: readonly FindMatch[], budget: number): FindMatch[] {
+/**
+ * Keeps the best matches while their serialized size, with the fields around them, fits the budget.
+ * The first match is cut to the budget when it alone does not fit.
+ */
+function keepWithinBudget(
+  ranked: readonly FindMatch[],
+  budget: number,
+): { kept: FindMatch[]; used: number } {
   const kept: FindMatch[] = [];
   let used = 0;
   for (const match of ranked) {
-    const size =
-      serializedSize(match.page.text.slice(match.offset, match.offset + match.length)) +
-      serializedSize(match.page.url) +
-      MATCH_OVERHEAD_CHARS;
+    const fixed = serializedSize(match.page.url) + MATCH_OVERHEAD_CHARS;
+    const text = match.page.text.slice(match.offset, match.offset + match.length);
+    let length = match.length;
+    if (kept.length === 0 && serializedSize(text) + fixed > budget) {
+      length = fitLength(text, Math.max(MIN_KEPT_MATCH_CHARS, budget - fixed));
+    }
+    const size = serializedSize(text.slice(0, length)) + fixed;
     if (kept.length > 0 && used + size > budget) break;
-    kept.push(match);
+    kept.push({ ...match, length });
     used += size;
   }
-  return kept;
+  return { kept, used };
+}
+
+function fitLength(text: string, textBudget: number): number {
+  let length = trimToBoundary(text, Math.min(text.length, textBudget));
+  while (length > MIN_KEPT_MATCH_CHARS && serializedSize(text.slice(0, length)) > textBudget) {
+    length = trimToBoundary(text, Math.floor(length * 0.9));
+  }
+  return length;
 }
 
 function cachedPageOf(deps: PageSearchDeps, resultId: string): CachedPage | undefined {
@@ -242,8 +264,16 @@ export const FindInPagesTool = defineTool<
     const ranked = matches
       .sort((a, b) => (input.mode === "literal" ? 0 : b.score - a.score))
       .slice(0, input.limit);
-    const listed = listPages(pages, counts, matches);
-    const kept = keepWithinBudget(ranked, MAX_FIND_RESULT_CHARS - serializedSize(listed.entries));
+    const { kept, used } = keepWithinBudget(
+      ranked,
+      MAX_FIND_RESULT_CHARS - FIND_ENVELOPE_CHARS - MIN_LISTED_CHARS,
+    );
+    const listed = listPages(
+      pages,
+      counts,
+      matches,
+      MAX_FIND_RESULT_CHARS - FIND_ENVELOPE_CHARS - used,
+    );
     const recorded = new Map<string, RecordedPage>();
     const outputs: {
       resultId: string;
@@ -353,6 +383,20 @@ export const ReadPageRangeTool = defineTool<
     const page = cachedPageOf(deps, input.resultId);
     if (!page) return toolFailure("page-not-in-session", NOT_IN_SESSION);
     const range = readRange(page.text, input.offset, input.length);
+    if (range.length === 0) {
+      return {
+        ok: true,
+        value: {
+          resultId: input.resultId,
+          offset: range.offset,
+          length: 0,
+          totalChars: page.text.length,
+          nextOffset: null,
+          text: "",
+          untrustedEvidence: true,
+        },
+      };
+    }
     let recorded: RecordedPage;
     try {
       recorded = recordPassages(
@@ -385,7 +429,10 @@ export const ReadPageRangeTool = defineTool<
         totalChars: page.text.length,
         nextOffset: end < page.text.length ? end : null,
         text: shown.text,
-        ...(range.splitsToken ? { splitsToken: true } : {}),
+        ...(range.splitsToken ||
+        (end < range.offset + range.length && splitsInsideToken(page.text, end))
+          ? { splitsToken: true }
+          : {}),
         untrustedEvidence: true,
       },
     };
