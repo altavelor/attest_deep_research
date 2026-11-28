@@ -1,6 +1,6 @@
 import { InMemoryPageCacheStore } from "@adapters/research-tools/web/InMemoryPageCacheStore";
 import { createResearchToolRegistry } from "@adapters/research-tools/createResearchToolRegistry";
-import type { SearchProvider } from "@application/ports";
+import type { ChatPageCaches, SearchProvider } from "@application/ports";
 import { SubAgentRunner } from "@application/use-cases/research/sub-agent/SubAgentRunner";
 import type { ModelRoundProvider, ModelRoundRequest, ModelRoundResult } from "@core/agent";
 import { webSource } from "../support/factories";
@@ -37,6 +37,10 @@ function lastToolMessage(request: ModelRoundRequest): string {
   );
 }
 
+function evidenceIdOf(message: string): string {
+  return /"evidenceId":"([^"]+)"/u.exec(message)?.[1] ?? "";
+}
+
 function scripted(
   steps: (request: ModelRoundRequest) => ModelRoundResult[],
 ): ModelRoundProvider & { requests: ModelRoundRequest[] } {
@@ -56,7 +60,7 @@ function scripted(
   };
 }
 
-function runner(modelRound: ModelRoundProvider, store: InMemoryPageCacheStore, sessionId: string) {
+function runner(modelRound: ModelRoundProvider, caches: ChatPageCaches, sessionId: string) {
   return new SubAgentRunner({
     toolsetFactory: createResearchToolRegistry,
     searchProvider: provider,
@@ -74,14 +78,14 @@ function runner(modelRound: ModelRoundProvider, store: InMemoryPageCacheStore, s
         noteMutationAccess: false,
       },
       searchProvider: provider,
-      pageCache: store.createChat().openSession(sessionId),
+      pageCache: caches.openSession(sessionId),
     },
   });
 }
 
 describe("page search in a sub-agent session", () => {
   it("lets the agent read a deep passage of a page larger than its whole tool output budget and keeps pages apart per session", async () => {
-    const store = new InMemoryPageCacheStore();
+    const caches = new InMemoryPageCacheStore().createChat();
     const first = scripted((request) => {
       const resultId = /"resultId":"([^"]+)"/u.exec(lastToolMessage(request))?.[1] ?? "";
       const offset = Number(/"offset":(\d+)/u.exec(lastToolMessage(request))?.[1] ?? 0);
@@ -90,10 +94,14 @@ describe("page search in a sub-agent session", () => {
         call("2", "fetch_web_page", { resultIds: [resultId] }),
         call("3", "find_in_pages", { query: "article 53(2) documentation" }),
         call("4", "read_page_range", { resultId, offset: Math.max(0, offset - 200) }),
+        {
+          items: [{ type: "text", text: `${DEEP} [${evidenceIdOf(lastToolMessage(request))}]` }],
+          stopReason: "complete",
+        },
       ];
     });
 
-    const firstRun = await runner(first, store, "session-one");
+    const firstRun = await runner(first, caches, "session-one");
     const handle = /"resultId":"([^"]+)"/u.exec(lastToolMessage(first.requests[3]!))?.[1] ?? "";
 
     const afterFetch = lastToolMessage(first.requests[2]!);
@@ -104,13 +112,17 @@ describe("page search in a sub-agent session", () => {
 
     const afterRead = lastToolMessage(first.requests[4]!);
     expect(afterRead).toContain(DEEP);
-    expect(firstRun.snapshot.evidence.some((chunk) => chunk.text.includes(DEEP))).toBe(true);
+    const cited = evidenceIdOf(afterRead);
+    expect(firstRun.answerText).toContain(`[${cited}]`);
+    expect(firstRun.snapshot.evidence.find((chunk) => chunk.id === cited)?.text ?? "").toContain(
+      DEEP,
+    );
 
     const second = scripted(() => [
       call("1", "find_in_pages", { query: "article 53(2)" }),
       call("2", "read_page_range", { resultId: handle, offset: 0 }),
     ]);
-    await runner(second, store, "session-two");
+    await runner(second, caches, "session-two");
 
     expect(lastToolMessage(second.requests[1]!)).toContain("no-pages-fetched");
     expect(lastToolMessage(second.requests[2]!)).toContain("page-not-in-session");
