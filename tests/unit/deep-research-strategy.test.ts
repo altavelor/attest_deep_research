@@ -272,7 +272,7 @@ describe("main branch runner findings", () => {
     const store = {
       forSession: (id: string) => {
         sessions.push(id);
-        return { put: () => undefined, get: () => undefined, list: () => [] };
+        return { maxPageChars: 1, put: () => undefined, get: () => undefined, list: () => [] };
       },
       release: (id: string) => released.push(id),
       retire: () => undefined,

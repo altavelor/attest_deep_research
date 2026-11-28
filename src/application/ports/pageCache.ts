@@ -11,6 +11,7 @@ export interface CachedPage {
 
 /** The full text of the pages one agent session fetched, looked up by the evidence id of the page. */
 export interface PageCache {
+  readonly maxPageChars: number;
   put(page: CachedPage): void;
   get(evidenceId: string): CachedPage | undefined;
   list(): readonly CachedPage[];

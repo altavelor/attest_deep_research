@@ -4,7 +4,6 @@ import { EvidenceRegistry } from "@application/sources";
 import { ToolExecution, toolFailure } from "@core/agent";
 import type { ImageCandidate } from "@core/media";
 import {
-  DEFAULT_PAGE_CACHE_LIMITS,
   PAGE_EVIDENCE_HEAD_CHARS,
   PAGE_HEAD_CHARS,
   PAGE_INLINE_CHARS,
@@ -106,7 +105,7 @@ export async function fetchRegisteredWebPage(
     result = await deps.provider.fetchPage(safeUrl.url, {
       ...DEFAULT_FETCH_OPTIONS,
       maxContentChars: deps.pageCache
-        ? DEFAULT_PAGE_CACHE_LIMITS.maxPageChars
+        ? deps.pageCache.maxPageChars
         : (maxContentChars ?? DEFAULT_FETCH_OPTIONS.maxContentChars),
       maxResponseBytes: maxResponseBytes ?? responseBytesForBatch(1, deps.pageCache !== undefined),
       ...(signal ? { signal } : {}),

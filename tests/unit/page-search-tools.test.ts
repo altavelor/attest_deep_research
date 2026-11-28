@@ -119,6 +119,47 @@ describe("page search tools", () => {
     expect(JSON.stringify(batch).length).toBeLessThanOrEqual(BATCH_OUTPUT_CHARS + 1_000);
   });
 
+  it("asks for no more text than the page cache of the platform keeps and reports the readable size", async () => {
+    const asked: unknown[] = [];
+    const search: SearchProvider = {
+      search: vi.fn(),
+      fetchPage: async (url, options) => {
+        asked.push(options?.maxContentChars);
+        const content = BIG.slice(0, options?.maxContentChars);
+        return {
+          ok: true as const,
+          url,
+          finalUrl: url,
+          content,
+          contentType: "text/html",
+          bytes: content.length,
+          truncated: content.length < BIG.length,
+          redirects: [url],
+        };
+      },
+    };
+    const store = new InMemoryPageCacheStore({
+      maxPageChars: 20_000,
+      maxSessionChars: 80_000,
+      maxTotalChars: 160_000,
+    });
+    const s = session(store, "s1");
+    const registered = s.register();
+    const fetchTool = new WebFetchResearchTool({
+      provider: search,
+      evidence: s.evidence,
+      pageCache: s.pageCache,
+    });
+    const execution = await s.call(fetchTool, "fetch_web_page", {
+      resultIds: [registered.resultId],
+    });
+
+    const page = (execution as { value: { pages: Record<string, unknown>[] } }).value.pages[0]!;
+    expect(asked).toEqual([20_000]);
+    expect(page).toMatchObject({ totalChars: 20_000, truncated: true });
+    expect(s.pageCache.get(registered.evidenceId)?.text).toHaveLength(20_000);
+  });
+
   it("finds a passage deep in a cached page, bounds the output and registers the passage as evidence", async () => {
     const page = await fetched(BIG);
 

@@ -111,7 +111,7 @@ async function drain(
 
 describe("ThinkingResearchStrategy page cache", () => {
   it("gives the toolset a page cache for the run and releases it when the run ends", async () => {
-    const cache = { put: vi.fn(), get: vi.fn(), list: vi.fn(() => []) };
+    const cache = { maxPageChars: 1, put: vi.fn(), get: vi.fn(), list: vi.fn(() => []) };
     const pageCacheStore = {
       forSession: vi.fn(() => cache),
       release: vi.fn(),

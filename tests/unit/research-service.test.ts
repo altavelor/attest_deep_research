@@ -595,7 +595,7 @@ describe("ResearchService", () => {
   });
 
   it("gives each child run the page cache of its own agent session", async () => {
-    const cache = { put: vi.fn(), get: vi.fn(), list: vi.fn(() => []) };
+    const cache = { maxPageChars: 1, put: vi.fn(), get: vi.fn(), list: vi.fn(() => []) };
     const pageCacheStore = {
       forSession: vi.fn(() => cache),
       release: vi.fn(),

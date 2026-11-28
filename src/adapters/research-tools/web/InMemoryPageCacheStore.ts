@@ -20,6 +20,7 @@ export class InMemoryPageCacheStore implements PageCacheStore {
 
   forSession(sessionId: string): PageCache {
     return {
+      maxPageChars: this.limits.maxPageChars,
       put: (page) => this.put(sessionId, page),
       get: (evidenceId) => this.touch(this.sessions.get(sessionId)?.get(evidenceId)),
       list: () => [...(this.sessions.get(sessionId)?.values() ?? [])].map((slot) => slot.page),
