@@ -67,6 +67,26 @@ describe("page search", () => {
     expect(readRange("alpha beta gamma", 0, 8)).not.toHaveProperty("splitsToken");
   });
 
+  it("moves a range that starts inside a word that fits to the start of that word", () => {
+    const text = `intro ${"x".repeat(450)} outro`;
+
+    const range = readRange(text, 206, 200);
+
+    expect(range).toMatchObject({ offset: 6, length: 450 });
+    expect(range).not.toHaveProperty("splitsToken");
+  });
+
+  it("ends a range of the largest size before an ordinary word that would cross its limit", () => {
+    const text = `${"ab ".repeat(2_666)}ordinary words follow here`;
+
+    const range = readRange(text, 0, 8_000);
+
+    expect(range.text.endsWith("ab")).toBe(true);
+    expect(range.length).toBeLessThanOrEqual(8_000);
+    expect(range).not.toHaveProperty("splitsToken");
+    expect(text.slice(range.nextOffset!).trimStart().startsWith("ordinary")).toBe(true);
+  });
+
   it("pages through a text without overlap or gaps and reads nothing past its end", () => {
     const text = "aaa bbb ccc ddd eee fff ggg";
     const pages: string[] = [];

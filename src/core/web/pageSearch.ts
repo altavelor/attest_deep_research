@@ -69,21 +69,20 @@ export function findInText(
 /**
  * Reads a range of a text with both edges moved to the nearest whitespace within a hundred
  * characters and never inside a surrogate pair; `nextOffset` is null at the end of the text. A word
- * is read whole up to the largest range; a longer one is cut there and `splitsToken` is set.
+ * is read whole when it fits the largest range, also when the range starts or ends inside it; a
+ * longer one is cut where the range ends and `splitsToken` is set.
  */
 export function readRange(text: string, offset: number, length: number): PageRange {
   const requested = Math.min(Math.max(0, offset), text.length);
   if (requested >= text.length)
     return { offset: text.length, length: 0, text: "", nextOffset: null };
-  const start = snapStart(text, requested);
-  const hardEnd = avoidSplit(text, Math.min(text.length, start + MAX_READ_RANGE_CHARS));
-  const end = Math.max(
-    start,
-    Math.min(
-      snapEnd(text, Math.min(text.length, requested + length), MAX_READ_RANGE_CHARS),
-      hardEnd,
-    ),
-  );
+  const start = wholeTokenStart(text, snapStart(text, requested));
+  const wanted = Math.min(text.length, requested + length);
+  let end = Math.max(start, wholeTokenEnd(text, snapEnd(text, wanted)));
+  if (end - start > MAX_READ_RANGE_CHARS) {
+    const trimmed = trimToBoundary(text, start + MAX_READ_RANGE_CHARS);
+    end = trimmed > start ? trimmed : avoidSplit(text, start + MAX_READ_RANGE_CHARS);
+  }
   return {
     offset: start,
     length: end - start,
@@ -91,6 +90,35 @@ export function readRange(text: string, offset: number, length: number): PageRan
     nextOffset: end < text.length ? end : null,
     ...(insideToken(text, start) || insideToken(text, end) ? { splitsToken: true as const } : {}),
   };
+}
+
+function wholeTokenStart(text: string, position: number): number {
+  if (!insideToken(text, position)) return position;
+  const first = tokenEdge(text, position, -1);
+  const last = tokenEdge(text, position, 1);
+  return first !== null && last !== null && last - first <= MAX_READ_RANGE_CHARS ? first : position;
+}
+
+function wholeTokenEnd(text: string, position: number): number {
+  if (!insideToken(text, position)) return position;
+  const first = tokenEdge(text, position, -1);
+  const last = tokenEdge(text, position, 1);
+  return first !== null && last !== null && last - first <= MAX_READ_RANGE_CHARS ? last : position;
+}
+
+function tokenEdge(text: string, position: number, direction: -1 | 1): number | null {
+  const limit = position + direction * MAX_READ_RANGE_CHARS;
+  for (let index = position; index !== limit + direction; index += direction) {
+    if (index < 0 || index > text.length) return null;
+    if (
+      direction === -1
+        ? index === 0 || /\s/u.test(text[index - 1]!)
+        : index === text.length || /\s/u.test(text[index]!)
+    ) {
+      return index;
+    }
+  }
+  return null;
 }
 
 /**
