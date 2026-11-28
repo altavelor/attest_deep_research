@@ -1,4 +1,4 @@
-import type { PageCache, SearchProvider } from "@application/ports";
+import { SearchProvider } from "@application/ports";
 import { EvidenceRegistry } from "@application/sources";
 import { ToolParseResult, toolFailure } from "@core/agent";
 import { WEB_FETCH_SECTION_TOOL } from "@core/agent";
@@ -53,7 +53,7 @@ function parseFetchWebSectionInput(
 }
 
 export const WebFetchSectionTool = defineTool<
-  { provider: SearchProvider; evidence: EvidenceRegistry; pageCache?: PageCache },
+  { provider: SearchProvider; evidence: EvidenceRegistry },
   FetchWebSectionInput,
   FetchWebSectionOutput
 >({
@@ -71,7 +71,7 @@ export const WebFetchSectionTool = defineTool<
   parse: parseFetchWebSectionInput,
   execute: async (deps, input, context) => {
     const fetched = await fetchRegisteredWebPage(
-      deps,
+      { provider: deps.provider, evidence: deps.evidence },
       input.resultId,
       context.callId,
       SECTION_FETCH_MAX_CHARS,
