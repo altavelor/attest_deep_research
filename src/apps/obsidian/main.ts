@@ -170,7 +170,6 @@ export default class AttestPlugin extends Plugin {
       warmCaches: this.requireWarmCaches(),
       fileSystem: this.fileSystem,
       isMobile: Platform.isMobile,
-      pageCacheStore: this.pageCacheStore,
       getSettings: () => this.settings,
       saveSettings: () => this.saveSettings(),
       getIndexingState: (profileId) => this.indexing.getState(profileId),
@@ -186,10 +185,7 @@ export default class AttestPlugin extends Plugin {
       persistDiagnostics: () => this.settings.debugMode,
       isDebugCapture: () => this.settings.debugMode,
       logError: (error) => this.logger.logError(error, { url: "chat:session" }),
-      releaseAgentSessions: (sessionIds) => {
-        for (const sessionId of sessionIds) this.pageCacheStore.release(sessionId);
-      },
-      retireAgentSession: (sessionId) => this.pageCacheStore.retire(sessionId),
+      createPageCaches: () => this.pageCacheStore.createChat(),
     });
     return this.chatSessionManager;
   }
@@ -387,7 +383,6 @@ export default class AttestPlugin extends Plugin {
 
   onunload(): void {
     this.unloaded = true;
-    this.pageCacheStore.releaseAll();
     this.onboardingModal?.close();
     this.onboardingModal = undefined;
     void this.chatSessionManager?.dispose();

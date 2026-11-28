@@ -31,6 +31,7 @@ import type {
   SubAgentParentRun,
 } from "@application/ports/subAgent";
 import type { MapSourcesRunContext } from "@application/ports/mapSources";
+import type { ChatPageCaches } from "@application/ports/pageCache";
 import type { ResearchStatePort } from "@application/ports/researchState";
 import type {
   ResearchActivity,
@@ -140,6 +141,7 @@ export interface ResearchRequest {
   subAgentParent?: SubAgentParentRun;
   subAgentResearch?: ResearchSubAgentContext;
   subAgentMapSources?: MapSourcesRunContext;
+  pageCaches?: ChatPageCaches;
   research?: ResearchTurnInput;
   researchState?: ResearchStatePort;
 }

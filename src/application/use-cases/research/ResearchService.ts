@@ -1,4 +1,4 @@
-import type { PageCacheStore } from "@application/ports/pageCache";
+import type { ChatPageCaches } from "@application/ports/pageCache";
 import { TokenUsageMeter, type StageTokenUsage } from "./TokenUsageMeter";
 import { summarizeCompactionWithModel } from "@application/use-cases/chat/ChatCompaction";
 import { SearchProvider } from "@application/ports/web";
@@ -81,8 +81,6 @@ export interface ResearchServiceOptions {
 
   toolsetFactory: ResearchToolsetFactory;
 
-  pageCacheStore?: PageCacheStore;
-
   runToolLoop: ToolLoopRunner;
   translate?: AnswerTranslate;
 
@@ -132,7 +130,6 @@ export class ResearchService implements ConversationEngine {
     "noteTools" | "retriever" | "searchProvider" | "urlStatusChecker"
   >;
   private readonly now: () => Date;
-  private readonly pageCacheStore: PageCacheStore | undefined;
 
   private readonly usage = new TokenUsageMeter();
 
@@ -190,7 +187,6 @@ export class ResearchService implements ConversationEngine {
     });
 
     this.now = now;
-    this.pageCacheStore = options.pageCacheStore;
     this.subAgentRunnerDeps = {
       toolsetFactory: options.toolsetFactory,
       ...(options.searchProvider ? { searchProvider: options.searchProvider } : {}),
@@ -237,7 +233,6 @@ export class ResearchService implements ConversationEngine {
       vaultWriter: options.vaultWriter,
       downloadFolder: options.downloadFolder,
       toolsetFactory: options.toolsetFactory,
-      ...(options.pageCacheStore ? { pageCacheStore: options.pageCacheStore } : {}),
       toolsEnabled: options.toolsEnabled === true && options.noteTools !== undefined,
       toolCapabilities,
       toolCapabilityProvenance: options.toolCapabilityProvenance,
@@ -260,7 +255,6 @@ export class ResearchService implements ConversationEngine {
       now,
       createBranchEngine: () => new SubAgentRunner(this.subAgentRunnerDeps),
       branchSources: this.subAgentSources,
-      ...(options.pageCacheStore ? { pageCacheStore: options.pageCacheStore } : {}),
       ...(options.researchTimer ? { setTimer: options.researchTimer } : {}),
       researchLabels: options.researchLabels ?? { labelsFor: () => ENGLISH_RESEARCH_LABELS },
       onStage: (stage) => this.usage.enter(stage),
@@ -312,13 +306,17 @@ export class ResearchService implements ConversationEngine {
     };
 
     if (policy.strategy === "deep-research") {
-      request.subAgentParent?.bindExecution(this.subAgentExecution(ctx.retrieval.web));
+      request.subAgentParent?.bindExecution(
+        this.subAgentExecution(ctx.retrieval.web, request.pageCaches),
+      );
       yield* this.deep.execute(ctx);
       return;
     }
 
     if (policy.strategy === "thinking") {
-      request.subAgentParent?.bindExecution(this.subAgentExecution(ctx.retrieval.web));
+      request.subAgentParent?.bindExecution(
+        this.subAgentExecution(ctx.retrieval.web, request.pageCaches),
+      );
     }
 
     let executionStrategy: ResearchExecutionStrategy = policy.strategy;
@@ -378,7 +376,10 @@ export class ResearchService implements ConversationEngine {
    * runner with the same model configuration is created only when a child run starts,
    * with tools limited by that run's source policy.
    */
-  private subAgentExecution(web: ResearchModeWebParameters): SubAgentExecutionPort {
+  private subAgentExecution(
+    web: ResearchModeWebParameters,
+    pageCaches: ChatPageCaches | undefined,
+  ): SubAgentExecutionPort {
     const label = this.chatModelName;
     return new SubAgentExecutionAdapter({
       selectModel: () => ({
@@ -393,9 +394,7 @@ export class ResearchService implements ConversationEngine {
       createRunner: (modelRound) => new SubAgentRunner({ ...this.subAgentRunnerDeps, modelRound }),
       toolContext: (request) => ({
         ...subAgentToolContext(this.subAgentSources, request.sourcePolicy, web, request.origin),
-        ...(this.pageCacheStore
-          ? { pageCache: this.pageCacheStore.forSession(request.sessionId) }
-          : {}),
+        ...(pageCaches ? { pageCache: pageCaches.openSession(request.sessionId) } : {}),
       }),
       now: this.now,
     });

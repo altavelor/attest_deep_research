@@ -1,3 +1,4 @@
+import type { ChatPageCaches } from "@application/ports";
 import { ENGLISH_RESEARCH_LABELS } from "@core/research/deepResearch";
 import {
   DeepResearchStrategy,
@@ -264,20 +265,26 @@ describe("main branch runner findings", () => {
     expect(runner.usage("w-1")).toMatchObject({ evidenceItems: 1, fetches: 1 });
   });
 
-  it("gives each run its own page cache, never shared by work id, and widened output budget and releases it after a failure", async () => {
-    const sessions: string[] = [];
-    const released: string[] = [];
+  it("gives each run its own page cache, closes it after a failure, and widens the output budget", async () => {
+    const opened: { closed: boolean }[] = [];
     const budgets: unknown[] = [];
     const contexts: unknown[] = [];
-    const store = {
-      forSession: (id: string) => {
-        sessions.push(id);
-        return { maxPageChars: 1, put: () => undefined, get: () => undefined, list: () => [] };
+    const pageCaches = {
+      openRun: () => {
+        const cache = {
+          closed: false,
+          maxPageChars: 1,
+          put: () => undefined,
+          get: () => undefined,
+          list: () => [],
+          close: () => {
+            cache.closed = true;
+          },
+        };
+        opened.push(cache);
+        return cache;
       },
-      release: (id: string) => released.push(id),
-      retire: () => undefined,
-      releaseAll: () => undefined,
-    };
+    } as unknown as ChatPageCaches;
     let fail = false;
     const runner = new MainBranchRunner({
       engine: {
@@ -293,7 +300,7 @@ describe("main branch runner findings", () => {
       },
       sources: {},
       web: { deadlineMs: 1, perSourceLimit: 1, mergedLimit: 1, maxConcurrentSources: 1 },
-      pageCacheStore: store,
+      pageCaches,
       chatScope: "indexOnly",
       branches: pendingResearch().plan!.branches,
       now: () => new Date("2026-01-01T00:00:00.000Z"),
@@ -318,9 +325,9 @@ describe("main branch runner findings", () => {
     await expect(runner.run(work, allocation(2), new AbortController().signal)).rejects.toThrow(
       "model failed",
     );
-    expect(sessions).toHaveLength(3);
-    expect(new Set(sessions).size).toBe(3);
-    expect(released).toEqual(sessions);
+    expect(opened).toHaveLength(3);
+    expect(new Set(opened).size).toBe(3);
+    expect(opened.every((cache) => cache.closed)).toBe(true);
     expect(contexts[0]).toHaveProperty("pageCache");
     expect(budgets[0]).toMatchObject({ maxResultChars: 120_000 });
   });

@@ -1,4 +1,9 @@
-import type { CachedPage, PageCache, PageCacheStore } from "@application/ports";
+import type {
+  CachedPage,
+  ChatPageCaches,
+  OwnedPageCache,
+  PageCacheStore,
+} from "@application/ports";
 import { DEFAULT_PAGE_CACHE_LIMITS, type PageCacheLimits } from "@core/web";
 
 interface Slot {
@@ -6,62 +11,96 @@ interface Slot {
   lastUse: number;
 }
 
+interface Leaf {
+  slots: Map<string, Slot>;
+  closed: boolean;
+  owner: Set<Leaf>;
+}
+
 /**
- * Keeps the fetched pages of each agent session in memory. A page longer than the per-page cap is
- * cut and flagged, and whole least-recently-used pages leave when a session or the store exceeds
- * its cap; the page just stored always stays. Nothing is persisted.
+ * Keeps the fetched pages of every chat in memory, one leaf per run or agent session. A page longer
+ * than the per-page cap is cut and flagged, and whole least-recently-used pages leave when a leaf or
+ * the whole store exceeds its cap; the page just stored always stays. Nothing is persisted.
  */
 export class InMemoryPageCacheStore implements PageCacheStore {
-  private readonly sessions = new Map<string, Map<string, Slot>>();
-  private readonly retired = new Set<string>();
+  private readonly leaves = new Set<Leaf>();
   private tick = 0;
 
   constructor(private readonly limits: PageCacheLimits = DEFAULT_PAGE_CACHE_LIMITS) {}
 
-  forSession(sessionId: string): PageCache {
+  createChat(): ChatPageCaches {
+    const own = new Set<Leaf>();
+    const sessions = new Map<string, Leaf>();
+    const stopped = new Set<string>();
+    let closed = false;
+    const open = (refused: boolean): Leaf => {
+      const leaf: Leaf = { slots: new Map(), closed: refused || closed, owner: own };
+      if (!leaf.closed) {
+        own.add(leaf);
+        this.leaves.add(leaf);
+      }
+      return leaf;
+    };
     return {
-      maxPageChars: this.limits.maxPageChars,
-      put: (page) => this.put(sessionId, page),
-      get: (evidenceId) => this.touch(this.sessions.get(sessionId)?.get(evidenceId)),
-      list: () => [...(this.sessions.get(sessionId)?.values() ?? [])].map((slot) => slot.page),
+      openRun: () => this.cacheOf(open(false)),
+      openSession: (sessionId) => {
+        const leaf = sessions.get(sessionId) ?? open(stopped.has(sessionId));
+        sessions.set(sessionId, leaf);
+        return this.cacheOf(leaf);
+      },
+      sessionPages: (sessionId) => {
+        const leaf = sessions.get(sessionId);
+        return leaf && !leaf.closed ? this.cacheOf(leaf) : undefined;
+      },
+      closeSession: (sessionId) => {
+        stopped.add(sessionId);
+        const leaf = sessions.get(sessionId);
+        if (leaf) this.drop(leaf);
+      },
+      close: () => {
+        closed = true;
+        for (const leaf of [...own]) this.drop(leaf);
+        sessions.clear();
+      },
     };
   }
 
-  release(sessionId: string): void {
-    this.sessions.delete(sessionId);
+  private cacheOf(leaf: Leaf): OwnedPageCache {
+    return {
+      maxPageChars: this.limits.maxPageChars,
+      put: (page) => this.put(leaf, page),
+      get: (evidenceId) => this.touch(leaf.slots.get(evidenceId)),
+      list: () => [...leaf.slots.values()].map((slot) => slot.page),
+      close: () => this.drop(leaf),
+    };
   }
 
-  retire(sessionId: string): void {
-    this.sessions.delete(sessionId);
-    this.retired.add(sessionId);
+  private drop(leaf: Leaf): void {
+    leaf.closed = true;
+    leaf.slots.clear();
+    leaf.owner.delete(leaf);
+    this.leaves.delete(leaf);
   }
 
-  releaseAll(): void {
-    this.sessions.clear();
-    this.retired.clear();
-  }
-
-  private put(sessionId: string, page: CachedPage): void {
-    if (this.retired.has(sessionId)) return;
+  private put(leaf: Leaf, page: CachedPage): void {
+    if (leaf.closed) return;
     const text = page.text.slice(0, this.limits.maxPageChars);
     const stored: CachedPage = {
       ...page,
       text,
       truncated: page.truncated || text.length < page.text.length,
     };
-    const session = this.sessions.get(sessionId) ?? new Map<string, Slot>();
-    this.sessions.set(sessionId, session);
     const kept: Slot = { page: stored, lastUse: this.next() };
-    session.set(page.evidenceId, kept);
+    leaf.slots.set(page.evidenceId, kept);
     this.evict(
-      () => sizeOf(session) > this.limits.maxSessionChars,
-      [...session.entries()].map(([id, slot]) => ({ session, id, slot })),
+      () => sizeOf(leaf.slots) > this.limits.maxSessionChars,
+      [...leaf.slots.entries()].map(([id, slot]) => ({ slots: leaf.slots, id, slot })),
       kept,
     );
     this.evict(
       () => this.total() > this.limits.maxTotalChars,
-      [...this.sessions.values()].flatMap((owned) =>
-        [...owned.entries()].map(([id, slot]) => ({ session: owned, id, slot })),
+      [...this.leaves].flatMap((owned) =>
+        [...owned.slots.entries()].map(([id, slot]) => ({ slots: owned.slots, id, slot })),
       ),
       kept,
     );
@@ -69,7 +108,7 @@ export class InMemoryPageCacheStore implements PageCacheStore {
 
   private evict(
     over: () => boolean,
-    candidates: { session: Map<string, Slot>; id: string; slot: Slot }[],
+    candidates: { slots: Map<string, Slot>; id: string; slot: Slot }[],
     keep: Slot,
   ): void {
     const order = candidates
@@ -77,7 +116,7 @@ export class InMemoryPageCacheStore implements PageCacheStore {
       .sort((a, b) => a.slot.lastUse - b.slot.lastUse);
     for (const candidate of order) {
       if (!over()) return;
-      candidate.session.delete(candidate.id);
+      candidate.slots.delete(candidate.id);
     }
   }
 
@@ -89,7 +128,7 @@ export class InMemoryPageCacheStore implements PageCacheStore {
 
   private total(): number {
     let total = 0;
-    for (const session of this.sessions.values()) total += sizeOf(session);
+    for (const leaf of this.leaves) total += sizeOf(leaf.slots);
     return total;
   }
 
@@ -99,8 +138,8 @@ export class InMemoryPageCacheStore implements PageCacheStore {
   }
 }
 
-function sizeOf(session: Map<string, Slot>): number {
+function sizeOf(slots: Map<string, Slot>): number {
   let size = 0;
-  for (const slot of session.values()) size += slot.page.text.length;
+  for (const slot of slots.values()) size += slot.page.text.length;
   return size;
 }

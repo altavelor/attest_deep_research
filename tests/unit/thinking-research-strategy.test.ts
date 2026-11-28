@@ -1,3 +1,4 @@
+import type { ChatPageCaches } from "@application/ports";
 import { ThinkingResearchStrategy } from "@application/use-cases/research/strategies/ThinkingResearchStrategy";
 import type {
   ResearchExecutionContext,
@@ -111,13 +112,14 @@ async function drain(
 
 describe("ThinkingResearchStrategy page cache", () => {
   it("gives the toolset a page cache for the run and releases it when the run ends", async () => {
-    const cache = { maxPageChars: 1, put: vi.fn(), get: vi.fn(), list: vi.fn(() => []) };
-    const pageCacheStore = {
-      forSession: vi.fn(() => cache),
-      release: vi.fn(),
-      retire: vi.fn(),
-      releaseAll: vi.fn(),
+    const cache = {
+      maxPageChars: 1,
+      put: vi.fn(),
+      get: vi.fn(),
+      list: vi.fn(() => []),
+      close: vi.fn(),
     };
+    const pageCaches = { openRun: vi.fn(() => cache) } as unknown as ChatPageCaches;
     const toolsetFactory = vi.fn(createResearchToolRegistry);
     const modelRound = scriptedRounds(() => ({
       items: [{ type: "text" as const, text: "Answer." }],
@@ -125,12 +127,11 @@ describe("ThinkingResearchStrategy page cache", () => {
     }));
 
     await drain(
-      strategy(modelRound, undefined, { pageCacheStore, toolsetFactory }).execute(context()),
+      strategy(modelRound, undefined, { toolsetFactory }).execute(context({ pageCaches })),
     );
 
     expect(toolsetFactory.mock.calls[0]![0].pageCache).toBe(cache);
-    const [sessionId] = pageCacheStore.forSession.mock.calls[0] as unknown as [string];
-    expect(pageCacheStore.release).toHaveBeenCalledWith(sessionId);
+    expect(cache.close).toHaveBeenCalledTimes(1);
   });
 });
 

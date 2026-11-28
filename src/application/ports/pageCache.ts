@@ -17,13 +17,24 @@ export interface PageCache {
   list(): readonly CachedPage[];
 }
 
+/** The pages one agent session or run holds; closing it drops them and refuses every later page. */
+export interface OwnedPageCache extends PageCache {
+  close(): void;
+}
+
 /**
- * Owns the page caches of all agent sessions; a session never sees the pages of another. A retired
- * session loses its pages and stores no page again, so a fetch that was in flight cannot refill it.
+ * The page caches of one chat. A run or an agent session owns its cache and sees no other; the chat
+ * can read the pages of an agent session, and closing a session or the chat releases its pages.
  */
+export interface ChatPageCaches {
+  openRun(): OwnedPageCache;
+  openSession(sessionId: string): OwnedPageCache;
+  sessionPages(sessionId: string): Pick<PageCache, "get" | "list"> | undefined;
+  closeSession(sessionId: string): void;
+  close(): void;
+}
+
+/** Creates the page caches of a chat; all chats of a plugin share one memory budget. */
 export interface PageCacheStore {
-  forSession(sessionId: string): PageCache;
-  release(sessionId: string): void;
-  retire(sessionId: string): void;
-  releaseAll(): void;
+  createChat(): ChatPageCaches;
 }

@@ -74,7 +74,7 @@ function runner(modelRound: ModelRoundProvider, store: InMemoryPageCacheStore, s
         noteMutationAccess: false,
       },
       searchProvider: provider,
-      pageCache: store.forSession(sessionId),
+      pageCache: store.createChat().openSession(sessionId),
     },
   });
 }

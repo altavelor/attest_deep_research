@@ -1,4 +1,3 @@
-import type { PageCacheStore } from "@application/ports/pageCache";
 import { ApiFormat, ChatModelProvider, ChatRequest, ModelRoundProvider } from "@core/agent";
 import { ToolCallingCapabilities } from "@core/agent";
 import { ResearchAnswer } from "@core/answer";
@@ -60,7 +59,6 @@ export interface ResearchStrategyDeps {
   vaultWriter?: VaultWriter;
   downloadFolder?: string;
   toolsetFactory: ResearchToolsetFactory;
-  pageCacheStore?: PageCacheStore;
 
   toolsEnabled: boolean;
   toolCapabilities: ToolCallingCapabilities;

@@ -130,7 +130,6 @@ export function createResearchService(
   return new ResearchService({
     retriever,
     toolsetFactory: (options) => createResearchToolRegistry(options, { fetch: nativeWindowFetch }),
-    ...(ctx.pageCacheStore ? { pageCacheStore: ctx.pageCacheStore } : {}),
     modelRoundFactory: (model) => new ChatCompletionsRoundAdapter(model),
     runToolLoop,
     translate: (key, params) => ctx.translator.t(key as MessageKey, params),

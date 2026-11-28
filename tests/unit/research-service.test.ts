@@ -1,3 +1,4 @@
+import type { ChatPageCaches } from "@application/ports";
 import { ResearchService } from "@application/use-cases/research";
 import { MarkdownExtractor } from "@adapters/extractors";
 import { createResearchToolRegistry, NoteToolService, runToolLoop } from "@adapters/research-tools";
@@ -595,13 +596,17 @@ describe("ResearchService", () => {
   });
 
   it("gives each child run the page cache of its own agent session", async () => {
-    const cache = { maxPageChars: 1, put: vi.fn(), get: vi.fn(), list: vi.fn(() => []) };
-    const pageCacheStore = {
-      forSession: vi.fn(() => cache),
-      release: vi.fn(),
-      retire: vi.fn(),
-      releaseAll: vi.fn(),
+    const cache = {
+      maxPageChars: 1,
+      put: vi.fn(),
+      get: vi.fn(),
+      list: vi.fn(() => []),
+      close: vi.fn(),
     };
+    const pageCaches = {
+      openRun: vi.fn(() => cache),
+      openSession: vi.fn(() => cache),
+    } as unknown as ChatPageCaches;
     const toolsetFactory = vi.fn(createResearchToolRegistry);
     const chatModel = new FakeChatModel([
       [{ content: "First attempt", isComplete: true }],
@@ -611,7 +616,6 @@ describe("ResearchService", () => {
     ]);
     const service = new ResearchService({
       toolsetFactory,
-      pageCacheStore,
       runToolLoop,
       modelRoundFactory: (m) => new ChatCompletionsRoundAdapter(m),
       retriever: new FakeRetriever(emptyRetrieval()),
@@ -633,6 +637,7 @@ describe("ResearchService", () => {
         question: "Delegate this",
         forceSubAgent: true,
         searchMode: "indexOnly",
+        pageCaches,
         subAgentDelegator: recordingDelegator().delegator,
         subAgentParent: { ...parent, bindExecution: (execution) => (bound = execution) },
       }),
@@ -657,7 +662,7 @@ describe("ResearchService", () => {
       onObservation: () => undefined,
     } as never);
 
-    expect(pageCacheStore.forSession).toHaveBeenCalledWith("child-1");
+    expect(pageCaches.openSession).toHaveBeenCalledWith("child-1");
     expect(toolsetFactory.mock.calls.at(-1)![0].pageCache).toBe(cache);
   });
 

@@ -43,7 +43,7 @@ export async function* runApprovedTurn(
       engine: deps.createBranchEngine(),
       sources: deps.branchSources,
       web: ctx.retrieval.web,
-      ...(deps.pageCacheStore ? { pageCacheStore: deps.pageCacheStore } : {}),
+      ...(ctx.request.pageCaches ? { pageCaches: ctx.request.pageCaches } : {}),
       chatScope: scope,
       branches: approved.plan!.branches,
       ...(ctx.request.finalizeAnswer ? { registerAnswer: ctx.request.finalizeAnswer } : {}),

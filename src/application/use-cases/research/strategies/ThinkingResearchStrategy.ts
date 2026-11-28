@@ -11,7 +11,7 @@ import {
 import { buildThinkingResearchMessages } from "@core/research";
 import { isWebQueryIntent, isWebQueryRecency } from "@core/web";
 import { ResearchStreamEvent } from "@application/contracts/research";
-import type { WebSearchOptions } from "@application/ports";
+import type { OwnedPageCache, WebSearchOptions } from "@application/ports";
 import { ASK_CLARIFICATION_TOOL, SUB_AGENT_TOOL } from "@core/agent";
 import {
   AskClarificationTool,
@@ -67,10 +67,10 @@ export class ThinkingResearchStrategy implements ResearchStrategy {
   ): AsyncGenerator<ResearchStreamEvent, ResearchStrategyOutcome> {
     yield { type: "status", message: "Synthesizing answer..." };
     const liveEvents = createAsyncEventChannel<ResearchStreamEvent>();
-    const pageCacheId = `thinking-${crypto.randomUUID()}`;
-    const thinkingPromise = this.run(ctx, (event) => liveEvents.push(event), pageCacheId).finally(
+    const pageCache = ctx.request.pageCaches?.openRun();
+    const thinkingPromise = this.run(ctx, (event) => liveEvents.push(event), pageCache).finally(
       () => {
-        this.deps.pageCacheStore?.release(pageCacheId);
+        pageCache?.close();
         liveEvents.close();
       },
     );
@@ -93,7 +93,7 @@ export class ThinkingResearchStrategy implements ResearchStrategy {
   private async run(
     ctx: ResearchExecutionContext,
     onEvent: (event: ResearchStreamEvent) => void,
-    pageCacheId: string,
+    pageCache: OwnedPageCache | undefined,
   ): Promise<ThinkingRunResult> {
     const { request, question, searchMode, policy, indexDescription } = ctx;
     const assembled = this.deps.contextAssembler
@@ -156,9 +156,7 @@ export class ThinkingResearchStrategy implements ResearchStrategy {
       urlStatusChecker: this.deps.urlStatusChecker,
       indexSourcePaths: request.contextPaths,
       searchProvider: this.deps.searchProvider,
-      ...(this.deps.pageCacheStore
-        ? { pageCache: this.deps.pageCacheStore.forSession(pageCacheId) }
-        : {}),
+      ...(pageCache ? { pageCache } : {}),
       web: ctx.retrieval.web,
       onWebSourceSelection: (selection) => {
         if (webSourceSelections.length < MAX_TRACED_WEB_SEARCHES) {

@@ -2,7 +2,7 @@ import { ResearchEvidenceRegistry } from "@adapters/research-tools/ResearchEvide
 import { InMemoryPageCacheStore } from "@adapters/research-tools/web/InMemoryPageCacheStore";
 import { FindInPagesTool, ReadPageRangeTool } from "@adapters/research-tools/web/PageSearchTools";
 import { WebFetchResearchTool } from "@adapters/research-tools/web/WebFetchResearchTool";
-import type { SearchProvider } from "@application/ports";
+import type { ChatPageCaches, SearchProvider } from "@application/ports";
 import { executeTool, type Tool } from "@core/agent";
 import {
   BATCH_OUTPUT_CHARS,
@@ -32,12 +32,20 @@ function provider(content: string): SearchProvider {
   };
 }
 
+const chats = new WeakMap<InMemoryPageCacheStore, ChatPageCaches>();
+
+function chatOf(store: InMemoryPageCacheStore): ChatPageCaches {
+  const chat = chats.get(store) ?? store.createChat();
+  chats.set(store, chat);
+  return chat;
+}
+
 function session(store: InMemoryPageCacheStore, sessionId: string) {
   let sequence = 0;
   const evidence = new ResearchEvidenceRegistry({
     createHandle: () => `${sessionId}-handle-${sequence++}`,
   });
-  const pageCache = store.forSession(sessionId);
+  const pageCache = chatOf(store).openSession(sessionId);
   const call = (tool: Tool, name: string, args: object) =>
     executeTool(tool, { id: "call", name, arguments: args as Record<string, unknown> });
   return {

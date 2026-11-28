@@ -12,7 +12,7 @@ import {
   type ResearchWork,
 } from "@core/research/deepResearch";
 import type { ResearchStreamEvent } from "@application/contracts/research";
-import type { PageCacheStore } from "@application/ports/pageCache";
+import type { ChatPageCaches } from "@application/ports/pageCache";
 import type { SubAgentPort } from "@application/research/subAgentPort";
 import {
   citationIdsFromText,
@@ -34,7 +34,7 @@ export interface MainBranchRunnerDeps {
   engine: SubAgentPort;
   sources: SubAgentToolSources;
   web: ResearchModeWebParameters;
-  pageCacheStore?: PageCacheStore;
+  pageCaches?: ChatPageCaches;
   chatScope: ResearchSourceScope;
   branches: readonly ResearchBranch[];
   registerAnswer?(answer: ResearchAnswer): ResearchAnswer;
@@ -66,8 +66,7 @@ export class MainBranchRunner implements BranchRunner {
       throw new BranchUnavailableError("The branch has no source available in this chat.");
     this.usages.delete(work.workId);
     const emit = this.deps.onEvent;
-    const cacheId = `main-branch-${crypto.randomUUID()}`;
-    const { pageCacheStore } = this.deps;
+    const pageCache = this.deps.pageCaches?.openRun();
     const toolContext = subAgentToolContext(
       this.deps.sources,
       {
@@ -82,13 +81,11 @@ export class MainBranchRunner implements BranchRunner {
     const result = await this.deps.engine
       .run({
         task: work.task,
-        toolContext: pageCacheStore
-          ? { ...toolContext, pageCache: pageCacheStore.forSession(cacheId) }
-          : toolContext,
+        toolContext: pageCache ? { ...toolContext, pageCache } : toolContext,
         budget: {
           maxRounds: allocation.modelRounds,
           maxSearches: allocation.searches,
-          ...(pageCacheStore ? { maxResultChars: RESEARCH_BRANCH_MAX_RESULT_CHARS } : {}),
+          ...(pageCache ? { maxResultChars: RESEARCH_BRANCH_MAX_RESULT_CHARS } : {}),
         },
         signal,
         onToolCall: (call) =>
@@ -96,7 +93,7 @@ export class MainBranchRunner implements BranchRunner {
         onToolResult: (outcome) =>
           emit?.({ type: "tool-call-end", ...outcome, id: `${work.workId}:${outcome.id}` }),
       })
-      .finally(() => pageCacheStore?.release(cacheId));
+      .finally(() => pageCache?.close());
     const evidence = [...result.snapshot.evidence];
     const telemetry = result.telemetry;
     const opened = openedDocuments(result.snapshot);

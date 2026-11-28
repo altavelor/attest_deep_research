@@ -1,3 +1,4 @@
+import type { ChatPageCaches } from "@application/ports/pageCache";
 import type { ChatDisplayMessage } from "@core/conversation";
 import type { ClarificationReply, ResearchAnswer } from "@core/answer";
 import type {
@@ -85,6 +86,5 @@ export interface ChatSessionEnvironment {
   createSubAgentSessionManager?: SubAgentSessionManagerFactory;
   subAgentServices?: ChatSubAgentServices;
   scheduleTimeout?(callback: () => void, delayMs: number): { cancel(): void };
-  releaseAgentSessions?(sessionIds: readonly string[]): void;
-  retireAgentSession?(sessionId: string): void;
+  createPageCaches?(): ChatPageCaches;
 }
