@@ -117,7 +117,18 @@ export class SubAgentRunScheduler implements SubAgentImportCommitter {
     if (!result.ok) return null;
     const revision = this.parts.store.putRecord(result.record, record);
     this.parts.store.tombstoneImport(result.tombstonedImport, tombstoneReasonOf(event));
+    if (result.record.session.status === "archived" && record.session.status !== "archived") {
+      this.notifyArchived(sessionId);
+    }
     return revision;
+  }
+
+  private notifyArchived(sessionId: string): void {
+    try {
+      this.parts.context.onSessionArchived?.(sessionId);
+    } catch {
+      return;
+    }
   }
 
   private pump(): void {

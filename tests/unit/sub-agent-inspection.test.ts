@@ -211,22 +211,34 @@ describe("sub-agent inspection snapshot", () => {
     expect(stopped?.entry).toMatchObject({ durationMs: 250 });
   });
 
-  it("tells the host which session the user stopped, once, and survives a failing host", async () => {
-    const stopped: string[] = [];
+  it("tells the host once about every session archived by a user stop or by stopping an import, and survives a failing host", async () => {
+    const archived: string[] = [];
     const harness = managerHarness({
-      onSessionStopped: (sessionId) => {
-        stopped.push(sessionId);
+      onSessionArchived: (sessionId) => {
+        archived.push(sessionId);
         throw new Error("host failed");
       },
     });
-    const { session } = await launchChild(harness.delegator(), "alpha");
-    const sessionId = session.subAgentSessionId;
-    const running = await card(harness, sessionId);
+    const delegator = harness.delegator();
+    const first = await launchChild(delegator, "alpha");
+    const second = await launchChild(delegator, "beta");
+    harness.execution.finish(1);
+    harness.imports.mode = "hold";
+    harness.execution.finish(0);
+    await settle();
+    const running = await card(harness, second.session.subAgentSessionId);
     const inspection = harness.manager.inspection();
-    expect(await inspection.stopFromUser(sessionId, "stale-run")).toBe("stale");
-    expect(stopped).toEqual([]);
-    expect(await inspection.stopFromUser(sessionId, running.controlRunId)).toBe("stopped");
-    expect(stopped).toEqual([sessionId]);
+
+    expect(await inspection.stopFromUser(second.session.subAgentSessionId, "stale-run")).toBe(
+      "stale",
+    );
+    expect(archived).toEqual([]);
+    expect(
+      await inspection.stopFromUser(second.session.subAgentSessionId, running.controlRunId),
+    ).toBe("stopped");
+    await delegator.stop(first.session.subAgentSessionId);
+
+    expect(archived).toEqual([second.session.subAgentSessionId, first.session.subAgentSessionId]);
   });
 
   it("sums usage per request, replaces live by final and keeps unknown totals partial", async () => {

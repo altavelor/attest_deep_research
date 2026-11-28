@@ -51,19 +51,10 @@ export class SubAgentUserStop {
     return this.save(sessionId);
   }
 
-  private notifyStopped(sessionId: string): void {
-    try {
-      this.parts.context.onSessionStopped?.(sessionId);
-    } catch {
-      return;
-    }
-  }
-
   private async save(sessionId: string): Promise<"stopped"> {
     await this.parts.store.flush(this.parts.store.currentRevision);
     const stoppedRunId = this.unsaved.get(sessionId) ?? null;
     this.unsaved.delete(sessionId);
-    this.notifyStopped(sessionId);
     if (stoppedRunId !== null) this.parts.mainEvents.terminal(sessionId, stoppedRunId, "stopped");
     this.parts.notifyResults();
     return "stopped";
