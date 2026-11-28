@@ -128,17 +128,19 @@ describe("research budget limits", () => {
       researchBranch(index + 1, { enabled: index !== 0 }),
     );
     const preset = presetLimits("balanced");
-    expect(budgetLimits(researchPlan(branches.slice(0, 4), "conservative"))).toEqual(
-      presetLimits("conservative"),
-    );
+    expect(budgetLimits(researchPlan(branches.slice(0, 4), "conservative"))).toEqual({
+      ...presetLimits("conservative"),
+      childSessions: 3,
+    });
     expect(budgetLimits(researchPlan(branches.slice(0, 7), "balanced"))).toEqual({
       ...preset,
+      childSessions: 6,
       attemptsPerBranch: 3,
       attemptsTotal: 11,
     });
     expect(budgetLimits(researchPlan(branches.slice(0, 11), "balanced"))).toEqual({
       ...preset,
-      childSessions: 7,
+      childSessions: 10,
       attemptsPerBranch: 3,
       attemptsTotal: 18,
       modelRoundsTotal: 267,

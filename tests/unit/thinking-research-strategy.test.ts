@@ -1,3 +1,4 @@
+import type { ChatPageCaches } from "@application/ports";
 import { ThinkingResearchStrategy } from "@application/use-cases/research/strategies/ThinkingResearchStrategy";
 import type {
   ResearchExecutionContext,
@@ -108,6 +109,31 @@ async function drain(
   }
   return { events, outcome: next.value };
 }
+
+describe("ThinkingResearchStrategy page cache", () => {
+  it("gives the toolset a page cache for the run and releases it when the run ends", async () => {
+    const cache = {
+      maxPageChars: 1,
+      put: vi.fn(),
+      get: vi.fn(),
+      list: vi.fn(() => []),
+      close: vi.fn(),
+    };
+    const pageCaches = { openRun: vi.fn(() => cache) } as unknown as ChatPageCaches;
+    const toolsetFactory = vi.fn(createResearchToolRegistry);
+    const modelRound = scriptedRounds(() => ({
+      items: [{ type: "text" as const, text: "Answer." }],
+      stopReason: "complete" as const,
+    }));
+
+    await drain(
+      strategy(modelRound, undefined, { toolsetFactory }).execute(context({ pageCaches })),
+    );
+
+    expect(toolsetFactory.mock.calls[0]![0].pageCache).toBe(cache);
+    expect(cache.close).toHaveBeenCalledTimes(1);
+  });
+});
 
 describe("ThinkingResearchStrategy failure paths", () => {
   it("returns a cancelled outcome and no answer when the run is aborted mid-stream", async () => {

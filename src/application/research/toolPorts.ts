@@ -1,4 +1,5 @@
 import type { SearchProvider } from "@application/ports/web";
+import type { PageCache } from "@application/ports/pageCache";
 import type { ImageSearchRegistry, ToolDocumentImageQuery } from "@application/ports/images";
 import type { AnswerArtifact, ImageCandidate } from "@core/media";
 import type { VaultWriter } from "@application/ports/vault";
@@ -58,6 +59,8 @@ export interface ResearchToolsetOptions {
   urlStatusChecker?: UrlStatusChecker;
   indexSourcePaths?: readonly string[];
   searchProvider?: SearchProvider;
+
+  pageCache?: PageCache;
 
   web?: ResearchModeWebParameters;
 

@@ -11,6 +11,7 @@ import {
   WebResultCapacityError,
 } from "@application/sources";
 import { validatePublicWebUrl } from "@application/sources";
+import { MAX_PAGE_EVIDENCE_CHARS, MIN_READ_RANGE_CHARS, trimToBoundary } from "@core/web";
 
 interface MutableEvidenceEntry {
   chunk: RetrievedChunk;
@@ -26,6 +27,20 @@ export interface ResearchEvidenceRegistryOptions {
 }
 
 const DEFAULT_MAX_WEB_RESULTS = 25;
+const PASSAGE_SEPARATOR_CHARS = 40;
+
+interface PagePart {
+  offset: number;
+  text: string;
+  seq: number;
+}
+
+interface PageParts {
+  head: string;
+  passages: PagePart[];
+  seq: number;
+  version?: string;
+}
 
 /**
  * Registers the evidence of one answer under stable IDs and bounded web handles. A fifth of the
@@ -38,6 +53,7 @@ export class ResearchEvidenceRegistry implements EvidenceRegistry {
   private readonly entries = new Map<string, MutableEvidenceEntry>();
   private readonly handles = new Map<string, WebHandleEntry>();
   private readonly handlesByUrl = new Map<string, WebHandleEntry>();
+  private readonly pages = new Map<string, PageParts>();
 
   constructor(options: ResearchEvidenceRegistryOptions = {}) {
     this.createHandle = options.createHandle ?? (() => `result_${crypto.randomUUID()}`);
@@ -157,7 +173,13 @@ export class ResearchEvidenceRegistry implements EvidenceRegistry {
 
   upgradeWebPage(
     resultId: string,
-    page: { content: string; finalUrl: string; truncated: boolean; callId: string },
+    page: {
+      content: string;
+      finalUrl: string;
+      truncated: boolean;
+      callId: string;
+      version?: string;
+    },
   ): void {
     const handle = this.handles.get(resultId);
     if (!handle) {
@@ -181,6 +203,44 @@ export class ResearchEvidenceRegistry implements EvidenceRegistry {
     entry.citation = { ...formatCitation(source), id: handle.evidenceId };
     entry.page = { finalUrl: page.finalUrl, truncated: page.truncated };
     appendCall(entry.calls, { callId: page.callId, tool: "fetch_web_page" });
+    const previous = this.pages.get(handle.evidenceId);
+    const sameVersion =
+      page.version !== undefined &&
+      previous?.version === page.version &&
+      previous.head === page.content;
+    const parts: PageParts = {
+      head: page.content,
+      passages: sameVersion ? previous.passages : [],
+      seq: sameVersion ? previous.seq : 0,
+      ...(page.version !== undefined ? { version: page.version } : {}),
+    };
+    const { text, kept } = composePageEvidence(parts);
+    parts.passages = kept;
+    this.pages.set(handle.evidenceId, parts);
+    entry.chunk = { ...entry.chunk, text, contentHash: stableId(text) };
+  }
+
+  addWebPassages(
+    resultId: string,
+    passages: readonly { offset: number; text: string }[],
+    callId: string,
+  ): readonly { offset: number; text: string }[] {
+    const handle = this.handles.get(resultId);
+    const entry = handle ? this.entries.get(handle.evidenceId) : undefined;
+    const parts = handle ? this.pages.get(handle.evidenceId) : undefined;
+    if (!handle || !entry || !parts) {
+      throw new Error("Registered web page is unavailable.");
+    }
+    parts.seq += 1;
+    const accepted = fitPassages(parts, passages);
+    for (const passage of accepted) {
+      parts.passages.push({ offset: passage.offset, text: passage.text, seq: parts.seq });
+    }
+    const { text, kept } = composePageEvidence(parts);
+    parts.passages = kept;
+    entry.chunk = { ...entry.chunk, text, contentHash: stableId(text) };
+    appendCall(entry.calls, { callId, tool: "fetch_web_page" });
+    return accepted;
   }
 
   snapshot(): ResearchEvidenceSnapshot {
@@ -230,6 +290,102 @@ export class ResearchEvidenceRegistry implements EvidenceRegistry {
     }
     throw new Error("Could not allocate a unique web result handle.");
   }
+}
+
+/**
+ * Returns the passages that still fit the evidence of the page next to what it already holds, the
+ * last one cut to the room left, so text handed to the model is never dropped from the evidence.
+ */
+function fitPassages(
+  parts: PageParts,
+  passages: readonly { offset: number; text: string }[],
+): { offset: number; text: string }[] {
+  const budget = MAX_PAGE_EVIDENCE_CHARS - parts.head.length;
+  const accepted: { offset: number; text: string }[] = [];
+  let held: PagePart[] = parts.passages.map((part) => ({ ...part }));
+  for (const passage of passages) {
+    if (passage.text.length === 0) continue;
+    const tail = trimToTail(
+      { offset: passage.offset, text: passage.text, seq: 0 },
+      parts.head.length,
+    );
+    if (!tail) {
+      accepted.push(passage);
+      continue;
+    }
+    const skipped = tail.offset - passage.offset;
+    const room = budget - partsSize(held) - PASSAGE_SEPARATOR_CHARS;
+    const cut = room >= MIN_READ_RANGE_CHARS ? trimToBoundary(tail.text, room) : 0;
+    for (const length of [tail.text.length, cut >= MIN_READ_RANGE_CHARS ? cut : 0]) {
+      const text = tail.text.slice(0, length);
+      if (text.length === 0) continue;
+      const next = mergeParts([...held, { ...tail, text }]);
+      if (partsSize(next) > budget) continue;
+      held = next;
+      accepted.push({ offset: passage.offset, text: passage.text.slice(0, skipped + text.length) });
+      break;
+    }
+  }
+  return accepted;
+}
+
+/**
+ * Builds the evidence text of a page from its head and the passages returned to the model: the
+ * newest passages first until the evidence cap, merged where they overlap, in reading order.
+ */
+function composePageEvidence(parts: PageParts): { text: string; kept: PagePart[] } {
+  const budget = MAX_PAGE_EVIDENCE_CHARS - parts.head.length;
+  const newest = [...parts.passages]
+    .map((part) => trimToTail(part, parts.head.length))
+    .filter((part): part is PagePart => part !== null)
+    .sort((a, b) => b.seq - a.seq);
+  let chosen: PagePart[] = [];
+  for (const part of newest) {
+    const next = mergeParts([...chosen, part]);
+    if (partsSize(next) <= budget) chosen = next;
+    else if (chosen.length === 0)
+      chosen = [
+        { ...part, text: part.text.slice(0, Math.max(0, budget - PASSAGE_SEPARATOR_CHARS)) },
+      ];
+  }
+  const kept = mergeParts(chosen);
+  const [first, ...rest] = kept;
+  const joined = first?.offset === parts.head.length;
+  const marked = (part: PagePart): string => `\n\n[… offset ${part.offset} …]\n${part.text}`;
+  return {
+    text: `${parts.head}${first ? (joined ? first.text : marked(first)) : ""}${rest.map(marked).join("")}`,
+    kept,
+  };
+}
+
+function trimToTail(part: PagePart, headChars: number): PagePart | null {
+  const end = part.offset + part.text.length;
+  if (end <= headChars) return null;
+  return part.offset >= headChars
+    ? part
+    : { ...part, offset: headChars, text: part.text.slice(headChars - part.offset) };
+}
+
+function mergeParts(parts: readonly PagePart[]): PagePart[] {
+  const merged: PagePart[] = [];
+  for (const part of [...parts].sort((a, b) => a.offset - b.offset)) {
+    const last = merged.at(-1);
+    if (last && part.offset <= last.offset + last.text.length) {
+      const overlap = last.offset + last.text.length - part.offset;
+      merged[merged.length - 1] = {
+        ...last,
+        text: last.text + part.text.slice(overlap),
+        seq: Math.max(last.seq, part.seq),
+      };
+    } else {
+      merged.push({ ...part });
+    }
+  }
+  return merged;
+}
+
+function partsSize(parts: readonly PagePart[]): number {
+  return parts.reduce((total, part) => total + part.text.length + PASSAGE_SEPARATOR_CHARS, 0);
 }
 
 export function canonicalizeWebUrl(value: string): string {

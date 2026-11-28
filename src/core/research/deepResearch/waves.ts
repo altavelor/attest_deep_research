@@ -8,21 +8,6 @@ export function waveSize(limits: ResearchLimits, parallelRequests: boolean): num
   return parallelRequests ? Math.max(1, Math.min(MAX_WAVE_SIZE, limits.childSessions)) : 1;
 }
 
-/**
- * Chooses where a branch work runs: in its child session when the branch already has one or the
- * distinct-session ceiling still allows a new one, counting new sessions already in flight, and on
- * the main path otherwise.
- */
-export function branchPath(
-  sessionByBranch: Readonly<Record<string, string>>,
-  branchId: string,
-  newSessionsInFlight: number,
-  ceiling: number,
-): "main" | "sub-agent" {
-  if (sessionByBranch[branchId] !== undefined) return "sub-agent";
-  return Object.keys(sessionByBranch).length + newSessionsInFlight < ceiling ? "sub-agent" : "main";
-}
-
 /** Returns the budget scope of one branch of a research; the manager treats it as opaque. */
 export function researchScopeId(researchId: string, branchId: string): string {
   return `${SCOPE_PREFIX}${researchId}:${branchId}`;

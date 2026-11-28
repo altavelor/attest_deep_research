@@ -63,6 +63,10 @@ export const subAgents: EnSubAgentMessages = {
   "chat.subAgents.work.summary": "{runs} تشغيلات · {calls} استدعاءات أدوات · {pending} معلّقة",
   "chat.subAgents.work.empty": "لم يستدعِ الوكيل أي أداة بعد.",
   "chat.subAgents.work.showMore": "عرض المزيد ({count} إضافية)",
+  "chat.subAgents.answer.title": "الإجابة النهائية",
+  "chat.subAgents.answer.summary": "التشغيل {run} · {chars} حرفًا",
+  "chat.subAgents.answer.empty": "ليس لهذا التشغيل إجابة نهائية بعد.",
+  "chat.subAgents.answer.truncated": "تم الاقتطاع — يُعرض الجزء الأول فقط",
   "chat.subAgents.stop": "إيقاف الوكيل",
   "chat.subAgents.stop.hint":
     "يوقف هذا الوكيل فقط. تستمر الإجابة الرئيسية والوكلاء الآخرون. إغلاق هذه النافذة لا يوقف شيئًا.",

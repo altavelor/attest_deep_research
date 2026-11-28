@@ -11,6 +11,9 @@ import type { SubAgentDelegator } from "@application/ports/subAgent";
 import {
   ResearchBudgetOwner,
   blockDependants,
+  budgetLimits,
+  withoutStaleRunRefs,
+  type BranchExecution,
   initialExecutions,
   isPlanStale,
   nextReadyExecution,
@@ -18,12 +21,15 @@ import {
   SOURCE_READING_INSTRUCTION,
   branchLanguageInstruction,
 } from "@core/research/deepResearch";
-import { researchBranch, researchPlan } from "../support/deepResearch";
-import { markdownSource, retrieved } from "../support/factories";
+import { gatheringResearch, researchBranch, researchPlan } from "../support/deepResearch";
+import { retrieved, webSource } from "../support/factories";
 import { runSummary } from "../support/subAgentInspection";
 import { settle } from "../support/async";
 import { runPastDeadline } from "../support/timers";
-import { STOP_SETTLE_MS } from "@application/use-cases/research/deep-research/ResearchScheduler";
+import {
+  STOP_SETTLE_MS,
+  type ResearchSchedulerRunners,
+} from "@application/use-cases/research/deep-research/ResearchScheduler";
 
 const plan = researchPlan(
   [
@@ -110,167 +116,221 @@ describe("deep research scheduling rules", () => {
   });
 });
 
-describe("deep research main-path fallback", () => {
-  it("queues a refused session behind a running main-path work and charges its allocation once", async () => {
-    const fallbackPlan = researchPlan([researchBranch(1), researchBranch(2)], "balanced", {
-      approvedAt: "2026-01-01T00:00:00.000Z",
+describe("run references of a replaced session", () => {
+  it("drops the references to a session that is no longer mapped to its branch", () => {
+    const state = gatheringResearch(plan);
+    const ref = (sessionId: string) => ({ sessionId, runId: "run-1", resultRevision: 1 });
+    const run = (branchId: string, sessionId: string, workId: string) => ({
+      ...initialExecutions(plan)[0]!,
+      workId,
+      branchId,
+      path: "sub-agent" as const,
+      runRef: ref(sessionId),
     });
-    const limits = { ...fallbackPlan.limits, childSessions: 1 };
-    const owner = new ResearchBudgetOwner(limits, () => 0, 2);
-    owner.open(null);
-    let release: () => void = () => undefined;
-    const mainRuns: string[] = [];
-    const tasks: string[] = [];
-    const main: BranchRunner = {
-      path: "main",
-      run: (work) => {
-        mainRuns.push(work.branchId);
-        tasks.push(work.task);
-        const finding = { text: "F", citationTokens: [], partial: false };
-        if (work.branchId === "branch-2") return Promise.resolve(finding);
-        return new Promise((resolve) => (release = () => resolve(finding)));
+    const next = withoutStaleRunRefs(
+      {
+        ...state,
+        executions: [run("branch-1", "s-old", "w-1"), run("branch-2", "s-2", "w-2")],
+        discovery: { executions: [run("branch-1", "s-old", "t-1")] } as never,
+        verification: { followUps: [run("branch-1", "s-old", "f-1")] } as never,
       },
-      usage: () => ({ modelRounds: 3, searches: 1, evidenceItems: 0 }),
-    };
-    const child: BranchRunner = {
-      path: "sub-agent",
-      run: (work) => {
-        tasks.push(work.task);
-        return Promise.reject(new UnusableBranchSessionError("s-2"));
-      },
-    };
-    const running = new ResearchScheduler({
-      plan: { ...fallbackPlan, limits },
-      executions: initialExecutions(fallbackPlan),
+      { "branch-1": "s-new", "branch-2": "s-2" },
+    );
+
+    expect(next.executions.map((entry) => entry.runRef?.sessionId)).toEqual([undefined, "s-2"]);
+    expect(next.discovery!.executions[0]!.runRef).toBeUndefined();
+    expect(next.verification!.followUps[0]!.runRef).toBeUndefined();
+  });
+});
+
+describe("deep research child session scheduling", () => {
+  const finding = { text: "F", citationTokens: [], partial: false };
+  const gatherWorks = (plan: ReturnType<typeof researchPlan>) =>
+    plan.branches.map((branch) => ({
+      workId: `${branch.branchId}-gather-1`,
+      branchId: branch.branchId,
+      cycle: 1,
+      kind: "gather" as const,
+      task: "T",
+    }));
+  const schedulerFor = (
+    plan: ReturnType<typeof researchPlan>,
+    owner: ResearchBudgetOwner,
+    runners: ResearchSchedulerRunners,
+    waveSize: number,
+    barrier: (executions: readonly BranchExecution[]) => Promise<void> = async () => undefined,
+  ) =>
+    new ResearchScheduler({
+      plan,
+      executions: initialExecutions(plan),
       owner,
-      runners: { main, subAgent: child, sessionByBranch: () => ({ "branch-2": "s-2" }) },
-      waveSize: 2,
+      runners,
+      waveSize,
       signal: new AbortController().signal,
       setTimer: () => () => undefined,
-      barrier: async () => undefined,
-    }).run(
-      ["branch-1", "branch-2"].map((branchId) => ({
-        workId: `${branchId}-gather-1`,
-        branchId,
-        cycle: 1,
-        kind: "gather" as const,
-        task: "T",
-      })),
-    );
-    await settle();
-    expect(mainRuns).toEqual(["branch-1"]);
-    release();
-    const executions = await running;
+      barrier,
+    });
 
-    expect(mainRuns).toEqual(["branch-1", "branch-2"]);
-    expect(executions.map((entry) => [entry.state, entry.path, entry.attempts])).toEqual([
-      ["completed", "main", 1],
-      ["completed", "main", 1],
-    ]);
-    expect(owner.snapshot().consumed).toMatchObject({ branchAttempts: 2, modelRounds: 6 });
-    expect(owner.snapshot().openAllocations).toEqual([]);
-    expect(tasks).toEqual(
-      Array(3).fill(`T\n\n${SOURCE_READING_INSTRUCTION}\n\n${branchLanguageInstruction("en")}`),
-    );
-  });
-
-  it("opens child sessions for branches added beyond the preset before using the main path", async () => {
+  it("starts every free slot in one step and lets the branches beyond the wave wait for a slot", async () => {
     const grown = researchPlan(
       Array.from({ length: 5 }, (_, index) => researchBranch(index + 1)),
       "conservative",
       { approvedAt: "2026-01-01T00:00:00.000Z" },
     );
-    const owner = new ResearchBudgetOwner(grown.limits, () => 0, 5);
+    const owner = new ResearchBudgetOwner(budgetLimits(grown), () => 0, 5);
     owner.open(null);
-    const finding = { text: "F", citationTokens: [], partial: false };
-    const runner = (path: "main" | "sub-agent"): BranchRunner => ({
-      path,
-      run: () => Promise.resolve(finding),
-    });
-    const executions = await new ResearchScheduler({
-      plan: grown,
-      executions: initialExecutions(grown),
-      owner,
-      runners: {
-        main: runner("main"),
-        subAgent: runner("sub-agent"),
-        sessionByBranch: () => ({}),
-      },
-      waveSize: 5,
-      signal: new AbortController().signal,
-      setTimer: () => () => undefined,
-      barrier: async () => undefined,
-    }).run(
-      grown.branches.map((branch) => ({
-        workId: `${branch.branchId}-gather-1`,
-        branchId: branch.branchId,
-        cycle: 1,
-        kind: "gather" as const,
-        task: "T",
-      })),
-    );
-
-    expect(executions.map((entry) => entry.path)).toEqual([
-      "sub-agent",
-      "sub-agent",
-      "sub-agent",
-      "sub-agent",
-      "main",
-    ]);
-  });
-
-  it("leaves a queued fallback's allocation open exactly once when the user stops", async () => {
-    const fallbackPlan = researchPlan([researchBranch(1), researchBranch(2)], "balanced", {
-      approvedAt: "2026-01-01T00:00:00.000Z",
-    });
-    const limits = { ...fallbackPlan.limits, childSessions: 1 };
-    const owner = new ResearchBudgetOwner(limits, () => 0, 2);
-    owner.open(null);
-    const stop = new AbortController();
-    const main: BranchRunner = {
-      path: "main",
-      run: (_work, _allocation, signal) =>
-        new Promise((_resolve, reject) =>
-          signal.addEventListener("abort", () => reject(new DOMException("Stopped", "AbortError"))),
-        ),
-    };
+    let active = 0;
+    let peak = 0;
+    const started: string[] = [];
+    const tasks: string[] = [];
+    const releases: (() => void)[] = [];
     const child: BranchRunner = {
       path: "sub-agent",
-      run: () => Promise.reject(new UnusableBranchSessionError("s-2")),
+      run: (work) => {
+        started.push(work.branchId);
+        tasks.push(work.task);
+        active += 1;
+        peak = Math.max(peak, active);
+        return new Promise((resolve) =>
+          releases.push(() => {
+            active -= 1;
+            resolve(finding);
+          }),
+        );
+      },
     };
-    const running = new ResearchScheduler({
-      plan: { ...fallbackPlan, limits },
-      executions: initialExecutions(fallbackPlan),
+    const barriers: string[][] = [];
+    const running = schedulerFor(
+      grown,
       owner,
-      runners: { main, subAgent: child, sessionByBranch: () => ({ "branch-2": "s-2" }) },
-      waveSize: 2,
-      signal: stop.signal,
-      setTimer: () => () => undefined,
-      barrier: async () => undefined,
-    }).run(
-      ["branch-1", "branch-2"].map((branchId) => ({
-        workId: `${branchId}-gather-1`,
-        branchId,
-        cycle: 1,
-        kind: "gather" as const,
-        task: "T",
-      })),
-    );
+      { main: { path: "main", run: () => Promise.reject(new Error("unused")) }, subAgent: child },
+      3,
+      async (executions) => {
+        barriers.push(
+          executions.filter((entry) => entry.state === "running").map((entry) => entry.branchId),
+        );
+      },
+    ).run(gatherWorks(grown));
     await settle();
-    stop.abort();
-    await expect(running).rejects.toMatchObject({ name: "AbortError" });
 
-    const snapshot = owner.snapshot();
-    expect(snapshot.openAllocations.map((entry) => entry.branchId)).toEqual([
-      "branch-1",
-      "branch-2",
-    ]);
-    expect(snapshot.consumed).toMatchObject({ branchAttempts: 2, modelRounds: 0 });
-    const next = new ResearchBudgetOwner(limits, () => 0, 2);
-    next.open(snapshot);
-    expect(next.snapshot().consumed.modelRounds).toBe(
-      snapshot.openAllocations.reduce((total, entry) => total + entry.modelRounds, 0),
+    expect(started).toEqual(["branch-1", "branch-2", "branch-3"]);
+    expect(barriers[0]).toEqual(["branch-1", "branch-2", "branch-3"]);
+    releases[0]!();
+    await settle();
+    expect(started).toEqual(["branch-1", "branch-2", "branch-3", "branch-4"]);
+    while (releases.length > 0 && started.length < 5) {
+      releases.shift()!();
+      await settle();
+    }
+    for (const release of releases) release();
+    const executions = await running;
+
+    expect(peak).toBe(3);
+    expect(new Set(tasks)).toEqual(
+      new Set([`T\n\n${SOURCE_READING_INSTRUCTION}\n\n${branchLanguageInstruction("en")}`]),
     );
+    expect(executions.map((entry) => [entry.state, entry.path])).toEqual(
+      Array(5).fill(["completed", "sub-agent"]),
+    );
+  });
+
+  it("runs the works one at a time on the main path when no sub-agent runner exists", async () => {
+    const two = researchPlan([researchBranch(1), researchBranch(2)], "balanced", {
+      approvedAt: "2026-01-01T00:00:00.000Z",
+    });
+    const owner = new ResearchBudgetOwner(budgetLimits(two), () => 0, 2);
+    owner.open(null);
+    let active = 0;
+    let peak = 0;
+    const main: BranchRunner = {
+      path: "main",
+      run: async () => {
+        active += 1;
+        peak = Math.max(peak, active);
+        await settle();
+        active -= 1;
+        return finding;
+      },
+    };
+    const executions = await schedulerFor(two, owner, { main }, 2).run(gatherWorks(two));
+
+    expect(peak).toBe(1);
+    expect(executions.map((entry) => entry.path)).toEqual(["main", "main"]);
+  });
+
+  it("never saves an open allocation for a work that is not running when another candidate is out of attempts", async () => {
+    const two = researchPlan([researchBranch(1), researchBranch(2)], "balanced", {
+      approvedAt: "2026-01-01T00:00:00.000Z",
+    });
+    const owner = new ResearchBudgetOwner(budgetLimits(two), () => 0, 2);
+    owner.open(null);
+    for (let attempt = 0; attempt < budgetLimits(two).attemptsPerBranch; attempt += 1) {
+      const used = owner.allocate(`old-${attempt}`, "branch-2", "branch-2");
+      if (used.ok) owner.settle(used.allocation, { modelRounds: 1, searches: 1, evidenceItems: 0 });
+    }
+    const orphans: string[] = [];
+    const child: BranchRunner = { path: "sub-agent", run: () => Promise.resolve(finding) };
+    const executions = await schedulerFor(
+      two,
+      owner,
+      { main: child, subAgent: child },
+      2,
+      async (saved) => {
+        for (const open of owner.snapshot().openAllocations) {
+          const entry = saved.find((candidate) => candidate.workId === open.workId);
+          if (entry?.state !== "running") orphans.push(open.workId);
+        }
+      },
+    ).run(gatherWorks(two));
+
+    expect(orphans).toEqual([]);
+    expect(executions.map((entry) => entry.state)).toEqual(["completed", "failed"]);
+  });
+
+  it.each([
+    ["renews the session once and charges the allocation once", 1, "completed", 2],
+    [
+      "stops renewing a session that is refused again and fails the attempt normally",
+      100,
+      "failed",
+      4,
+    ],
+  ])("%s", async (_name, refusals, state, runs) => {
+    const one = researchPlan([researchBranch(1)], "balanced", {
+      approvedAt: "2026-01-01T00:00:00.000Z",
+    });
+    const owner = new ResearchBudgetOwner(budgetLimits(one), () => 0, 1);
+    owner.open(null);
+    const released: string[] = [];
+    let calls = 0;
+    const child: BranchRunner = {
+      path: "sub-agent",
+      run: () => {
+        calls += 1;
+        return calls <= refusals
+          ? Promise.reject(new UnusableBranchSessionError("s-1"))
+          : Promise.resolve(finding);
+      },
+      usage: () => ({ modelRounds: 3, searches: 1, evidenceItems: 0 }),
+    };
+    const executions = await schedulerFor(
+      one,
+      owner,
+      {
+        main: { path: "main", run: () => Promise.reject(new Error("unused")) },
+        subAgent: child,
+        releaseSession: (branchId) => released.push(branchId),
+      },
+      1,
+    ).run(gatherWorks(one));
+
+    expect(executions[0]).toMatchObject({ state, path: "sub-agent" });
+    expect(calls).toBe(runs);
+    expect(released).toEqual(Array(refusals === 1 ? 1 : 2).fill("branch-1"));
+    if (state === "completed") {
+      expect(executions[0]!.attempts).toBe(1);
+      expect(owner.snapshot().consumed).toMatchObject({ branchAttempts: 1, modelRounds: 3 });
+    }
   });
 
   it.each([
@@ -297,7 +357,7 @@ describe("deep research main-path fallback", () => {
         plan: single,
         executions: initialExecutions(single),
         owner,
-        runners: { main: child, subAgent: child, sessionByBranch: () => ({}) },
+        runners: { main: child, subAgent: child },
         waveSize: 1,
         signal: stop.signal,
         setTimer: (delayMs, callback) => {
@@ -366,70 +426,90 @@ describe("deep research main-path fallback", () => {
     expect(calls).toEqual([]);
   });
 
-  it("reports the documents the child opened as the fetches of its attempt", async () => {
-    const run = runSummary("r-1", "s-1", {
-      usage: { requestCount: 1, modelRounds: 2, toolCalls: 3, durationMs: 1, source: "provider" },
-    });
-    const delegator = {
-      create: async () => ({ subAgentSessionId: "s-1" }),
-      run: async () => ({ sessionId: "s-1", runId: "r-1" }),
-      getResult: async () => ({
-        state: "completed",
-        resultRevision: 1,
-        outcome: {
-          run,
-          answerText: "Opened [chunk-1] and heard [chunk-2].",
-          importId: "import-1",
-          evidence: ["chunk-1", "chunk-2"].map((id) => ({
-            conversationEvidenceId: id,
-            conversationRevisionId: `${id}:revision-1`,
-          })),
+  it.each([
+    ["counts the search calls the child reported", { searchCalls: 2 }, 2],
+    ["falls back to every tool call for a child stored without a search count", {}, 3],
+  ])(
+    "%s and the documents it opened as the fetches of its attempt",
+    async (_name, extra, searches) => {
+      const toolCounts = { search_web: 2, fetch_web_page: 1 };
+      const run = runSummary("r-1", "s-1", {
+        usage: {
+          requestCount: 1,
+          modelRounds: 2,
+          toolCalls: 3,
+          toolCounts,
+          durationMs: 1,
+          source: "provider",
+          ...extra,
         },
-      }),
-    } as unknown as SubAgentDelegator;
-    const call = (tool: "fetch_web_page" | "search_web") => ({ callId: "c", tool });
-    const runner = new SubAgentBranchRunner({
-      branches: [researchBranch(1)],
-      delegator: () => delegator,
-      resolver: {
-        resolve: async () => ({
-          evidence: [
-            retrieved("chunk-1", markdownSource("a.md"), "A"),
-            retrieved("chunk-2", markdownSource("b.md"), "B"),
-          ],
-          citations: [],
-          provenance: [
-            { evidenceId: "chunk-1", calls: [call("fetch_web_page")] },
-            { evidenceId: "chunk-2", calls: [call("search_web")] },
-          ],
+      });
+      const delegator = {
+        create: async () => ({ subAgentSessionId: "s-1" }),
+        run: async () => ({ sessionId: "s-1", runId: "r-1" }),
+        getResult: async () => ({
+          state: "completed",
+          resultRevision: 1,
+          outcome: {
+            run,
+            answerText: "Opened [chunk-1] and heard [chunk-2].",
+            importId: "import-1",
+            evidence: ["chunk-1", "chunk-2"].map((id) => ({
+              conversationEvidenceId: id,
+              conversationRevisionId: `${id}:revision-1`,
+            })),
+          },
         }),
-      },
-      sessionOf: () => null,
-    });
-    const work = {
-      workId: "w-1",
-      branchId: "branch-1",
-      cycle: 1,
-      kind: "gather" as const,
-      task: "T",
-    };
-    const allocation = {
-      workId: "w-1",
-      branchId: "branch-1",
-      attempt: 1,
-      modelRounds: 3,
-      searches: 3,
-    };
+      } as unknown as SubAgentDelegator;
+      const call = (tool: "fetch_web_page" | "search_web") => ({ callId: "c", tool });
+      const runner = new SubAgentBranchRunner({
+        branches: [researchBranch(1)],
+        delegator: () => delegator,
+        resolver: {
+          resolve: async () => ({
+            evidence: [
+              retrieved("chunk-1", webSource("https://e.test/opened"), "A"),
+              retrieved("chunk-3", webSource("https://e.test/uncited"), "C"),
+              retrieved("chunk-2", webSource("https://e.test/cited"), "B"),
+            ],
+            citations: [],
+            provenance: [
+              { evidenceId: "chunk-1", calls: [call("fetch_web_page")] },
+              { evidenceId: "chunk-3", calls: [call("search_web")] },
+              { evidenceId: "chunk-2", calls: [call("search_web")] },
+            ],
+          }),
+        },
+        sessionOf: () => null,
+      });
+      const work = {
+        workId: "w-1",
+        branchId: "branch-1",
+        cycle: 1,
+        kind: "gather" as const,
+        task: "T",
+      };
+      const allocation = {
+        workId: "w-1",
+        branchId: "branch-1",
+        attempt: 1,
+        modelRounds: 3,
+        searches: 3,
+      };
 
-    await runner.run(work, allocation, new AbortController().signal);
+      const finding = await runner.run(work, allocation, new AbortController().signal);
 
-    expect(runner.usage("w-1")).toEqual({
-      modelRounds: 2,
-      searches: 3,
-      evidenceItems: 0,
-      fetches: 1,
-    });
-  });
+      expect(finding.unreadSources).toEqual(["https://e.test/cited", "https://e.test/uncited"]);
+      expect(runner.usage("w-1")).toEqual({
+        modelRounds: 2,
+        searches,
+        evidenceItems: 0,
+        fetches: 1,
+        sources: 2,
+        toolCounts,
+      });
+    },
+  );
 
   it("reports the child's import outcome and evidence count after a failed import", async () => {
     const run = runSummary("r-1", "s-1", { status: "failed", evidenceCount: 2 });

@@ -23,12 +23,17 @@ import {
   yesNo,
 } from "./primitives";
 
-const NAV_SECTIONS = ["findings", "run-trace", "input", "internals"];
-
 export function renderNav(report: DiagnosticReportV3): string {
-  const anchors = NAV_SECTIONS.filter(
-    (id) => id !== "findings" || report.findings.findings.length > 0,
-  )
+  const present: [string, boolean][] = [
+    ["findings", report.findings.findings.length > 0],
+    ["run-trace", (report.reasoning.thinkingLoop?.rounds.length ?? 0) > 0],
+    ["deep-research", report.deepResearch !== null],
+    ["input", true],
+    ["internals", true],
+  ];
+  const anchors = present
+    .filter(([, shown]) => shown)
+    .map(([id]) => id)
     .map((id) => `<a class="nav-anchor" href="#${attr(id)}">${h(id)}</a>`)
     .join("");
   return `<nav class="top-nav" aria-label="Sections"><span class="nav-brand">Attest</span><span class="nav-label">Diagnostic report</span><div class="nav-anchors">${anchors}</div></nav>`;

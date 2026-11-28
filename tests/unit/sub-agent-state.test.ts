@@ -310,6 +310,37 @@ describe("sub-agent section validation", () => {
       "Sub-agent state has an invalid field: records[0].runs[0].usage.toolCalls.",
     ],
     [
+      "a tool count that is not a counter",
+      withRun(
+        subAgentSection(),
+        (run) => (run.usage = { ...(run.usage as object), toolCounts: { search_web: -1 } }),
+      ),
+      "invalid-state-field",
+      "Sub-agent state has an invalid field: records[0].runs[0].usage.toolCounts.search_web.",
+    ],
+    [
+      "a search count that is not a counter",
+      withRun(
+        subAgentSection(),
+        (run) => (run.usage = { ...(run.usage as object), searchCalls: 1.5 }),
+      ),
+      "invalid-state-field",
+      "Sub-agent state has an invalid field: records[0].runs[0].usage.searchCalls.",
+    ],
+    [
+      "more tool names than the bound",
+      withRun(
+        subAgentSection(),
+        (run) =>
+          (run.usage = {
+            ...(run.usage as object),
+            toolCounts: Object.fromEntries(Array.from({ length: 65 }, (_, i) => [`tool-${i}`, 1])),
+          }),
+      ),
+      "invalid-state-field",
+      "Sub-agent state has an invalid field: records[0].runs[0].usage.toolCounts.",
+    ],
+    [
       "an unknown import discriminant",
       subAgentSection([], { imports: [{ state: "applied" }] as never }),
       "invalid-state-field",

@@ -1,3 +1,4 @@
+import type { ChatPageCaches } from "@application/ports";
 import { ENGLISH_RESEARCH_LABELS } from "@core/research/deepResearch";
 import {
   DeepResearchStrategy,
@@ -6,7 +7,7 @@ import {
 import { boundFindingText, initialExecutions } from "@core/research/deepResearch";
 import type { ReportSynthesisService } from "@application/use-cases/research/deep-research/ReportSynthesisService";
 import { runResearch } from "@application/use-cases/research/deep-research/researchRun";
-import { markdownSource, retrieved } from "../support/factories";
+import { markdownSource, retrieved, webSource } from "../support/factories";
 import type { ResearchExecutionContext } from "@application/use-cases/research/strategies/ResearchStrategy";
 import { collectAsync } from "../support/async";
 import {
@@ -227,11 +228,12 @@ describe("main branch runner findings", () => {
         run: async () => ({
           answerText: `Kept [${kept.id}]. ${"x".repeat(30_000)} Cut [${cut.id}].`,
           snapshot: {
-            evidence: [kept, cut],
+            evidence: [kept, cut, retrieved("web-1", webSource("https://e.test/unread"), "W")],
             citations: [],
             provenance: [
               { evidenceId: kept.id, calls: [{ callId: "c1", tool: "read_note" as const }] },
               { evidenceId: cut.id, calls: [{ callId: "c2", tool: "search_index" as const }] },
+              { evidenceId: "web-1", calls: [{ callId: "c3", tool: "search_web" as const }] },
             ],
           },
         }),
@@ -259,7 +261,75 @@ describe("main branch runner findings", () => {
     const finding = await runner.run(work, allocation, new AbortController().signal);
     expect(finding.text).toHaveLength(30_000);
     expect(finding.citationTokens).toEqual([kept.id]);
+    expect(finding.unreadSources).toEqual(["https://e.test/unread"]);
     expect(runner.usage("w-1")).toMatchObject({ evidenceItems: 1, fetches: 1 });
+  });
+
+  it("gives each run its own page cache, closes it after a failure, and widens the output budget", async () => {
+    const opened: { closed: boolean }[] = [];
+    const budgets: unknown[] = [];
+    const contexts: unknown[] = [];
+    const pageCaches = {
+      openRun: () => {
+        const cache = {
+          closed: false,
+          maxPageChars: 1,
+          put: () => undefined,
+          get: () => undefined,
+          list: () => [],
+          close: () => {
+            cache.closed = true;
+          },
+        };
+        opened.push(cache);
+        return cache;
+      },
+    } as unknown as ChatPageCaches;
+    let fail = false;
+    const runner = new MainBranchRunner({
+      engine: {
+        run: async (input) => {
+          budgets.push(input.budget);
+          contexts.push(input.toolContext);
+          if (fail) throw new Error("model failed");
+          return {
+            answerText: "Plain answer.",
+            snapshot: { evidence: [], citations: [], provenance: [] },
+          };
+        },
+      },
+      sources: {},
+      web: { deadlineMs: 1, perSourceLimit: 1, mergedLimit: 1, maxConcurrentSources: 1 },
+      pageCaches,
+      chatScope: "indexOnly",
+      branches: pendingResearch().plan!.branches,
+      now: () => new Date("2026-01-01T00:00:00.000Z"),
+    });
+    const work = {
+      workId: "w-1",
+      branchId: "branch-1",
+      cycle: 1,
+      kind: "gather" as const,
+      task: "T",
+    };
+    const allocation = (attempt: number) => ({
+      workId: "w-1",
+      branchId: "branch-1",
+      attempt,
+      modelRounds: 2,
+      searches: 2,
+    });
+    await runner.run(work, allocation(1), new AbortController().signal);
+    await runner.run(work, allocation(1), new AbortController().signal);
+    fail = true;
+    await expect(runner.run(work, allocation(2), new AbortController().signal)).rejects.toThrow(
+      "model failed",
+    );
+    expect(opened).toHaveLength(3);
+    expect(new Set(opened).size).toBe(3);
+    expect(opened.every((cache) => cache.closed)).toBe(true);
+    expect(contexts[0]).toHaveProperty("pageCache");
+    expect(budgets[0]).toMatchObject({ maxResultChars: 120_000 });
   });
 
   it("cuts a finding whose stored encoding would exceed the byte bound", () => {

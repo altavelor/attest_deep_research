@@ -91,7 +91,9 @@ describe("readable diagnostic HTML (v3)", () => {
     expect(html).toContain("What is the meaning of life?");
     expect(html).toContain("run-1");
     expect(html).toContain("top-nav");
-    expect(html).toContain('href="#run-trace"');
+    for (const [, target] of html.matchAll(/href="#([^"]+)"/g)) {
+      expect(html).toContain(`id="${target}"`);
+    }
     expect(html).toContain('href="#input"');
     expect(html).toContain('href="#internals"');
     expect(html).toContain('id="input"');

@@ -118,7 +118,7 @@ describe("deep research run", () => {
       completedBranches: ["branch-1", "branch-2", "branch-3"],
       scale: { objectives: final.plan!.objectives.length },
       stats: {
-        sourcesFound: 1,
+        sourcesFound: 3,
         documentsOpened: 0,
         sourcesCited: 1,
         removedCitations: 1,

@@ -157,6 +157,7 @@ function runningDetail(): SubAgentInspectionDetail {
       },
     ],
     lifetime: [workItem("w1", "run-1", 1), workItem("w2", "run-2", 2, { status: "pending" })],
+    answers: [{ runId: "run-2", text: "Done <img src=x onerror=alert(1)>", truncated: true }],
   };
 }
 
@@ -383,6 +384,7 @@ describe("sub-agent sessions button and modal", () => {
     expect(sectionHeaders().map((header) => header.getAttribute("aria-expanded"))).toEqual([
       "false",
       "false",
+      "false",
     ]);
     expect(modalText()).toContain("Models changed");
 
@@ -421,6 +423,7 @@ describe("sub-agent sessions button and modal", () => {
     await settle();
     expect(sectionHeaders().map((header) => header.getAttribute("aria-expanded"))).toEqual([
       "true",
+      "false",
       "false",
     ]);
     expect(
@@ -723,6 +726,23 @@ describe("sub-agent sessions button and modal", () => {
     expect(document.activeElement).toBe(
       document.body.querySelector(".attest-sub-agents__detail-top .attest-sub-agents__back"),
     );
+  });
+
+  it("S9 shows the final answer of the selected run as text and says when a run has none", async () => {
+    const harness = createHarness();
+    await openDetail(harness, runningDetail());
+
+    sectionHeaders()[2].click();
+    const body = () => sectionHeaders()[2].nextElementSibling!;
+    expect(body().querySelector("img")).toBeNull();
+    expect(body().querySelector("pre")?.textContent).toBe("Done <img src=x onerror=alert(1)>");
+    expect(body().textContent).toContain("Truncated — only the first part is shown");
+    const select = document.body.querySelector<HTMLSelectElement>(
+      ".attest-sub-agents__run-select",
+    )!;
+    select.value = "run-1";
+    select.dispatchEvent(new Event("change"));
+    expect(body().textContent).toBe("This run has no final answer yet.");
   });
 
   it("S8 pages a long run of pending tool calls instead of rendering them all", async () => {

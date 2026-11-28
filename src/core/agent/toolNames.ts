@@ -20,6 +20,8 @@ export const WEB_FETCH_TOOL = "fetch_web_page";
 export const WEB_FETCH_URL_TOOL = "fetch_url";
 export const WEB_FETCH_SECTION_TOOL = "fetch_web_section";
 export const WEB_PAGE_METADATA_TOOL = "get_page_metadata";
+export const FIND_IN_PAGES_TOOL = "find_in_pages";
+export const READ_PAGE_RANGE_TOOL = "read_page_range";
 
 export const IMAGE_SEARCH_TOOL = "search_images";
 export const PRESENT_IMAGE_GALLERY_TOOL = "present_image_gallery";
@@ -64,6 +66,8 @@ export const PROMPT_TOOL_NAMES = [
   GET_SOURCE_SUMMARY_TOOL,
   WEB_SEARCH_TOOL,
   WEB_FETCH_TOOL,
+  FIND_IN_PAGES_TOOL,
+  READ_PAGE_RANGE_TOOL,
   SUB_AGENT_TOOL,
   SUB_AGENT_RESULT_TOOL,
   SUB_AGENT_WAIT_TOOL,

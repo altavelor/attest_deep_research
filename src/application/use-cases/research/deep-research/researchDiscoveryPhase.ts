@@ -2,6 +2,7 @@ import {
   MAX_NOTE_TEXT_CHARS,
   MAX_RESEARCH_HYPOTHESES,
   MAX_RESEARCH_TESTS,
+  MAX_UNREAD_SOURCES,
   boundDiscovery,
   currentHypotheses,
   discoveryText,
@@ -221,7 +222,7 @@ async function runOpenTests(
       branchId: execution.branchId,
       cycle: discovery.cycles.length + 1,
       kind: "test",
-      task: testWorkTask(hypothesis, test),
+      task: testWorkTask(hypothesis, test, unreadSourcesOf(deps.gathered, execution.branchId)),
     };
   });
   const settled = await deps.runTests(executions, works);
@@ -380,4 +381,11 @@ function withNote(
       },
     ],
   };
+}
+
+function unreadSourcesOf(gathered: readonly BranchExecution[], branchId: string): string[] {
+  const urls = gathered
+    .filter((entry) => entry.branchId === branchId)
+    .flatMap((entry) => entry.finding?.unreadSources ?? []);
+  return [...new Set(urls)].slice(0, MAX_UNREAD_SOURCES);
 }

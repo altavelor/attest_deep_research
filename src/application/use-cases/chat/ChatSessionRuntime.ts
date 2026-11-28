@@ -31,6 +31,7 @@ import {
   resolveConversationEvidence,
 } from "@core/chat/sourceRegistry";
 import type { ChatRepository } from "@application/ports/chat";
+import type { ChatPageCaches } from "@application/ports/pageCache";
 import type { SubAgentInspectionPort } from "@application/ports/subAgent";
 import { isNonTerminalChatSessionStatus } from "@core/chat/chatSession";
 import type { SaveChatInput } from "@core/chat/savedChat";
@@ -66,6 +67,7 @@ export class ChatSessionRuntime {
   private readonly writes: ChatWriteBuffer;
   private readonly subAgents: ChatSubAgents;
   private readonly research: ChatResearchState;
+  private pageCaches: ChatPageCaches | undefined;
 
   constructor(
     readonly state: ChatSessionState,
@@ -95,6 +97,7 @@ export class ChatSessionRuntime {
         ? { createManager: environment.createSubAgentSessionManager }
         : {}),
       ...(environment.subAgentServices ? { services: environment.subAgentServices } : {}),
+      onSessionArchived: (sessionId: string) => this.pageCaches?.closeSession(sessionId),
       writer: this.writes,
       now: () => environment.now(),
       createId: () => environment.createRunId(),
@@ -136,6 +139,11 @@ export class ChatSessionRuntime {
     });
   }
 
+  private openPageCaches(): ChatPageCaches | undefined {
+    this.pageCaches ??= this.host.environment.createPageCaches?.();
+    return this.pageCaches;
+  }
+
   /** Closes the children of a terminal parent run before its terminal save. */
   closeSubAgents(runId: string, reason: string): Promise<void> {
     return this.subAgents.closeParentRun(runId, reason);
@@ -156,6 +164,7 @@ export class ChatSessionRuntime {
 
   /** Releases this chat's sub-agent manager and flushes or drops its writer. */
   async dispose(): Promise<void> {
+    this.pageCaches?.close();
     await this.subAgents.dispose();
     await this.writes.dispose();
   }
@@ -227,6 +236,7 @@ export class ChatSessionRuntime {
         resolveEvidence: (revisionIds) =>
           resolveConversationEvidence(this.state.sourceRegistry, revisionIds),
         signal: this.controller.signal,
+        ...pageCachesOf(this.openPageCaches()),
         ...(mode === "deep-research"
           ? {
               researchState: this.research,
@@ -438,4 +448,8 @@ export function isAbortError(error: unknown): boolean {
     error !== null &&
     (error as { name?: unknown }).name === "AbortError"
   );
+}
+
+function pageCachesOf(caches: ChatPageCaches | undefined): { pageCaches?: ChatPageCaches } {
+  return caches ? { pageCaches: caches } : {};
 }

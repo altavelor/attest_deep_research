@@ -1,5 +1,7 @@
 import {
   MAX_FINDING_CITATION_TOKENS,
+  MAX_UNREAD_SOURCE_CHARS,
+  MAX_UNREAD_SOURCES,
   MAX_PLAN_LIST_ITEMS,
   MAX_RESEARCH_BRANCHES,
   MAX_RESEARCH_TEXT_CHARS,
@@ -58,7 +60,8 @@ export function readBudget(value: unknown): ResearchBudgetState | null | undefin
     !isRecord(diagnostics) ||
     !(diagnostics.inputTokens === null || isRevision(diagnostics.inputTokens)) ||
     !(diagnostics.outputTokens === null || isRevision(diagnostics.outputTokens)) ||
-    !isRevision(diagnostics.fetches)
+    !isRevision(diagnostics.fetches) ||
+    !(diagnostics.sources === undefined || isRevision(diagnostics.sources))
   ) {
     return undefined;
   }
@@ -77,6 +80,7 @@ export function readBudget(value: unknown): ResearchBudgetState | null | undefin
       inputTokens: diagnostics.inputTokens as number | null,
       outputTokens: diagnostics.outputTokens as number | null,
       fetches: diagnostics.fetches,
+      ...(diagnostics.sources !== undefined ? { sources: diagnostics.sources as number } : {}),
     },
   };
 }
@@ -387,7 +391,24 @@ function readFinding(value: unknown): BranchFinding | undefined {
   ) {
     return undefined;
   }
-  return { text: value.text, citationTokens: [...value.citationTokens], partial: value.partial };
+  const unread = value.unreadSources;
+  if (unread !== undefined && !isUnreadSourceList(unread)) return undefined;
+  return {
+    text: value.text,
+    citationTokens: [...value.citationTokens],
+    partial: value.partial,
+    ...(unread ? { unreadSources: [...unread] } : {}),
+  };
+}
+
+function isUnreadSourceList(value: unknown): value is string[] {
+  return (
+    Array.isArray(value) &&
+    value.length <= MAX_UNREAD_SOURCES &&
+    value.every(
+      (url) => typeof url === "string" && url.length > 0 && url.length <= MAX_UNREAD_SOURCE_CHARS,
+    )
+  );
 }
 
 function isIdList(value: unknown): value is string[] {

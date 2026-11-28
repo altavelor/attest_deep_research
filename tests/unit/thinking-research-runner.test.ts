@@ -295,6 +295,70 @@ describe("ThinkingResearchRunner", () => {
     expect(search.execute).toHaveBeenCalledTimes(1);
   });
 
+  it("runs a page tool again for the same arguments and counts only an unchanged result as a duplicate", async () => {
+    const execute = vi
+      .fn()
+      .mockResolvedValueOnce({ ok: true, value: { text: "A" } })
+      .mockResolvedValueOnce({ ok: true, value: { text: "A" } })
+      .mockResolvedValueOnce({ ok: true, value: { text: "B" } });
+    const read = tool("read_page_range", execute);
+    const call = (id: string) => ({
+      id,
+      name: "read_page_range",
+      arguments: { resultId: "r", offset: 0 },
+    });
+    const provider = new ScriptedProvider([
+      [{ content: "", isComplete: true, toolCalls: [call("1")] }],
+      [{ content: "", isComplete: true, toolCalls: [call("2")] }],
+      [{ content: "", isComplete: true, toolCalls: [call("3")] }],
+      [{ content: "done", isComplete: true }],
+    ]);
+    const result = await new ThinkingResearchRunner({
+      modelRound: new ChatCompletionsRoundAdapter(provider),
+      model: "m",
+      messages: [],
+      tools: new ToolManager([read.handler]),
+      policy: policy(["read_page_range"]),
+    }).run();
+
+    expect(result).toMatchObject({ ok: true, totalCalls: 3, duplicateCalls: 1 });
+    expect(execute).toHaveBeenCalledTimes(3);
+  });
+
+  it("treats new portions of an already known page as progress", async () => {
+    const search = tool(
+      "search_index",
+      vi.fn().mockResolvedValue({ ok: true, value: { results: [{ evidenceId: "e1" }] } }),
+    );
+    let portion = 0;
+    const read = tool(
+      "read_page_range",
+      vi.fn().mockImplementation(async () => ({
+        ok: true,
+        value: { evidenceId: "e1", text: `portion ${(portion += 1)}` },
+      })),
+    );
+    const step = (id: string, name: string, args: Record<string, unknown>) => [
+      { content: "", isComplete: true, toolCalls: [{ id, name, arguments: args }] },
+    ];
+    const provider = new ScriptedProvider([
+      step("1", "search_index", { query: "a" }),
+      step("2", "read_page_range", { resultId: "r", offset: 0 }),
+      step("3", "read_page_range", { resultId: "r", offset: 8_000 }),
+      [{ content: "done", isComplete: true }],
+    ]);
+    const result = await new ThinkingResearchRunner({
+      modelRound: new ChatCompletionsRoundAdapter(provider),
+      model: "m",
+      messages: [],
+      tools: new ToolManager([search.handler, read.handler]),
+      policy: policy(["search_index"]),
+    }).run();
+
+    expect(result).toMatchObject({ ok: true, answerText: "done" });
+    expect(provider.requests[3].toolChoice).not.toEqual({ type: "none" });
+  });
+
   it("executes one real retry for a retryable mandatory failure", async () => {
     const execute = vi
       .fn()

@@ -5,6 +5,7 @@ import {
   ResearchScheduler,
   ResearchScopeRouter,
   type BranchRunner,
+  RESEARCH_BRANCH_MAX_RESULT_CHARS,
 } from "@application/use-cases/research/deep-research";
 import type { ReportSynthesisService } from "@application/use-cases/research/deep-research/ReportSynthesisService";
 import { runResearch } from "@application/use-cases/research/deep-research/researchRun";
@@ -17,7 +18,6 @@ import {
 } from "../support/deepResearch";
 import {
   ResearchBudgetOwner,
-  branchPath,
   initialExecutions,
   presetLimits,
   researchScopeId,
@@ -51,6 +51,23 @@ describe("deep research budget scopes", () => {
       "c-1",
     );
     expect(own.type).toBe("registered");
+  });
+
+  it("registers one session per branch at a time, also while its first registration is open", async () => {
+    const port = permits();
+    const scope = researchScopeId("research-1", "branch-1");
+    const first = await port.beginSessionRegistration(scope, "c-1");
+
+    await expect(port.beginSessionRegistration(scope, "c-2")).rejects.toThrow(
+      "The research has no child session left for this branch.",
+    );
+    if (first.type !== "registered") throw new Error("not registered");
+    await port.finishSessionRegistration(first.registration, {
+      type: "published",
+      sessionId: "session-1",
+    });
+    port.releaseSession("branch-1");
+    expect((await port.beginSessionRegistration(scope, "c-3")).type).toBe("registered");
   });
 
   it("grants one execution permit per open allocation and replays it for the same key", async () => {
@@ -95,19 +112,6 @@ describe("deep research budget scopes", () => {
     expect(denied.type).toBe("denied");
     expect(claims).toEqual([true, true, false]);
     expect(await port.beginExecution(b!, "key-after")).toMatchObject({ type: "denied", closureId });
-  });
-});
-
-describe("deep research branch path", () => {
-  it("delegates up to the session ceiling and runs a new branch on the main path beyond it", () => {
-    const sessions = { "branch-1": "s-1" };
-    expect(branchPath(sessions, "branch-2", 0, 2)).toBe("sub-agent");
-    expect(branchPath(sessions, "branch-2", 1, 2)).toBe("main");
-    expect(branchPath(sessions, "branch-1", 1, 2)).toBe("sub-agent");
-  });
-
-  it("runs every branch on the main path with a ceiling of zero", () => {
-    expect(branchPath({}, "branch-1", 0, 0)).toBe("main");
   });
 });
 
@@ -181,6 +185,42 @@ describe("deep research waves", () => {
     expect(delays).toEqual([35 * 60_000]);
   });
 
+  it("saves no run reference to a session the branch no longer maps to", async () => {
+    const start = gatheringResearch(researchPlan([researchBranch(1)], "balanced"));
+    const earlier = {
+      ...start.executions[0]!,
+      state: "completed" as const,
+      path: "sub-agent" as const,
+      finding: { text: "F", citationTokens: [], partial: false },
+      runRef: { sessionId: "session-old", runId: "run-1", resultRevision: 1 },
+    };
+    const saved: ResearchState[] = [];
+    const port = new MemoryResearchState();
+    port.commit = async (next: ResearchState) => {
+      saved.push(next);
+      throw new Error("stop");
+    };
+    await expect(
+      runResearch(
+        { ...start, executions: [earlier], sessionByBranch: { "branch-1": "session-new" } },
+        {
+          port,
+          runner: { path: "main", run: () => Promise.reject(new Error("unused")) },
+          synthesis: {} as ReportSynthesisService,
+          labels: ENGLISH_RESEARCH_LABELS,
+          now: () => new Date("2026-01-01T01:00:00.000Z"),
+          setTimer: () => () => undefined,
+          createId: (prefix) => `${prefix}-1`,
+          onState: () => undefined,
+          onStatus: () => undefined,
+        },
+      ),
+    ).rejects.toThrow("stop");
+
+    expect(saved[0]!.sessionByBranch).toEqual({ "branch-1": "session-new" });
+    expect(saved[0]!.executions[0]!.runRef).toBeUndefined();
+  });
+
   it("fails a branch without a source in the chat once, without a retry", async () => {
     const plan = researchPlan([researchBranch(1)], "balanced", {
       approvedAt: "2026-01-01T00:00:00.000Z",
@@ -196,7 +236,6 @@ describe("deep research waves", () => {
           path: "main",
           run: () => Promise.reject(new BranchUnavailableError("No source for this branch.")),
         },
-        sessionByBranch: () => ({}),
       },
       waveSize: 1,
       signal: new AbortController().signal,
@@ -241,7 +280,8 @@ describe("research branch grant", () => {
         allowNoteMutation: false,
       },
       origin: "direct",
-      limits: { maxRounds: 7, maxResultChars: 30_000, maxSearches: 20 },
+      limits: { maxRounds: 7, maxResultChars: RESEARCH_BRANCH_MAX_RESULT_CHARS, maxSearches: 20 },
     });
+    expect(grant.limits.maxResultChars).toBeGreaterThan(30_000);
   });
 });

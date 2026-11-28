@@ -140,3 +140,30 @@ export function intersectScope(
   if (index) return "indexOnly";
   return web ? "webOnly" : null;
 }
+
+/**
+ * Drops the run reference of every execution, discovery test and verification follow-up whose
+ * session is no longer the one mapped to its branch, as after a refused session was replaced.
+ */
+export function withoutStaleRunRefs(
+  state: ResearchState,
+  sessionByBranch: Readonly<Record<string, string>>,
+): ResearchState {
+  const current = (execution: BranchExecution): BranchExecution => {
+    if (!execution.runRef || sessionByBranch[execution.branchId] === execution.runRef.sessionId) {
+      return execution;
+    }
+    const { runRef: _stale, ...rest } = execution;
+    return rest;
+  };
+  return {
+    ...state,
+    executions: state.executions.map(current),
+    discovery: state.discovery
+      ? { ...state.discovery, executions: state.discovery.executions.map(current) }
+      : null,
+    verification: state.verification
+      ? { ...state.verification, followUps: state.verification.followUps.map(current) }
+      : null,
+  };
+}

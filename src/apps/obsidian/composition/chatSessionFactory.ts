@@ -1,6 +1,6 @@
 import { ChatDocumentSubAgentRepository } from "@adapters/filesystem/sub-agent/ChatDocumentSubAgentRepository";
 import { ChatSessionManager } from "@application/use-cases/chat";
-import type { ChatRepository } from "@application/ports";
+import type { ChatPageCaches, ChatRepository } from "@application/ports";
 import { createSubAgentSessionManager } from "@application/use-cases/sub-agent";
 import { redactSensitiveText, scheduleTimeout } from "@shared";
 import type { ResearchService, ResearchSearchMode } from "@application/use-cases/research";
@@ -17,6 +17,7 @@ export interface ChatSessionFactoryOptions {
   persistDiagnostics: () => boolean;
   isDebugCapture: () => boolean;
   logError: (error: unknown) => void;
+  createPageCaches?: () => ChatPageCaches;
 }
 
 let runSequence = 0;
@@ -43,6 +44,7 @@ export function createChatSessionManager(options: ChatSessionFactoryOptions): Ch
       buildRegistryPromptView: (registry, question) =>
         selectConversationRegistryPromptView(registry, question),
       logError: options.logError,
+      ...(options.createPageCaches ? { createPageCaches: options.createPageCaches } : {}),
       scheduleTimeout,
       createSubAgentSessionManager,
       subAgentServices: {

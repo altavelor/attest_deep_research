@@ -777,6 +777,29 @@ describe("chat session manager lifecycle", () => {
     });
   });
 
+  it("hands every run of a chat the same page caches and closes them when the manager is disposed", async () => {
+    const caches = { close: vi.fn() };
+    const createPageCaches = vi.fn(() => caches as never);
+    const gated = createGatedService();
+    const { manager } = createTestSessionManager({
+      createResearchService: gated.service,
+      createPageCaches,
+    });
+    const session = newSession(manager);
+    await manager.start(session.sessionId, request("Question"));
+    await settle();
+    gated.gates[0].emit({ type: "complete", answer: answerFor("Done") });
+    gated.gates[0].end();
+    await settle();
+    await manager.start(session.sessionId, request("Again"));
+    await settle();
+
+    expect(gated.requests.map((entry) => entry.pageCaches)).toEqual([caches, caches]);
+    expect(createPageCaches).toHaveBeenCalledTimes(1);
+    await manager.dispose();
+    expect(caches.close).toHaveBeenCalledTimes(1);
+  });
+
   it("abandons a run whose first save finished after dispose", async () => {
     const gated = createGatedService();
     const { manager } = createTestSessionManager({ createResearchService: gated.service });

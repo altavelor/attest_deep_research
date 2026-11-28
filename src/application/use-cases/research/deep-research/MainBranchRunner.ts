@@ -12,6 +12,7 @@ import {
   type ResearchWork,
 } from "@core/research/deepResearch";
 import type { ResearchStreamEvent } from "@application/contracts/research";
+import type { ChatPageCaches } from "@application/ports/pageCache";
 import type { SubAgentPort } from "@application/research/subAgentPort";
 import {
   citationIdsFromText,
@@ -22,7 +23,9 @@ import {
 import {
   BranchNoFindingsError,
   BranchUnavailableError,
+  RESEARCH_BRANCH_MAX_RESULT_CHARS,
   openedDocuments,
+  unreadWebSources,
   type BranchRunner,
 } from "./branchRunner";
 import { subAgentToolContext, type SubAgentToolSources } from "../sub-agent/subAgentToolContext";
@@ -31,6 +34,7 @@ export interface MainBranchRunnerDeps {
   engine: SubAgentPort;
   sources: SubAgentToolSources;
   web: ResearchModeWebParameters;
+  pageCaches?: ChatPageCaches;
   chatScope: ResearchSourceScope;
   branches: readonly ResearchBranch[];
   registerAnswer?(answer: ResearchAnswer): ResearchAnswer;
@@ -41,8 +45,9 @@ export interface MainBranchRunnerDeps {
 /**
  * Runs a branch in the parent run with the Thinking engine: the branch task is the question of a
  * fresh model context, tools follow the branch scope intersected with the chat's scope without
- * sub-agents or note mutation, and the allocation bounds rounds and searches. Evidence enters the
- * conversation registry through the answer registration of the chat turn.
+ * sub-agents or note mutation, and the allocation bounds rounds and searches. Pages it fetches are
+ * kept in a cache of that attempt only, released when it ends. Evidence enters the conversation
+ * registry through the answer registration of the chat turn.
  */
 export class MainBranchRunner implements BranchRunner {
   readonly path = "main" as const;
@@ -61,26 +66,34 @@ export class MainBranchRunner implements BranchRunner {
       throw new BranchUnavailableError("The branch has no source available in this chat.");
     this.usages.delete(work.workId);
     const emit = this.deps.onEvent;
-    const result = await this.deps.engine.run({
-      task: work.task,
-      toolContext: subAgentToolContext(
-        this.deps.sources,
-        {
-          searchMode: scope,
-          contextPaths: [],
-          indexScope: scope === "webOnly" ? "none" : "all-allowed",
-          allowActiveFile: false,
-          allowNoteMutation: false,
+    const pageCache = this.deps.pageCaches?.openRun();
+    const toolContext = subAgentToolContext(
+      this.deps.sources,
+      {
+        searchMode: scope,
+        contextPaths: [],
+        indexScope: scope === "webOnly" ? "none" : "all-allowed",
+        allowActiveFile: false,
+        allowNoteMutation: false,
+      },
+      this.deps.web,
+    );
+    const result = await this.deps.engine
+      .run({
+        task: work.task,
+        toolContext: pageCache ? { ...toolContext, pageCache } : toolContext,
+        budget: {
+          maxRounds: allocation.modelRounds,
+          maxSearches: allocation.searches,
+          ...(pageCache ? { maxResultChars: RESEARCH_BRANCH_MAX_RESULT_CHARS } : {}),
         },
-        this.deps.web,
-      ),
-      budget: { maxRounds: allocation.modelRounds, maxSearches: allocation.searches },
-      signal,
-      onToolCall: (call) =>
-        emit?.({ type: "tool-call-start", ...call, id: `${work.workId}:${call.id}` }),
-      onToolResult: (outcome) =>
-        emit?.({ type: "tool-call-end", ...outcome, id: `${work.workId}:${outcome.id}` }),
-    });
+        signal,
+        onToolCall: (call) =>
+          emit?.({ type: "tool-call-start", ...call, id: `${work.workId}:${call.id}` }),
+        onToolResult: (outcome) =>
+          emit?.({ type: "tool-call-end", ...outcome, id: `${work.workId}:${outcome.id}` }),
+      })
+      .finally(() => pageCache?.close());
     const evidence = [...result.snapshot.evidence];
     const telemetry = result.telemetry;
     const opened = openedDocuments(result.snapshot);
@@ -89,6 +102,8 @@ export class MainBranchRunner implements BranchRunner {
       searches: telemetry?.searchCalls ?? allocation.searches,
       evidenceItems: opened,
       fetches: opened,
+      sources: result.snapshot.evidence.length,
+      ...(telemetry?.toolCounts ? { toolCounts: telemetry.toolCounts } : {}),
       ...(telemetry
         ? { inputTokens: telemetry.usage.inputTokens, outputTokens: telemetry.usage.outputTokens }
         : {}),
@@ -113,12 +128,14 @@ export class MainBranchRunner implements BranchRunner {
     const registered = this.deps.registerAnswer?.(answer) ?? answer;
     const bounded = boundFindingText(registered.answer);
     const cited = citationIdsFromText(bounded);
+    const unread = unreadWebSources(result.snapshot, cited);
     return {
       text: bounded,
       citationTokens: [...new Set((registered.evidence ?? []).map((chunk) => chunk.id))]
         .filter((id) => cited.has(id))
         .slice(0, MAX_FINDING_CITATION_TOKENS),
       partial: telemetry?.failureReason !== undefined,
+      ...(unread.length > 0 ? { unreadSources: unread } : {}),
     };
   }
 

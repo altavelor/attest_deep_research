@@ -54,8 +54,19 @@ export interface EvidenceRegistry {
   resolveWebResult(resultId: string): Readonly<WebHandleEntry> | undefined;
   upgradeWebPage(
     resultId: string,
-    page: { content: string; finalUrl: string; truncated: boolean; callId: string },
+    page: {
+      content: string;
+      finalUrl: string;
+      truncated: boolean;
+      callId: string;
+      version?: string;
+    },
   ): void;
+  addWebPassages(
+    resultId: string,
+    passages: readonly { offset: number; text: string }[],
+    callId: string,
+  ): readonly { offset: number; text: string }[];
   snapshot(): ResearchEvidenceSnapshot;
   importRegisteredSnapshot(snapshot: ResearchEvidenceSnapshot): void;
   remainingWebCapacity?(): number;

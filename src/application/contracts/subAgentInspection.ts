@@ -29,10 +29,17 @@ export interface SubAgentInspectionSnapshot {
   sessions: readonly SubAgentSessionCard[];
 }
 
+export interface SubAgentRunAnswer {
+  runId: string;
+  text: string;
+  truncated: boolean;
+}
+
 export interface SubAgentInspectionDetail {
   card: SubAgentSessionCard;
   runs: readonly SubAgentRunSummary[];
   selectedRunId: string | null;
   initialPrompts: readonly SubAgentInitialPrompt[];
   lifetime: readonly SubAgentWorkflowItem[];
+  answers: readonly SubAgentRunAnswer[];
 }

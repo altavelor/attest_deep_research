@@ -63,6 +63,10 @@ export const subAgents: EnSubAgentMessages = {
   "chat.subAgents.work.summary": "{runs} ejecuciones · {calls} llamadas · {pending} pendientes",
   "chat.subAgents.work.empty": "El agente aún no ha llamado a ninguna herramienta.",
   "chat.subAgents.work.showMore": "Mostrar más ({count} más)",
+  "chat.subAgents.answer.title": "Respuesta final",
+  "chat.subAgents.answer.summary": "Ejecución {run} · {chars} caracteres",
+  "chat.subAgents.answer.empty": "Esta ejecución aún no tiene respuesta final.",
+  "chat.subAgents.answer.truncated": "Truncada: solo se muestra el principio",
   "chat.subAgents.stop": "Detener agente",
   "chat.subAgents.stop.hint":
     "Detiene solo este agente. La respuesta principal y los demás agentes continúan. Cerrar esta ventana no detiene nada.",

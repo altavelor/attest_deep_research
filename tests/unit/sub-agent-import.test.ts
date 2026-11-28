@@ -263,6 +263,37 @@ describe("sub-agent evidence import", () => {
     ]);
   });
 
+  it("reports the search calls and per-tool counts the runner measured in the run usage", async () => {
+    const harness = importHarness();
+    await launchWith(harness, ["example.com"]);
+    const adapter = new SubAgentExecutionAdapter({
+      selectModel: () => ({
+        model: { profileId: "p", providerId: "openai", modelId: "m", label: "M" },
+        modelRound: scriptedModelRounds(() => ({ items: [], stopReason: "complete" })),
+      }),
+      createRunner: () => ({
+        run: async () => ({
+          answerText: "Done",
+          snapshot: { evidence: [], citations: [], provenance: [] },
+          telemetry: {
+            toolCalls: 4,
+            searchCalls: 2,
+            toolCounts: { search_web: 2, find_in_pages: 2 },
+          } as never,
+        }),
+      }),
+      now: () => new Date(AT),
+    });
+
+    const run = await adapter.run(harness.execution.requests[0]!);
+
+    expect(run.usage).toMatchObject({
+      toolCalls: 4,
+      searchCalls: 2,
+      toolCounts: { search_web: 2, find_in_pages: 2 },
+    });
+  });
+
   it("U2: replays a prepare with the same importId and registers its source once", async () => {
     const input = {
       chatId: "chat-1",

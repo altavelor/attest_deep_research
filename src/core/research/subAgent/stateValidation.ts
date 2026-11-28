@@ -13,6 +13,7 @@ export type SubAgentStateValidation =
 
 type Rec = Record<string, unknown>;
 
+const MAX_TOOL_COUNT_KEYS = 64;
 const ISO_TIME = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?Z$/u;
 const SESSION_STATUSES = [
   "ready",
@@ -193,6 +194,14 @@ function checkRun(run: Rec, path: string): string {
     "cacheCreationInputTokens",
   ]) {
     if (usage[key] !== undefined) count(usage[key], `${path}.usage.${key}`);
+  }
+  if (usage.searchCalls !== undefined) count(usage.searchCalls, `${path}.usage.searchCalls`);
+  if (usage.toolCounts !== undefined) {
+    const counts = rec(usage.toolCounts, `${path}.usage.toolCounts`);
+    if (Object.keys(counts).length > MAX_TOOL_COUNT_KEYS) invalid(`${path}.usage.toolCounts`);
+    for (const [name, value] of Object.entries(counts)) {
+      count(value, `${path}.usage.toolCounts.${name}`);
+    }
   }
   oneOf(usage.source, ["provider", "estimated", "unavailable"], `${path}.usage.source`);
   return run.subAgentRunId as string;

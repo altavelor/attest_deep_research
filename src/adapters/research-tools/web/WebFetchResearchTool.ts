@@ -1,5 +1,5 @@
-import { MAX_WEB_FETCH_RESULT_IDS } from "@core/web";
-import { SearchProvider } from "@application/ports";
+import { BATCH_OUTPUT_CHARS, MAX_WEB_FETCH_RESULT_IDS } from "@core/web";
+import type { PageCache, SearchProvider } from "@application/ports";
 import { EvidenceRegistry } from "@application/sources";
 import { ToolError, ToolParseResult, toolFailure } from "@core/agent";
 import { WEB_FETCH_TOOL } from "@core/agent";
@@ -66,8 +66,59 @@ function parseFetchWebPagesInput(
   return { ok: true, value: { resultIds } };
 }
 
+const PAGE_METADATA_CHARS = 200;
+const BATCH_ENVELOPE_CHARS = 600;
+
+/**
+ * Admits pages in order while the links of their results fit the output budget of one batch. The
+ * links are kept whole because host checks read them, so a page whose links do not fit is fetched
+ * in a later call instead.
+ */
+function admitWithinOutputBudget(
+  evidence: EvidenceRegistry,
+  resultIds: readonly string[],
+): Set<string> {
+  const admitted = new Set<string>();
+  let used = 0;
+  for (const resultId of resultIds) {
+    const url = evidence.resolveWebResult(resultId)?.canonicalUrl ?? "";
+    const cost = PAGE_METADATA_CHARS + url.length * 2;
+    if (admitted.size > 0 && used + cost > BATCH_OUTPUT_CHARS) continue;
+    admitted.add(resultId);
+    used += cost;
+  }
+  return admitted;
+}
+
+/**
+ * Measures the results as they will be serialized, redirects included, and answers the pages after
+ * the budget is spent with a retryable error; the first page is always answered.
+ */
+function deferPagesOverBudget(pages: readonly FetchWebPageResult[]): FetchWebPageResult[] {
+  const budget = BATCH_OUTPUT_CHARS - BATCH_ENVELOPE_CHARS;
+  let used = 0;
+  let answered = 0;
+  return pages.map((page) => {
+    const size = JSON.stringify(page).length;
+    if (page.ok && answered > 0 && used + size > budget) {
+      return { ok: false, resultId: page.resultId, error: batchLimitError() };
+    }
+    used += size;
+    if (page.ok) answered += 1;
+    return page;
+  });
+}
+
+function batchLimitError(): ToolError {
+  return {
+    code: "batch-output-limit",
+    message: "The result of this batch is full. Fetch this page in a separate call.",
+    retryable: true,
+  };
+}
+
 export const WebFetchResearchTool = defineTool<
-  { provider: SearchProvider; evidence: EvidenceRegistry },
+  { provider: SearchProvider; evidence: EvidenceRegistry; pageCache?: PageCache },
   FetchWebPagesInput,
   FetchWebPagesOutput
 >({
@@ -81,9 +132,25 @@ export const WebFetchResearchTool = defineTool<
   },
   parse: parseFetchWebPagesInput,
   execute: async (deps, input, context) => {
-    const maxResponseBytes = responseBytesForBatch(input.resultIds.length);
-    const pages = await Promise.all(
+    const maxResponseBytes = responseBytesForBatch(
+      input.resultIds.length,
+      deps.pageCache !== undefined,
+    );
+    const admitted = deps.pageCache
+      ? admitWithinOutputBudget(deps.evidence, input.resultIds)
+      : new Set(input.resultIds);
+    const outputBudget = deps.pageCache
+      ? Math.floor(BATCH_OUTPUT_CHARS / Math.max(1, admitted.size))
+      : undefined;
+    const fetchedPages = await Promise.all(
       input.resultIds.map(async (resultId): Promise<FetchWebPageResult> => {
+        if (!admitted.has(resultId)) {
+          return {
+            ok: false,
+            resultId,
+            error: batchLimitError(),
+          };
+        }
         const fetched = await fetchRegisteredWebPage(
           deps,
           resultId,
@@ -91,12 +158,14 @@ export const WebFetchResearchTool = defineTool<
           undefined,
           maxResponseBytes,
           context.signal,
+          outputBudget,
         );
         return fetched.ok
           ? { ok: true, ...fetched.value }
           : { ok: false, resultId, error: fetched.error };
       }),
     );
+    const pages = deps.pageCache ? deferPagesOverBudget(fetchedPages) : fetchedPages;
     const failed = pages.reduce((count, page) => count + (page.ok ? 0 : 1), 0);
 
     return {

@@ -55,6 +55,11 @@ export class ResearchBudgetPermits implements SubAgentBudgetPermitPort {
     return { ...this.sessions };
   }
 
+  /** Forgets the child session of a branch whose session can no longer be continued, so it gets a new one. */
+  releaseSession(branchId: string): void {
+    delete this.sessions[branchId];
+  }
+
   async beginSessionRegistration(
     scopeId: string,
     creationKey: string,
@@ -63,7 +68,11 @@ export class ResearchBudgetPermits implements SubAgentBudgetPermitPort {
     const closure = this.currentClosure();
     if (closure) return { type: "denied", creationKey, ...closure };
     const distinct = new Set([...Object.keys(this.sessions), ...this.registering.values()]);
-    if (this.sessions[branchId] !== undefined || distinct.size >= this.options.sessionCeiling) {
+    if (
+      this.sessions[branchId] !== undefined ||
+      [...this.registering.values()].includes(branchId) ||
+      distinct.size >= this.options.sessionCeiling
+    ) {
       throw new Error("The research has no child session left for this branch.");
     }
     const registrationId = `registration-${creationKey}`;

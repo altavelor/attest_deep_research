@@ -33,6 +33,25 @@ describe("WebFetchSectionTool", () => {
     };
   }
 
+  it("keeps its own download limit and leaves the page cache of the session untouched", async () => {
+    const { evidence, registered, fetchPage } = setup();
+    const cached: unknown[] = [];
+    const deps = {
+      provider: { search: vi.fn(), fetchPage },
+      evidence,
+      pageCache: { put: (page: unknown) => cached.push(page), get: vi.fn(), list: vi.fn() },
+    };
+
+    await executeTool(new WebFetchSectionTool(deps), {
+      id: "call",
+      name: "fetch_web_section",
+      arguments: { resultId: registered.resultId, query: "treaty" },
+    });
+
+    expect(cached).toEqual([]);
+    expect(fetchPage.mock.calls[0]![1]).toMatchObject({ maxContentChars: 48_000 });
+  });
+
   it("returns only passages relevant to the focused query", async () => {
     const { tool, registered } = setup();
 

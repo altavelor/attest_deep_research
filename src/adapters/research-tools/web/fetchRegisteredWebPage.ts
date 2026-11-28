@@ -1,15 +1,28 @@
-import { SearchProvider } from "@application/ports";
+import type { PageCache, SearchProvider } from "@application/ports";
 import { validatePublicWebUrl } from "@application/sources";
 import { EvidenceRegistry } from "@application/sources";
 import { ToolExecution, toolFailure } from "@core/agent";
 import type { ImageCandidate } from "@core/media";
+import {
+  PAGE_EVIDENCE_HEAD_CHARS,
+  PAGE_HEAD_CHARS,
+  PAGE_INLINE_CHARS,
+  PAGE_OUTLINE_ENTRIES,
+  pageFingerprint,
+  pageOutline,
+  type PageOutlineEntry,
+} from "@core/web";
 
 export interface FetchWebPageOutput {
   resultId: string;
   evidenceId: string;
   url: string;
   finalUrl: string;
-  content: string;
+  content?: string;
+  totalChars: number;
+  head?: string;
+  outline?: PageOutlineEntry[];
+  hint?: string;
   contentType: string;
   truncated: boolean;
 
@@ -27,20 +40,30 @@ export const DEFAULT_FETCH_OPTIONS = {
 const MIN_RESPONSE_BYTES = 1_048_576;
 
 const BATCH_RESPONSE_BYTES = 10_485_760;
+const CACHED_RESPONSE_BYTES = 16_777_216;
+const CACHED_BATCH_RESPONSE_BYTES = 33_554_432;
+const METADATA_CHARS = 200;
+const LARGE_PAGE_HINT = "Large page: use find_in_pages and read_page_range to read it.";
 
 /**
  * Per-page download ceiling for a batch of `pageCount` parallel fetches. One page
  * may use the full budget; a large batch is trimmed so the bytes in flight stay
  * bounded regardless of how many pages the model requested at once.
  */
-export function responseBytesForBatch(pageCount: number): number {
-  const share = Math.floor(BATCH_RESPONSE_BYTES / Math.max(1, pageCount));
-  return Math.min(DEFAULT_FETCH_OPTIONS.maxResponseBytes, Math.max(MIN_RESPONSE_BYTES, share));
+export function responseBytesForBatch(pageCount: number, cached = false): number {
+  const share = Math.floor(
+    (cached ? CACHED_BATCH_RESPONSE_BYTES : BATCH_RESPONSE_BYTES) / Math.max(1, pageCount),
+  );
+  return Math.min(
+    cached ? CACHED_RESPONSE_BYTES : DEFAULT_FETCH_OPTIONS.maxResponseBytes,
+    Math.max(MIN_RESPONSE_BYTES, share),
+  );
 }
 
 export interface FetchRegisteredWebPageDeps {
   provider: SearchProvider;
   evidence: EvidenceRegistry;
+  pageCache?: PageCache;
 
   artifacts?: {
     register(candidates: readonly ImageCandidate[]): ReadonlyArray<{ handle: string }>;
@@ -48,17 +71,20 @@ export interface FetchRegisteredWebPageDeps {
 }
 
 /**
- * Fetch and register the page behind a known resultId. `maxContentChars` lets
- * callers that re-rank long pages (fetch_web_section) pull more text than the
- * default head-truncation budget.
+ * Fetch and register the page behind a known resultId. With a page cache the whole page is stored
+ * there and a page longer than the inline threshold returns only its size, outline and head; an
+ * explicit `maxContentChars` (fetch_web_section) always returns that much of the text instead. An
+ * `outputBudget` bounds the serialized result of this page: a page that does not fit it inline is
+ * answered with a shortened head and outline.
  */
 export async function fetchRegisteredWebPage(
   deps: FetchRegisteredWebPageDeps,
   resultId: string,
   callId: string,
-  maxContentChars: number = DEFAULT_FETCH_OPTIONS.maxContentChars,
-  maxResponseBytes: number = DEFAULT_FETCH_OPTIONS.maxResponseBytes,
+  maxContentChars?: number,
+  maxResponseBytes?: number,
   signal?: AbortSignal,
+  outputBudget?: number,
 ): Promise<ToolExecution<FetchWebPageOutput>> {
   if (signal?.aborted) {
     return toolFailure("web-fetch-cancelled", "Page fetch was cancelled.", false);
@@ -79,8 +105,10 @@ export async function fetchRegisteredWebPage(
   try {
     result = await deps.provider.fetchPage(safeUrl.url, {
       ...DEFAULT_FETCH_OPTIONS,
-      maxContentChars,
-      maxResponseBytes,
+      maxContentChars: deps.pageCache
+        ? deps.pageCache.maxPageChars
+        : (maxContentChars ?? DEFAULT_FETCH_OPTIONS.maxContentChars),
+      maxResponseBytes: maxResponseBytes ?? responseBytesForBatch(1, deps.pageCache !== undefined),
       ...(signal ? { signal } : {}),
     });
   } catch {
@@ -112,13 +140,37 @@ export async function fetchRegisteredWebPage(
       ? deps.artifacts.register(result.pageImages).map((entry) => entry.handle)
       : [];
 
-  const content = result.content.slice(0, maxContentChars);
-  const truncated = result.truncated || content.length < result.content.length;
+  const cap = maxContentChars ?? DEFAULT_FETCH_OPTIONS.maxContentChars;
+  const totalChars = result.content.length;
+  const version = pageFingerprint(result.content);
+  deps.pageCache?.put({
+    evidenceId: registered.evidenceId,
+    url: registered.canonicalUrl,
+    finalUrl: finalUrl.url,
+    title: registered.source.title,
+    snippet: registered.source.snippet,
+    contentType: result.contentType,
+    text: result.content,
+    truncated: result.truncated,
+    version,
+  });
+  const metadataChars = METADATA_CHARS + registered.canonicalUrl.length + finalUrl.url.length;
+  const room =
+    outputBudget === undefined
+      ? Number.POSITIVE_INFINITY
+      : Math.max(0, outputBudget - metadataChars);
+  const compact =
+    deps.pageCache !== undefined &&
+    maxContentChars === undefined &&
+    totalChars > Math.min(PAGE_INLINE_CHARS, room);
+  const content = result.content.slice(0, compact ? PAGE_EVIDENCE_HEAD_CHARS : cap);
+  const truncated = result.truncated || (!compact && content.length < totalChars);
   deps.evidence.upgradeWebPage(resultId, {
     content,
     finalUrl: finalUrl.url,
     truncated,
     callId,
+    version,
   });
 
   return {
@@ -128,11 +180,29 @@ export async function fetchRegisteredWebPage(
       evidenceId: registered.evidenceId,
       url: registered.canonicalUrl,
       finalUrl: finalUrl.url,
-      content,
+      totalChars,
+      ...(compact ? compactView(result.content, room) : { content }),
       contentType: result.contentType,
       truncated,
       ...(imageIds.length > 0 ? { imageIds } : {}),
       untrustedEvidence: true,
     },
   };
+}
+
+/**
+ * Builds the head, outline and hint of a page too large to return whole, shortened until their
+ * serialized size fits the room left for the page.
+ */
+function compactView(
+  text: string,
+  room: number,
+): Pick<FetchWebPageOutput, "head" | "outline" | "hint"> {
+  const hintChars = LARGE_PAGE_HINT.length + 40;
+  const head = text.slice(0, Math.min(PAGE_HEAD_CHARS, Math.max(0, Math.floor(room / 3))));
+  const outline = pageOutline(text, PAGE_OUTLINE_ENTRIES);
+  while (outline.length > 0 && JSON.stringify(outline).length + head.length + hintChars > room) {
+    outline.pop();
+  }
+  return { head, outline, hint: LARGE_PAGE_HINT };
 }

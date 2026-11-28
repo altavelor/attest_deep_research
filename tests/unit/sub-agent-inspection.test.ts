@@ -20,7 +20,11 @@ import {
   managerParts,
   readySubAgentRecord,
 } from "../support/subAgentSessions";
-import { hasStoppableWork } from "@application/use-cases/sub-agent/inspectionView";
+import {
+  MAX_ANSWER_CHARS,
+  buildInspectionDetail,
+  hasStoppableWork,
+} from "@application/use-cases/sub-agent/inspectionView";
 
 type Harness = ReturnType<typeof managerHarness>;
 
@@ -205,6 +209,36 @@ describe("sub-agent inspection snapshot", () => {
       (intent) => intent.type === "notice" && intent.entry.kind === "stopped",
     );
     expect(stopped?.entry).toMatchObject({ durationMs: 250 });
+  });
+
+  it("tells the host once about every session archived by a user stop or by stopping an import, and survives a failing host", async () => {
+    const archived: string[] = [];
+    const harness = managerHarness({
+      onSessionArchived: (sessionId) => {
+        archived.push(sessionId);
+        throw new Error("host failed");
+      },
+    });
+    const delegator = harness.delegator();
+    const first = await launchChild(delegator, "alpha");
+    const second = await launchChild(delegator, "beta");
+    harness.execution.finish(1);
+    harness.imports.mode = "hold";
+    harness.execution.finish(0);
+    await settle();
+    const running = await card(harness, second.session.subAgentSessionId);
+    const inspection = harness.manager.inspection();
+
+    expect(await inspection.stopFromUser(second.session.subAgentSessionId, "stale-run")).toBe(
+      "stale",
+    );
+    expect(archived).toEqual([]);
+    expect(
+      await inspection.stopFromUser(second.session.subAgentSessionId, running.controlRunId),
+    ).toBe("stopped");
+    await delegator.stop(first.session.subAgentSessionId);
+
+    expect(archived).toEqual([second.session.subAgentSessionId, first.session.subAgentSessionId]);
   });
 
   it("sums usage per request, replaces live by final and keeps unknown totals partial", async () => {
@@ -689,5 +723,46 @@ describe("sub-agent inspection hardening", () => {
     expect([Object.getPrototypeOf(copy), copy.polluted]).toEqual([Object.prototype, undefined]);
     expect(redactSubAgentJson(cyclic, (text) => text).self).toBeNull();
     expect((await card(harness, failing.session.subAgentSessionId)).status).toBe("failed");
+  });
+});
+
+describe("final answers of a session", () => {
+  it("lists the latest committed answer of each run, redacted and cut, and skips discarded ones", () => {
+    const record = readySubAgentRecord("session-1");
+    const entry = (runId: string, state: string, answerText: string) => ({
+      state,
+      sessionId: "session-1",
+      runId,
+      answerText,
+    });
+    const detail = buildInspectionDetail(
+      {
+        state: {
+          chatId: "chat-1",
+          records: [record],
+          imports: [
+            entry("run-1", "committed", "first"),
+            entry("run-1", "committed", "second token=SECRET"),
+            entry("run-2", "tombstoned", "discarded"),
+            entry("run-3", "prepared", "not committed"),
+            { ...entry("run-4", "committed", "other"), sessionId: "session-2" },
+            entry("run-5", "committed", "x".repeat(MAX_ANSWER_CHARS + 1)),
+          ],
+          observation: [],
+        } as never,
+        revision: 1,
+        debug: false,
+        redact: (text) => text.replace("SECRET", "[redacted]"),
+        elapsed: () => 0,
+        liveRevision: () => 0,
+        parentLive: () => true,
+      },
+      "session-1",
+    );
+
+    expect(detail!.answers).toEqual([
+      { runId: "run-1", text: "second token=[redacted]", truncated: false },
+      { runId: "run-5", text: "x".repeat(MAX_ANSWER_CHARS), truncated: true },
+    ]);
   });
 });

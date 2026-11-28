@@ -10,6 +10,7 @@ import {
 import {
   CachedExecution,
   contentBearingTool,
+  pageStateTool,
   extractEvidenceIds,
   launchParallelToolPool,
   uncachedTool,
@@ -22,6 +23,10 @@ import {
 const PREVIEW_CHARS = 600;
 export const SYNTHESIS_TOOL_STUB =
   "[omitted: stop calling tools — answer from the evidence already gathered]";
+
+export const RESULT_BUDGET_STUB =
+  "[omitted: the tool output budget of this run is spent, so this result was not shown to you; " +
+  "answer from the evidence already gathered]";
 
 export const SEARCH_BUDGET_STUB =
   '{"ok":false,"error":{"code":"search-budget-exhausted","message":"The search budget for ' +
@@ -61,6 +66,7 @@ export interface ThinkingToolRoundResult {
 /** Executes one round of tool calls while retaining cache, budget, and diagnostics for the run. */
 export class ThinkingToolRoundExecutor {
   private readonly cache = new Map<string, CachedExecution>();
+  private readonly pageResults = new Map<string, string>();
   private readonly mandatoryFailures = new Map<string, boolean>();
   private readonly seenEvidenceIds = new Set<string>();
   private readonly callDiagnostics: ToolCallDiagnostic[] = [];
@@ -200,6 +206,14 @@ export class ThinkingToolRoundExecutor {
         }
       }
 
+      const repeatedPageResult =
+        pageStateTool(call.name) && this.pageResults.get(key) === execution.result;
+      if (pageStateTool(call.name)) this.pageResults.set(key, execution.result);
+      if (repeatedPageResult) {
+        this.duplicateCallsCount += 1;
+        roundDuplicates += 1;
+      }
+
       this.recordExecution({
         call,
         execution,
@@ -210,7 +224,7 @@ export class ThinkingToolRoundExecutor {
       if (this.totalResultCharsCount + execution.result.length > this.options.maxResultChars) {
         this.budgetExhausted = true;
       }
-      const transcriptResult = this.budgetExhausted ? SYNTHESIS_TOOL_STUB : execution.result;
+      const transcriptResult = this.budgetExhausted ? RESULT_BUDGET_STUB : execution.result;
       this.totalResultCharsCount += transcriptResult.length;
       this.appendToolResult(
         call.id,
@@ -220,7 +234,7 @@ export class ThinkingToolRoundExecutor {
         toolOutputs,
       );
 
-      if (!cacheHit && execution.ok && contentBearingTool(call.name)) {
+      if (!cacheHit && !repeatedPageResult && execution.ok && contentBearingTool(call.name)) {
         roundFetchedContent = true;
       }
       if (execution.ok && searchTool(call.name)) {

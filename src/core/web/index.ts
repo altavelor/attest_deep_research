@@ -1,5 +1,19 @@
 export { rankSectionsByQuery, splitIntoSections } from "./sectionRanking";
 export type { RankedSection, SectionRankingOptions } from "./sectionRanking";
+export { pageFingerprint } from "./pageFingerprint";
+export {
+  MAX_PAGE_MATCHES,
+  findInText,
+  pageOutline,
+  pageSearchTerms,
+  readRange,
+  splitsInsideToken,
+  trimToBoundary,
+  type PageMatch,
+  type PageOutlineEntry,
+  type PageRange,
+  type PageSearchMode,
+} from "./pageSearch";
 
 export {
   WEB_SOURCE_CATALOG,
@@ -58,3 +72,4 @@ export type {
   WebSourceDescriptor,
   WebSourceProfile,
 } from "./webSources";
+export * from "./pageLimits";

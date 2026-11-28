@@ -1,3 +1,4 @@
+import type { ChatPageCaches } from "@application/ports/pageCache";
 import { TokenUsageMeter, type StageTokenUsage } from "./TokenUsageMeter";
 import { summarizeCompactionWithModel } from "@application/use-cases/chat/ChatCompaction";
 import { SearchProvider } from "@application/ports/web";
@@ -305,13 +306,17 @@ export class ResearchService implements ConversationEngine {
     };
 
     if (policy.strategy === "deep-research") {
-      request.subAgentParent?.bindExecution(this.subAgentExecution(ctx.retrieval.web));
+      request.subAgentParent?.bindExecution(
+        this.subAgentExecution(ctx.retrieval.web, request.pageCaches),
+      );
       yield* this.deep.execute(ctx);
       return;
     }
 
     if (policy.strategy === "thinking") {
-      request.subAgentParent?.bindExecution(this.subAgentExecution(ctx.retrieval.web));
+      request.subAgentParent?.bindExecution(
+        this.subAgentExecution(ctx.retrieval.web, request.pageCaches),
+      );
     }
 
     let executionStrategy: ResearchExecutionStrategy = policy.strategy;
@@ -371,7 +376,10 @@ export class ResearchService implements ConversationEngine {
    * runner with the same model configuration is created only when a child run starts,
    * with tools limited by that run's source policy.
    */
-  private subAgentExecution(web: ResearchModeWebParameters): SubAgentExecutionPort {
+  private subAgentExecution(
+    web: ResearchModeWebParameters,
+    pageCaches: ChatPageCaches | undefined,
+  ): SubAgentExecutionPort {
     const label = this.chatModelName;
     return new SubAgentExecutionAdapter({
       selectModel: () => ({
@@ -384,8 +392,10 @@ export class ResearchService implements ConversationEngine {
         modelRound: this.subAgentRunnerDeps.modelRound,
       }),
       createRunner: (modelRound) => new SubAgentRunner({ ...this.subAgentRunnerDeps, modelRound }),
-      toolContext: (request) =>
-        subAgentToolContext(this.subAgentSources, request.sourcePolicy, web, request.origin),
+      toolContext: (request) => ({
+        ...subAgentToolContext(this.subAgentSources, request.sourcePolicy, web, request.origin),
+        ...(pageCaches ? { pageCache: pageCaches.openSession(request.sessionId) } : {}),
+      }),
       now: this.now,
     });
   }

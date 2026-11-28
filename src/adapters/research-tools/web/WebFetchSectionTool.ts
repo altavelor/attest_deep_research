@@ -71,7 +71,7 @@ export const WebFetchSectionTool = defineTool<
   parse: parseFetchWebSectionInput,
   execute: async (deps, input, context) => {
     const fetched = await fetchRegisteredWebPage(
-      deps,
+      { provider: deps.provider, evidence: deps.evidence },
       input.resultId,
       context.callId,
       SECTION_FETCH_MAX_CHARS,
@@ -80,7 +80,9 @@ export const WebFetchSectionTool = defineTool<
       return fetched;
     }
 
-    const ranked = rankSectionsByQuery(fetched.value.content, input.query, { limit: input.limit });
+    const ranked = rankSectionsByQuery(fetched.value.content ?? "", input.query, {
+      limit: input.limit,
+    });
 
     return {
       ok: true,

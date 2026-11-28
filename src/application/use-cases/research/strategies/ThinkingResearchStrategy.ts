@@ -11,7 +11,7 @@ import {
 import { buildThinkingResearchMessages } from "@core/research";
 import { isWebQueryIntent, isWebQueryRecency } from "@core/web";
 import { ResearchStreamEvent } from "@application/contracts/research";
-import type { WebSearchOptions } from "@application/ports";
+import type { OwnedPageCache, WebSearchOptions } from "@application/ports";
 import { ASK_CLARIFICATION_TOOL, SUB_AGENT_TOOL } from "@core/agent";
 import {
   AskClarificationTool,
@@ -67,8 +67,12 @@ export class ThinkingResearchStrategy implements ResearchStrategy {
   ): AsyncGenerator<ResearchStreamEvent, ResearchStrategyOutcome> {
     yield { type: "status", message: "Synthesizing answer..." };
     const liveEvents = createAsyncEventChannel<ResearchStreamEvent>();
-    const thinkingPromise = this.run(ctx, (event) => liveEvents.push(event)).finally(() =>
-      liveEvents.close(),
+    const pageCache = ctx.request.pageCaches?.openRun();
+    const thinkingPromise = this.run(ctx, (event) => liveEvents.push(event), pageCache).finally(
+      () => {
+        pageCache?.close();
+        liveEvents.close();
+      },
     );
     for await (const event of liveEvents) yield event;
     const thinking = await thinkingPromise;
@@ -89,6 +93,7 @@ export class ThinkingResearchStrategy implements ResearchStrategy {
   private async run(
     ctx: ResearchExecutionContext,
     onEvent: (event: ResearchStreamEvent) => void,
+    pageCache: OwnedPageCache | undefined,
   ): Promise<ThinkingRunResult> {
     const { request, question, searchMode, policy, indexDescription } = ctx;
     const assembled = this.deps.contextAssembler
@@ -151,6 +156,7 @@ export class ThinkingResearchStrategy implements ResearchStrategy {
       urlStatusChecker: this.deps.urlStatusChecker,
       indexSourcePaths: request.contextPaths,
       searchProvider: this.deps.searchProvider,
+      ...(pageCache ? { pageCache } : {}),
       web: ctx.retrieval.web,
       onWebSourceSelection: (selection) => {
         if (webSourceSelections.length < MAX_TRACED_WEB_SEARCHES) {

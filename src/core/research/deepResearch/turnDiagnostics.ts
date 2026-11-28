@@ -116,7 +116,9 @@ function workDiagnostic(
   state: ResearchState,
   runs: readonly DeepResearchChildRunDiagnostic[],
 ): DeepResearchWorkDiagnostic {
-  const session = execution.runRef?.sessionId ?? state.sessionByBranch[execution.branchId];
+  const session =
+    execution.runRef?.sessionId ??
+    (execution.state === "running" ? state.sessionByBranch[execution.branchId] : undefined);
   const runner =
     execution.path === "sub-agent"
       ? `sub-agent ${session ?? "unknown"}`

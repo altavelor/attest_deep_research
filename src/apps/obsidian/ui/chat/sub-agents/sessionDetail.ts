@@ -10,6 +10,7 @@ import { promptSummary, renderPromptBody } from "./promptSection";
 import { renderStatus } from "./sessionList";
 import { renderStopArea, type StopState } from "./stopArea";
 import { WorkLogView, type WorkLogDeps } from "./workLog";
+import { answerSummary, renderAnswerBody } from "./answerSection";
 
 export interface DetailCallbacks {
   onBack(): void;
@@ -44,6 +45,7 @@ export class SessionDetailView {
   private readonly runRowEl: HTMLElement;
   private readonly prompt: CollapsibleSection;
   private readonly work: CollapsibleSection;
+  private readonly answer: CollapsibleSection;
   private readonly stopEl: HTMLElement;
   private readonly workLog: WorkLogView;
   private detail: SubAgentInspectionDetail | null = null;
@@ -51,6 +53,7 @@ export class SessionDetailView {
   private elapsedEl: HTMLElement | null = null;
   private runSignature: string | null = null;
   private promptKey: string | null = null;
+  private answerKey: string | null = null;
   private stopKey: string | null = null;
 
   constructor(
@@ -82,6 +85,7 @@ export class SessionDetailView {
     this.prompt = this.createSection(sectionsEl, t("chat.subAgents.prompt.title"));
     this.work = this.createSection(sectionsEl, t("chat.subAgents.work.title"));
     this.workLog = new WorkLogView(this.work.bodyEl, deps);
+    this.answer = this.createSection(sectionsEl, t("chat.subAgents.answer.title"));
     this.stopEl = rootEl.createDiv({ cls: "attest-sub-agents__stop" });
   }
 
@@ -113,6 +117,16 @@ export class SessionDetailView {
       }),
     );
     this.renderWorkLog();
+    const answer = detail.answers.find((entry) => entry.runId === state.selectedRunId);
+    this.answer.summaryEl.setText(answerSummary(answer, runIndex + 1, t));
+    const answerKey = this.answer.open
+      ? `${state.selectedRunId}\u0000${JSON.stringify(answer)}`
+      : null;
+    if (answerKey !== this.answerKey) {
+      this.answerKey = answerKey;
+      this.answer.bodyEl.empty();
+      if (this.answer.open) renderAnswerBody(this.answer.bodyEl, answer, t);
+    }
     if (this.work.open && previousRun !== undefined && previousRun !== state.selectedRunId) {
       this.workLog.revealSelectedRun();
     }

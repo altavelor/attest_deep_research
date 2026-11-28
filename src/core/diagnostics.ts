@@ -175,6 +175,7 @@ export interface DeepResearchChildRunDiagnostic {
   rounds: number | null;
   searches: number | null;
   evidenceItems: number | null;
+  tools?: Record<string, number>;
   allocatedRounds: number;
   allocatedSearches: number;
   childOutcome?: string;

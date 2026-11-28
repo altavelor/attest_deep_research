@@ -12,6 +12,8 @@ export interface BranchUsage {
   inputTokens?: number;
   outputTokens?: number;
   fetches?: number;
+  sources?: number;
+  toolCounts?: Readonly<Record<string, number>>;
 }
 
 export type AllocationResult =
@@ -135,6 +137,9 @@ export class ResearchBudgetOwner {
         inputTokens: addOptional(diagnostics.inputTokens, usage?.inputTokens),
         outputTokens: addOptional(diagnostics.outputTokens, usage?.outputTokens),
         fetches: diagnostics.fetches + (usage?.fetches ?? 0),
+        ...(usage?.sources !== undefined || diagnostics.sources !== undefined
+          ? { sources: (diagnostics.sources ?? 0) + (usage?.sources ?? 0) }
+          : {}),
       },
     };
   }

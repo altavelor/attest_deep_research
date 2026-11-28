@@ -38,6 +38,7 @@ const approved = {
     openAllocations: [
       { workId: "w-2", branchId: "branch-2", attempt: 1, modelRounds: 12, searches: 10 },
     ],
+    diagnostics: { ...emptyBudgetState().diagnostics, sources: 4 },
   },
 };
 const [done, running] = approved.executions;
@@ -448,6 +449,9 @@ function budgetRows(): [string, unknown][] {
     withBudget("searches over the limit with the open allocation", {
       consumed: { ...budget.consumed, searches: 95 },
     }),
+    withBudget("negative source counter", {
+      diagnostics: { ...budget.diagnostics, sources: -1 },
+    }),
     withBudget("closure the owner never writes", {
       openAllocations: [],
       closed: { reason: "user", dimension: null },
@@ -749,6 +753,35 @@ describe("deep research section validation", () => {
         }),
       ],
       [
+        "more unread sources than the bound",
+        section({
+          ...approved,
+          executions: [
+            {
+              ...done,
+              finding: {
+                ...done!.finding!,
+                unreadSources: Array.from({ length: 6 }, (_, index) => `https://e.test/${index}`),
+              },
+            },
+            running,
+          ],
+        }),
+      ],
+      [
+        "an over-long unread source",
+        section({
+          ...approved,
+          executions: [
+            {
+              ...done,
+              finding: { ...done!.finding!, unreadSources: [`https://e.test/${"x".repeat(500)}`] },
+            },
+            running,
+          ],
+        }),
+      ],
+      [
         "finding over the encoded size",
         section({
           ...approved,
@@ -790,6 +823,7 @@ describe("deep research section validation", () => {
         {
           ...done!,
           path: "sub-agent",
+          finding: { ...done!.finding!, unreadSources: ["https://e.test/a"] },
           runRef: { sessionId: "session-1", runId: "run-1", resultRevision: 2 },
         },
         running,

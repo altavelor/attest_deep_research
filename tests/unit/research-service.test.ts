@@ -1,3 +1,4 @@
+import type { ChatPageCaches } from "@application/ports";
 import { ResearchService } from "@application/use-cases/research";
 import { MarkdownExtractor } from "@adapters/extractors";
 import { createResearchToolRegistry, NoteToolService, runToolLoop } from "@adapters/research-tools";
@@ -592,6 +593,77 @@ describe("ResearchService", () => {
         expect.objectContaining({ function: expect.objectContaining({ name: "run_subagent" }) }),
       ]),
     );
+  });
+
+  it("gives each child run the page cache of its own agent session", async () => {
+    const cache = {
+      maxPageChars: 1,
+      put: vi.fn(),
+      get: vi.fn(),
+      list: vi.fn(() => []),
+      close: vi.fn(),
+    };
+    const pageCaches = {
+      openRun: vi.fn(() => cache),
+      openSession: vi.fn(() => cache),
+    } as unknown as ChatPageCaches;
+    const toolsetFactory = vi.fn(createResearchToolRegistry);
+    const chatModel = new FakeChatModel([
+      [{ content: "First attempt", isComplete: true }],
+      [{ content: "Repair attempt", isComplete: true }],
+      [{ content: "Fallback answer", isComplete: true }],
+      [{ content: "Child answer", isComplete: true }],
+    ]);
+    const service = new ResearchService({
+      toolsetFactory,
+      runToolLoop,
+      modelRoundFactory: (m) => new ChatCompletionsRoundAdapter(m),
+      retriever: new FakeRetriever(emptyRetrieval()),
+      chatModel,
+      chatModelName: "qwen",
+      toolCapabilities: {
+        calls: true,
+        choiceRequired: true,
+        choiceSpecific: true,
+        parallelCalls: true,
+      },
+      now: fixedNow,
+    });
+    let bound: { run(request: never): Promise<unknown> } | undefined;
+    const parent = fakeParentRun().parent;
+
+    await collectAsync(
+      service.answer({
+        question: "Delegate this",
+        forceSubAgent: true,
+        searchMode: "indexOnly",
+        pageCaches,
+        subAgentDelegator: recordingDelegator().delegator,
+        subAgentParent: { ...parent, bindExecution: (execution) => (bound = execution) },
+      }),
+    );
+    await bound!.run({
+      sessionId: "child-1",
+      runId: "run-1",
+      attempt: 1,
+      task: "Look it up",
+      sourcePolicy: {
+        searchMode: "webOnly",
+        contextPaths: [],
+        indexScope: "none",
+        allowActiveFile: false,
+        allowNoteMutation: false,
+      },
+      resources: [],
+      limits: { maxRounds: 2, maxResultChars: 30_000, maxSearches: 2 },
+      priorContext: { continuesPartial: false, priorEvidenceItems: [] },
+      signal: new AbortController().signal,
+      observe: () => undefined,
+      onObservation: () => undefined,
+    } as never);
+
+    expect(pageCaches.openSession).toHaveBeenCalledWith("child-1");
+    expect(toolsetFactory.mock.calls.at(-1)![0].pageCache).toBe(cache);
   });
 
   it("does not require get_active_note when active-file inclusion is enabled without an active file", async () => {

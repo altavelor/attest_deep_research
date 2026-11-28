@@ -20,7 +20,7 @@ import type {
   ToolContext,
 } from "@core/agent";
 import { SUB_AGENT_PHASE, SUB_AGENT_TOOL_END, SUB_AGENT_TOOL_START } from "@application/research";
-import { SYNTHESIS_TOOL_STUB } from "@application/use-cases/research/ThinkingToolRoundExecutor";
+import { RESULT_BUDGET_STUB } from "@application/use-cases/research/ThinkingToolRoundExecutor";
 import { fakeParentRun, recordingDelegator, sourcePolicy } from "../support/subAgentSessions";
 import { subAgentToolContext } from "@application/use-cases/research/sub-agent/subAgentToolContext";
 
@@ -423,7 +423,7 @@ describe("SubAgentRunner cancellation and budgets", () => {
     expect(result.snapshot.evidence.length).toBeGreaterThan(0);
   });
 
-  it("replaces tool output with the synthesis stub once the result budget is exceeded", async () => {
+  it("replaces tool output with the budget stub once the result budget is exceeded", async () => {
     const modelRound = scriptedRounds((_request, index) =>
       index === 1 ? searchCallRound("1") : textRound("Answer within budget."),
     );
@@ -439,7 +439,8 @@ describe("SubAgentRunner cancellation and budgets", () => {
 
     expect(result.answerText).toBe("Answer within budget.");
     const toolMessage = modelRound.requests[1].messages.find((message) => message.role === "tool");
-    expect(toolMessage?.content).toBe(SYNTHESIS_TOOL_STUB);
+    expect(toolMessage?.content).toBe(RESULT_BUDGET_STUB);
+    expect(RESULT_BUDGET_STUB).toContain("tool output budget");
     expect(toolMessage?.content).not.toContain("xxxx");
   });
 
@@ -650,9 +651,34 @@ describe("SubAgentRunner telemetry", () => {
       searchBudgetRejections: 1,
       hitRoundLimit: false,
       toolCalls: 2,
+      toolCounts: { search_web: 2 },
       usedSynthesisFallback: false,
     });
     expect(result.telemetry?.failureReason).toBeUndefined();
+  });
+
+  it("counts a tool name the model made up in one bucket instead of under its own key", async () => {
+    const runner = runnerWith(
+      scriptedRounds((request, index) => {
+        if (request.toolChoice?.type === "none" || index > 2) return textRound("Answer.");
+        if (index === 1) {
+          return {
+            items: [
+              {
+                type: "toolCall" as const,
+                call: { id: "1", name: "constructor", arguments: {} },
+              },
+            ],
+            stopReason: "tool_calls" as const,
+          };
+        }
+        return searchCallRound("2");
+      }),
+    );
+
+    const result = await runner.run({ task: "What is X?" });
+
+    expect(result.telemetry?.toolCounts).toEqual({ other: 1, search_web: 1 });
   });
 
   it("keeps the loop duration equal to the run duration without a synthesis pass", async () => {

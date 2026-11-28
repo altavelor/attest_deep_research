@@ -54,6 +54,7 @@ export {
   nextReadyExecution,
   openWorks,
   resumeExecutions,
+  withoutStaleRunRefs,
 } from "./schedule";
 export {
   formatWithoutModel,
@@ -66,7 +67,7 @@ export {
 } from "./report";
 export { boundFindingText } from "./findingBounds";
 export { SOURCE_READING_INSTRUCTION, branchTaskText } from "./branchTask";
-export { branchPath, parseResearchScope, researchScopeId, waveSize } from "./waves";
+export { parseResearchScope, researchScopeId, waveSize } from "./waves";
 export {
   MAX_BRIEF_PROMPT_CHARS,
   MAX_BRIEF_SUGGESTION_CHARS,
@@ -90,6 +91,7 @@ export {
   containedQuote,
   objectiveCoverage,
 } from "./verification";
+export { readReportStats, sourcesFound } from "./reportStats";
 export { escapePromptText } from "./promptText";
 export type * from "./discoveryTypes";
 export {

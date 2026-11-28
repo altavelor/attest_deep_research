@@ -6,9 +6,12 @@ import {
 } from "@core/agent";
 import {
   DOWNLOAD_DOCUMENT_TOOL,
+  FIND_IN_PAGES_TOOL,
+  READ_PAGE_RANGE_TOOL,
   SUB_AGENT_RESULT_TOOL,
   SUB_AGENT_TOOL,
   SUB_AGENT_WAIT_TOOL,
+  WEB_FETCH_TOOL,
 } from "@core/agent";
 import { ToolManager } from "@application/tools/ToolManager";
 import { ConcurrencyLimiter } from "./ToolConcurrencyPool";
@@ -53,7 +56,11 @@ export function extractEvidenceIds(result: string): string[] {
 }
 
 export function contentBearingTool(name: string): boolean {
-  return name === "read_note" || name === "get_active_note" || name === "fetch_web_page";
+  return name === "read_note" || name === "get_active_note" || pageStateTool(name);
+}
+
+export function pageStateTool(name: string): boolean {
+  return name === WEB_FETCH_TOOL || name === FIND_IN_PAGES_TOOL || name === READ_PAGE_RANGE_TOOL;
 }
 
 export function searchTool(name: string): boolean {
@@ -96,7 +103,12 @@ export function launchParallelToolPool(
 
 /** True for tools whose answer changes over time, so a repeated call is never served from the cache. */
 export function uncachedTool(name: string): boolean {
-  return mutationTool(name) || name === SUB_AGENT_RESULT_TOOL || name === SUB_AGENT_WAIT_TOOL;
+  return (
+    mutationTool(name) ||
+    pageStateTool(name) ||
+    name === SUB_AGENT_RESULT_TOOL ||
+    name === SUB_AGENT_WAIT_TOOL
+  );
 }
 
 export function mutationTool(name: string): boolean {

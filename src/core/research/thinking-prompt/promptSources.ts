@@ -11,6 +11,8 @@ import {
   URL_CHECK_BATCH_LIMIT,
   WEB_FETCH_TOOL,
   WEB_SEARCH_TOOL,
+  FIND_IN_PAGES_TOOL,
+  READ_PAGE_RANGE_TOOL,
 } from "@core/agent";
 import {
   MAX_WEB_FETCH_RESULT_IDS,
@@ -131,6 +133,13 @@ export function buildWebSection(capabilities: PromptCapabilities): string {
       `- When a snippet is insufficient, call ${WEB_FETCH_TOOL} with the \`resultId\` handles ` +
         `from ${WEB_SEARCH_TOOL} in \`resultIds\` — not their \`url\`, not a \`[url:…]\` citation ` +
         `— up to ${MAX_WEB_FETCH_RESULT_IDS} pages in one call rather than one at a time.`,
+    );
+  }
+  if (capabilities.tools.has(FIND_IN_PAGES_TOOL) && capabilities.tools.has(READ_PAGE_RANGE_TOOL)) {
+    lines.push(
+      `- A page reported as large comes back as its size, outline and head only: search it with ` +
+        `${FIND_IN_PAGES_TOOL} (words or an exact phrase) and read the passage with ` +
+        `${READ_PAGE_RANGE_TOOL}. Cite only text you have read this way, not the head alone.`,
     );
   }
   return lines.join("\n");

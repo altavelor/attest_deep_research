@@ -29,6 +29,7 @@ import {
   BranchNoFindingsError,
   UnusableBranchSessionError,
   openedDocuments,
+  unreadWebSources,
   type BranchChildRun,
   type BranchRunner,
 } from "./branchRunner";
@@ -183,7 +184,12 @@ export class SubAgentBranchRunner implements BranchRunner {
   ): Promise<BranchFinding> {
     const snapshot = await this.deps.resolver.resolve(outcome);
     const usage = this.usages.get(workId);
-    if (usage) this.usages.set(workId, { ...usage, fetches: openedDocuments(snapshot) });
+    if (usage)
+      this.usages.set(workId, {
+        ...usage,
+        fetches: openedDocuments(snapshot),
+        sources: outcome.evidence.length,
+      });
     const present = new Set(snapshot.evidence.map((chunk) => chunk.id));
     const revisionOf = new Map(
       outcome.evidence
@@ -197,21 +203,31 @@ export class SubAgentBranchRunner implements BranchRunner {
     if (text === "") throw new BranchNoFindingsError();
     const bounded = boundFindingText(text);
     const cited = citationIdsFromText(bounded);
+    const unread = unreadWebSources(
+      snapshot,
+      new Set([...revisionOf].filter(([, revision]) => cited.has(revision)).map(([id]) => id)),
+    );
     return {
       text: bounded,
       citationTokens: [...new Set(revisionOf.values())]
         .filter((id) => cited.has(id))
         .slice(0, MAX_FINDING_CITATION_TOKENS),
       partial: outcome.evidenceBudgetExhausted === true,
+      ...(unread.length > 0 ? { unreadSources: unread } : {}),
     };
   }
 }
 
-/** Reads the rounds and tool calls a child reported; evidence is charged when it is appended. */
+/** Reads the rounds, search calls and per-tool counts a child reported; evidence is charged when it is appended. */
 function measuredUsage(run: SubAgentRunSummary | undefined): BranchUsage | null {
   const usage = run?.usage;
   if (!usage || !isCount(usage.modelRounds) || !isCount(usage.toolCalls)) return null;
-  return { modelRounds: usage.modelRounds, searches: usage.toolCalls, evidenceItems: 0 };
+  return {
+    modelRounds: usage.modelRounds,
+    searches: isCount(usage.searchCalls) ? usage.searchCalls : usage.toolCalls,
+    evidenceItems: 0,
+    ...(usage.toolCounts ? { toolCounts: usage.toolCounts } : {}),
+  };
 }
 
 function isCount(value: unknown): value is number {

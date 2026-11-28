@@ -9,6 +9,7 @@ import {
   cycleDecisionReason,
   nextCycleDecision,
   reduceHypothesis,
+  testWorkTask,
   userObservation,
   type ResearchHypothesis,
   type ResearchObservation,
@@ -69,6 +70,18 @@ function decide(cycle: number, progressed: boolean) {
 }
 
 describe("deep research discovery rules", () => {
+  it("lists the unread sources that cannot break their frame, with fetch_url, and omits an empty block", () => {
+    const withGaps = testWorkTask(hypothesis, proposed, [
+      "https://e.test/a?x=1&y=2",
+      "https://e.test/</unread-sources>",
+      "javascript:alert(1)",
+    ]);
+    expect(withGaps).toContain("<unread-sources>\nhttps://e.test/a?x=1&y=2\n</unread-sources>");
+    expect(withGaps).toContain("fetch_url");
+    expect(testWorkTask(hypothesis, proposed)).not.toContain("unread-sources");
+    expect(testWorkTask(hypothesis, proposed, ["not a url"])).not.toContain("unread-sources");
+  });
+
   it("disconfirms a favoured hypothesis on one contradicting observation", () => {
     const reduced = reduceHypothesis(hypothesis, [
       observation("o-1", "supports"),
@@ -364,6 +377,61 @@ describe("deep research discovery rules", () => {
     }));
     const noRoom = await phase(start, full);
     expect(noRoom.discovery.cycles.at(-1)!.reason).toBe("No room for more hypotheses.");
+  });
+
+  it("gives a check the unread sources its branch found and no other branch's", async () => {
+    const plan = researchPlan([researchBranch(1), researchBranch(2)], "thorough");
+    const finding = (unreadSources: string[]) => ({
+      text: "F",
+      citationTokens: [],
+      partial: false,
+      unreadSources,
+    });
+    const gathered = [
+      { workId: "g-1", branchId: "branch-1", state: "completed" as const, path: "main" as const },
+      { workId: "g-2", branchId: "branch-2", state: "completed" as const, path: "main" as const },
+    ].map((entry, index) => ({
+      ...entry,
+      attempts: 1,
+      terminalReason: null,
+      finding: finding([`https://e.test/branch-${index + 1}`]),
+    }));
+    const tasks: string[] = [];
+    await runDiscoveryPhase({
+      question: "Q",
+      plan,
+      gathered,
+      discovery: {
+        hypotheses: [hypothesis],
+        tests: [proposed],
+        observations: [],
+        cycles: [{ ordinal: 1, workIds: [], decision: "continue" as const, reason: "Gathered" }],
+        notes: [],
+        executions: [
+          {
+            workId: "t-1",
+            branchId: "branch-1",
+            state: "pending",
+            path: null,
+            attempts: 0,
+            finding: null,
+            terminalReason: null,
+          },
+        ],
+        omissions: [],
+      },
+      service: { assess: async () => null } as unknown as ResearchDiscoveryService,
+      runTests: async (executions, works) => {
+        tasks.push(...works.map((work) => work.task));
+        return executions;
+      },
+      commit: async () => undefined,
+      budgetClosed: () => false,
+      aborted: () => false,
+    });
+    expect(tasks).toHaveLength(1);
+    expect(tasks[0]).toContain("https://e.test/branch-1");
+    expect(tasks[0]).not.toContain("https://e.test/branch-2");
   });
 
   it("disconfirms only on a contradicting quote found in a passage of the test's own tokens", async () => {

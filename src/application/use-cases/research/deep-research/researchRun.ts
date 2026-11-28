@@ -9,7 +9,9 @@ import {
   openWorks,
   reportDecision,
   reportScale,
+  sourcesFound,
   resumeExecutions,
+  withoutStaleRunRefs,
   researchLanguageOf,
   stopReasonOf,
   waveSize,
@@ -105,14 +107,18 @@ export async function runResearch(
   });
   let current = start;
   const commit = async (patch: Partial<ResearchState>): Promise<ResearchState> => {
-    const next: ResearchState = {
-      ...current,
-      ...patch,
-      revision: current.revision + 1,
-      budget: owner.snapshot(),
-      sessionByBranch: permits.sessionByBranch(),
-      updatedAt: deps.now().toISOString(),
-    };
+    const sessionByBranch = permits.sessionByBranch();
+    const next = withoutStaleRunRefs(
+      {
+        ...current,
+        ...patch,
+        revision: current.revision + 1,
+        budget: owner.snapshot(),
+        sessionByBranch,
+        updatedAt: deps.now().toISOString(),
+      },
+      sessionByBranch,
+    );
     await deps.port.commit(next, current.revision);
     current = next;
     deps.onState(next);
@@ -143,7 +149,7 @@ export async function runResearch(
   const runners: ResearchSchedulerRunners = {
     main: deps.runner,
     ...(subAgent ? { subAgent } : {}),
-    sessionByBranch: () => permits.sessionByBranch(),
+    releaseSession: (branchId) => permits.releaseSession(branchId),
   };
   const phase = {
     language: researchLanguageOf(start),
@@ -308,7 +314,7 @@ async function writeReport(
     verification: null,
     scale: reportScale(plan, budget.activeMs),
     stats: {
-      sourcesFound: Math.max(budget.consumed.evidenceItems, sourcesCited),
+      sourcesFound: sourcesFound(budget, sourcesCited),
       sourcesCited,
       documentsOpened: budget.diagnostics.fetches,
       removedCitations: written.removedCitations,

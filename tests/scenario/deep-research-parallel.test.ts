@@ -197,7 +197,7 @@ describe("deep research branches as child sessions", () => {
     expect(rounds.peakConcurrentRounds).toBe(1);
   });
 
-  it("moves a branch whose mapped session is refused to the main path within the same attempt", async () => {
+  it("gives a branch whose mapped session is refused a new child session within the same attempt", async () => {
     const chat = realSubAgentChat(new MemoryFileSystem());
     const session = chat.manager.createSession(SETTINGS);
     const state = {
@@ -209,7 +209,10 @@ describe("deep research branches as child sessions", () => {
     await run.events;
 
     const final = run.port.commits.find((entry) => entry.phase === "discovering")!;
-    expect(final.executions).toMatchObject([{ state: "completed", path: "main", attempts: 1 }]);
+    expect(final.executions).toMatchObject([
+      { state: "completed", path: "sub-agent", attempts: 1 },
+    ]);
+    expect(final.sessionByBranch["branch-1"]).not.toBe("subagent-session-forged");
     expect(final.budget!.consumed.branchAttempts).toBe(1);
     expect(final.budget!.consumed.modelRounds).toBe(2);
   });
