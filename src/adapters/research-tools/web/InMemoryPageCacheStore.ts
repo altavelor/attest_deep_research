@@ -13,6 +13,7 @@ interface Slot {
  */
 export class InMemoryPageCacheStore implements PageCacheStore {
   private readonly sessions = new Map<string, Map<string, Slot>>();
+  private readonly retired = new Set<string>();
   private tick = 0;
 
   constructor(private readonly limits: PageCacheLimits = DEFAULT_PAGE_CACHE_LIMITS) {}
@@ -29,11 +30,18 @@ export class InMemoryPageCacheStore implements PageCacheStore {
     this.sessions.delete(sessionId);
   }
 
+  retire(sessionId: string): void {
+    this.sessions.delete(sessionId);
+    this.retired.add(sessionId);
+  }
+
   releaseAll(): void {
     this.sessions.clear();
+    this.retired.clear();
   }
 
   private put(sessionId: string, page: CachedPage): void {
+    if (this.retired.has(sessionId)) return;
     const text = page.text.slice(0, this.limits.maxPageChars);
     const stored: CachedPage = {
       ...page,

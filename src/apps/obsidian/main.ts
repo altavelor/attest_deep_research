@@ -189,6 +189,7 @@ export default class AttestPlugin extends Plugin {
       releaseAgentSessions: (sessionIds) => {
         for (const sessionId of sessionIds) this.pageCacheStore.release(sessionId);
       },
+      retireAgentSession: (sessionId) => this.pageCacheStore.retire(sessionId),
     });
     return this.chatSessionManager;
   }

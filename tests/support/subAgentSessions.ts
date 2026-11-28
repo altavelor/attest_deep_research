@@ -462,6 +462,7 @@ export interface ManagerHarnessOptions {
   evidenceImport?: SubAgentEvidenceImportPort;
   redact?: (text: string) => string;
   execution?: SubAgentExecutionPort;
+  onSessionStopped?: (sessionId: string) => void;
 }
 
 /** Builds one untrusted child evidence value as the runner reports it, web by default. */
@@ -567,6 +568,7 @@ export function managerHarness(options: ManagerHarnessOptions = {}) {
     monotonicNow: () => probes.clockMs,
     isDebugCapture: () => probes.debug,
     mainEvents: { publish: (intents) => void mainEvents.push(...intents) },
+    ...(options.onSessionStopped ? { onSessionStopped: options.onSessionStopped } : {}),
   };
   const manager = createSubAgentSessionManager(context);
   const delegator = (grantId = "grant-1", deliveryEpoch = 1) =>

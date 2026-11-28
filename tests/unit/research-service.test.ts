@@ -599,6 +599,7 @@ describe("ResearchService", () => {
     const pageCacheStore = {
       forSession: vi.fn(() => cache),
       release: vi.fn(),
+      retire: vi.fn(),
       releaseAll: vi.fn(),
     };
     const toolsetFactory = vi.fn(createResearchToolRegistry);

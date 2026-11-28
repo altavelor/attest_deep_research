@@ -95,6 +95,9 @@ export class ChatSessionRuntime {
         ? { createManager: environment.createSubAgentSessionManager }
         : {}),
       ...(environment.subAgentServices ? { services: environment.subAgentServices } : {}),
+      ...(environment.retireAgentSession
+        ? { onSessionStopped: (sessionId: string) => environment.retireAgentSession?.(sessionId) }
+        : {}),
       writer: this.writes,
       now: () => environment.now(),
       createId: () => environment.createRunId(),

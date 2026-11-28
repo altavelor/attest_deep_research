@@ -16,9 +16,13 @@ export interface PageCache {
   list(): readonly CachedPage[];
 }
 
-/** Owns the page caches of all agent sessions; a session never sees the pages of another. */
+/**
+ * Owns the page caches of all agent sessions; a session never sees the pages of another. A retired
+ * session loses its pages and stores no page again, so a fetch that was in flight cannot refill it.
+ */
 export interface PageCacheStore {
   forSession(sessionId: string): PageCache;
   release(sessionId: string): void;
+  retire(sessionId: string): void;
   releaseAll(): void;
 }

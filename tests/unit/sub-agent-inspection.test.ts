@@ -211,6 +211,24 @@ describe("sub-agent inspection snapshot", () => {
     expect(stopped?.entry).toMatchObject({ durationMs: 250 });
   });
 
+  it("tells the host which session the user stopped, once, and survives a failing host", async () => {
+    const stopped: string[] = [];
+    const harness = managerHarness({
+      onSessionStopped: (sessionId) => {
+        stopped.push(sessionId);
+        throw new Error("host failed");
+      },
+    });
+    const { session } = await launchChild(harness.delegator(), "alpha");
+    const sessionId = session.subAgentSessionId;
+    const running = await card(harness, sessionId);
+    const inspection = harness.manager.inspection();
+    expect(await inspection.stopFromUser(sessionId, "stale-run")).toBe("stale");
+    expect(stopped).toEqual([]);
+    expect(await inspection.stopFromUser(sessionId, running.controlRunId)).toBe("stopped");
+    expect(stopped).toEqual([sessionId]);
+  });
+
   it("sums usage per request, replaces live by final and keeps unknown totals partial", async () => {
     const harness = managerHarness();
     const { session, receipt } = await launchChild(harness.delegator(), "alpha");

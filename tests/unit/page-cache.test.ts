@@ -28,6 +28,18 @@ describe("in-memory page cache store", () => {
     expect(store.forSession("one").list()).toEqual([]);
   });
 
+  it("drops a retired session and refuses a page that a fetch in flight stores afterwards", () => {
+    const store = new InMemoryPageCacheStore(limits);
+    const cache = store.forSession("one");
+    cache.put(page("a", "aaaa"));
+    store.retire("one");
+    cache.put(page("b", "bbbb"));
+
+    expect(cache.list()).toEqual([]);
+    store.forSession("two").put(page("c", "cccc"));
+    expect(store.forSession("two").list()).toHaveLength(1);
+  });
+
   it("cuts a page over the page cap and flags it as truncated", () => {
     const cache = new InMemoryPageCacheStore(limits).forSession("one");
     cache.put(page("a", "x".repeat(25)));

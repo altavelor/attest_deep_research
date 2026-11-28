@@ -18,6 +18,7 @@ export interface ChatSessionFactoryOptions {
   isDebugCapture: () => boolean;
   logError: (error: unknown) => void;
   releaseAgentSessions?: (sessionIds: readonly string[]) => void;
+  retireAgentSession?: (sessionId: string) => void;
 }
 
 let runSequence = 0;
@@ -47,6 +48,7 @@ export function createChatSessionManager(options: ChatSessionFactoryOptions): Ch
       ...(options.releaseAgentSessions
         ? { releaseAgentSessions: options.releaseAgentSessions }
         : {}),
+      ...(options.retireAgentSession ? { retireAgentSession: options.retireAgentSession } : {}),
       scheduleTimeout,
       createSubAgentSessionManager,
       subAgentServices: {

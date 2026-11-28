@@ -376,6 +376,7 @@ export interface SubAgentSessionManagerContext {
   monotonicNow?(): number;
   isDebugCapture?(): boolean;
   mainEvents?: SubAgentMainEventSink;
+  onSessionStopped?(sessionId: string): void;
 }
 
 export type SubAgentSessionManagerFactory = (

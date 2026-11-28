@@ -86,4 +86,5 @@ export interface ChatSessionEnvironment {
   subAgentServices?: ChatSubAgentServices;
   scheduleTimeout?(callback: () => void, delayMs: number): { cancel(): void };
   releaseAgentSessions?(sessionIds: readonly string[]): void;
+  retireAgentSession?(sessionId: string): void;
 }

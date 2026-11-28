@@ -39,6 +39,7 @@ export interface ChatSubAgentsOptions {
   state: ChatSessionState;
   createManager?: SubAgentSessionManagerFactory;
   services?: ChatSubAgentServices;
+  onSessionStopped?(sessionId: string): void;
   writer: SubAgentDurableWriter;
   now(): Date;
   createId(): string;
@@ -118,6 +119,9 @@ export class ChatSubAgents {
               ? { isDebugCapture: options.services.isDebugCapture }
               : {}),
             mainEvents: this.bridge,
+            ...(options.onSessionStopped
+              ? { onSessionStopped: (sessionId: string) => options.onSessionStopped?.(sessionId) }
+              : {}),
           })
         : null;
   }

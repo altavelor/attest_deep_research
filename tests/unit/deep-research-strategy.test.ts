@@ -275,6 +275,7 @@ describe("main branch runner findings", () => {
         return { put: () => undefined, get: () => undefined, list: () => [] };
       },
       release: (id: string) => released.push(id),
+      retire: () => undefined,
       releaseAll: () => undefined,
     };
     let fail = false;
